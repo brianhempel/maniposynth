@@ -1,0 +1,3 @@
+(library
+ (name maniposynth_lib)
+ (libraries compiler-libs.common ocamlformat.ocamlformat_lib tyxml))

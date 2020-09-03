@@ -1,8 +1,11 @@
-_build/default/parse_test.exe:
-	dune build parse_test.exe
+_build/default/test.exe: *.ml lib/*.ml lib/*.mli dune **/dune
+	dune build --auto-promote test.exe
 
-run: _build/default/parse_test.exe
-	./_build/default/parse_test.exe
+clean:
+	rm -rf _build/
+
+run: _build/default/test.exe
+	./_build/default/test.exe
 
 # Open an OCaml REPL.
 # May need to run `opam install utop`
@@ -11,12 +14,15 @@ repl:
 
 # Auto-rebuild on save.
 watch:
-	dune build -w parse_test.exe
+	# Dune's watch just keeps rebuilding over and over. Use our own.
+	./scripts/continuously_make.rb
 
 setup:
 	opam switch 4.11.0 || opam switch create 4.11.0
 	opam install utop
 	opam install dune
+	opam install tyxml
+	# opam install ppx_deriving
 	# Using ocamlformat's parser/printer, which preserves comments.
 	mkdir vendor; cd vendor; curl -L https://github.com/ocaml-ppx/ocamlformat/archive/0.15.0.zip > ocamlformat-0.15.0.zip && unzip ocamlformat-0.15.0.zip && mv ocamlformat-0.15.0 ocamlformat
 	# Need to make certain sub-libraries public so dune will build the whole gambit.

@@ -1,5 +1,5 @@
 (executable
- (name parse_test)
- (libraries compiler-libs.common ocamlformat.ocamlformat_lib))
+ (name test)
+ (libraries maniposynth_lib))
 
 (vendored_dirs vendor)
