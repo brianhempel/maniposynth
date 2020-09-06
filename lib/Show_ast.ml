@@ -7,15 +7,29 @@ let dummy_exp : expression =
   ; pexp_attributes = []
   }
 
+(* let unknown_pat : pattern =
+  { ppat_desc       = Ppat_var (Location.mknoloc "?")
+  ; ppat_loc        = Location.none
+  ; ppat_loc_stack  = []
+  ; ppat_attributes = []
+  }
+ *)
+
+(* The Pprintast functions print to a formatter. Make them output a string instead. *)
 (* Following https://github.com/ocaml/ocaml/blob/4.11/parsing/pprintast.ml string_of_expression *)
-let pat pat =
+let formatter_to_stringifyer formatter =
+  fun x ->
     ignore (Format.flush_str_formatter ());
-    Pprintast.pattern Format.str_formatter pat;
+    formatter Format.str_formatter x;
     Format.flush_str_formatter ()
+
+let pat pat = (formatter_to_stringifyer Pprintast.pattern) pat
 
 let exp = Pprintast.string_of_expression
 
 let constant constant = exp { dummy_exp with pexp_desc = Pexp_constant constant }
+
+let longident longident = (formatter_to_stringifyer Pprintast.longident) longident
 
 (* Pprintast doesn't expose its arg_label function...or does it! *)
 let fun_param param_label default_opt pat =

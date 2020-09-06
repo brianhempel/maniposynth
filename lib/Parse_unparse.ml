@@ -12,12 +12,15 @@ let conf_opts : Conf.opts =
 let translation_ops : Parsetree.toplevel_phrase list Translation_unit.t =
   Translation_unit.impl
 
-let parse_file input_name =
-  let source = Utils.string_of_file input_name in
+let parse_string source =
   Parse_with_comments.parse
     Migrate_ast.Parse.use_file
     conf
     ~source
+  
+let parse_file input_name =
+  let source = Utils.string_of_file input_name in
+  parse_string source
 
 (* On error, returns the unchanged contents of the original file. *)
 let unparse input_name parsed =

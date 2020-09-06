@@ -4,8 +4,10 @@ B /Users/brian/.opam/4.11.0/lib/base
 B /Users/brian/.opam/4.11.0/lib/base/base_internalhash_types
 B /Users/brian/.opam/4.11.0/lib/base/caml
 B /Users/brian/.opam/4.11.0/lib/base/shadow_stdlib
+B /Users/brian/.opam/4.11.0/lib/biniou
 B /Users/brian/.opam/4.11.0/lib/bytes
 B /Users/brian/.opam/4.11.0/lib/cmdliner
+B /Users/brian/.opam/4.11.0/lib/easy-format
 B /Users/brian/.opam/4.11.0/lib/fpath
 B /Users/brian/.opam/4.11.0/lib/menhirLib
 B /Users/brian/.opam/4.11.0/lib/ocaml
@@ -27,6 +29,7 @@ B /Users/brian/.opam/4.11.0/lib/uucp
 B /Users/brian/.opam/4.11.0/lib/uuseg
 B /Users/brian/.opam/4.11.0/lib/uuseg/string
 B /Users/brian/.opam/4.11.0/lib/uutf
+B /Users/brian/.opam/4.11.0/lib/yojson
 B ../_build/default/lib/.maniposynth_lib.objs/byte
 B ../_build/default/vendor/ocamlformat/lib/.ocamlformat_lib.objs/byte
 B ../_build/default/vendor/ocamlformat/lib/import/.import.objs/byte
@@ -39,8 +42,10 @@ S /Users/brian/.opam/4.11.0/lib/base
 S /Users/brian/.opam/4.11.0/lib/base/base_internalhash_types
 S /Users/brian/.opam/4.11.0/lib/base/caml
 S /Users/brian/.opam/4.11.0/lib/base/shadow_stdlib
+S /Users/brian/.opam/4.11.0/lib/biniou
 S /Users/brian/.opam/4.11.0/lib/bytes
 S /Users/brian/.opam/4.11.0/lib/cmdliner
+S /Users/brian/.opam/4.11.0/lib/easy-format
 S /Users/brian/.opam/4.11.0/lib/fpath
 S /Users/brian/.opam/4.11.0/lib/menhirLib
 S /Users/brian/.opam/4.11.0/lib/ocaml
@@ -62,6 +67,7 @@ S /Users/brian/.opam/4.11.0/lib/uucp
 S /Users/brian/.opam/4.11.0/lib/uuseg
 S /Users/brian/.opam/4.11.0/lib/uuseg/string
 S /Users/brian/.opam/4.11.0/lib/uutf
+S /Users/brian/.opam/4.11.0/lib/yojson
 S .
 S ../vendor/ocamlformat/lib
 S ../vendor/ocamlformat/lib/import

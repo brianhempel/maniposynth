@@ -1,11 +1,15 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type t =
+  | Top_binding of value_binding * t
   | Constant of constant
   | Unknown
+  | Labeled of expression (* var *)
   | Let of (value_binding * t) list * t
   | Fun of Asttypes.arg_label * expression option * pattern * t
-  | App of t * (Asttypes.arg_label * expression option * pattern) * (Asttypes.arg_label * expression * t) * t
+  | Apply of expression * (Asttypes.arg_label * t) list
+  | Construct of Longident.t * t option
+  | Skels of t list
 
 val show : t -> string
 

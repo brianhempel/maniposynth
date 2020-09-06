@@ -1,6 +1,7 @@
 open Tyxml.Html
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
+
 type skel = Skeleton.t
 
 (* type skel =
@@ -19,25 +20,35 @@ let rec html_of_skeleton (skel : skel) =
     box [txt param_code]
   in
   match skel with
+  | Top_binding (vb, skel) -> box_of_binding_skel (vb, skel)
   | Constant constant -> box [txt (Show_ast.constant constant)]
-  | Unknown -> box [txt "Unknown"]
+  | Unknown -> box [txt "?"]
+  | Labeled exp ->
+      box
+        [ box [txt (Show_ast.exp exp)]
+        ; txt "?"
+        ]
   | Let (bindings_skels, body_skel) ->
       let binding_boxes = List.map box_of_binding_skel bindings_skels in
       div (binding_boxes @ [html_of_skeleton body_skel])
   | Fun (param_label, default_opt, pat, body_skel) ->
       box [param_label_box param_label default_opt pat; html_of_skeleton body_skel]
-  | App (f_skel, (param_label, default_opt, pat), (arg_label, arg_exp, arg_skel), ret_skel) ->
-      box
-        [ html_of_skeleton f_skel
-        ; box
-            [ param_label_box param_label default_opt pat
-            ; box
-                [ box [txt (Show_ast.app_arg arg_label arg_exp)]
-                ; html_of_skeleton arg_skel
-                ]
-            ]
-        ; html_of_skeleton ret_skel
-        ]
+  | Apply (f_exp, arg_labels_skels) ->
+      let arg_box (_arg_label, arg_skel) = html_of_skeleton arg_skel in
+      box @@
+        [ box [txt (Show_ast.exp f_exp)] ] @
+        List.map arg_box arg_labels_skels @
+        [ txt "?" ]
+  | Construct (longident, arg_skel_opt) ->
+      (* imitate display of Apply *)
+      let arg_box_opt = Option.map html_of_skeleton arg_skel_opt in
+      box @@
+      [ box [txt (Show_ast.longident longident)] ] @
+      Option.to_list arg_box_opt @
+      [ txt "?" ]
+  | Skels skels ->
+    box (List.map html_of_skeleton skels)
+
 and box_of_binding_skel (binding, skel) =
   let binding_code =
     Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.exp binding.pvb_expr
@@ -49,11 +60,22 @@ let string_of_doc doc =
   pp () Format.str_formatter doc;
   Format.flush_str_formatter ()
 
-let html_str_of_skeletons skels =
+let html_of_callables callables =
+  let html_of_callable (name, arg_count) =
+    let arg_strs = List.init arg_count (fun _ -> "?") in
+    box [txt (String.concat " " (name :: arg_strs))]
+  in
+  div ~a:[a_id "toolbox"]
+    (List.map html_of_callable callables)
+
+let html_str (callables : (string * int) list) skels =
   let doc = 
     html
       (head (title (txt "Manipos")) [link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ();])
-      (body (List.map html_of_skeleton skels))
+      (body @@
+        html_of_callables callables ::
+        (List.map html_of_skeleton skels)
+      )
   in
   string_of_doc doc
 

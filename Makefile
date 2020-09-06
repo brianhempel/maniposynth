@@ -22,6 +22,8 @@ setup:
 	opam install utop
 	opam install dune
 	opam install tyxml
+	opam install merlin
+	opam install yojson
 	# opam install ppx_deriving
 	# Using ocamlformat's parser/printer, which preserves comments.
 	mkdir vendor; cd vendor; curl -L https://github.com/ocaml-ppx/ocamlformat/archive/0.15.0.zip > ocamlformat-0.15.0.zip && unzip ocamlformat-0.15.0.zip && mv ocamlformat-0.15.0 ocamlformat
