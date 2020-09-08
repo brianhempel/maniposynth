@@ -1,4 +1,3 @@
-open Tyxml.Html
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
 
@@ -11,73 +10,77 @@ type skel = Skeleton.t
   | Fun of Asttypes.arg_label * expression option * pattern * t
   | App of t * (Asttypes.arg_label * expression option * pattern) * (Asttypes.arg_label * expression * t) * t *)
 
-let box = div ~a:[a_class ["box"]]
+let txt = Tyxml.Html.txt
+let div = Tyxml.Html.div
+let a_class = Tyxml.Html.a_class
+let a_id = Tyxml.Html.a_id
 
+let box klass = Tyxml.Html.div ~a:[a_class ["box"; klass]]
+
+let label str = box "label" [txt str]
 
 let rec html_of_skeleton (skel : skel) =
-  let param_label_box param_label default_opt pat =
-    let param_code = Show_ast.fun_param param_label default_opt pat in
-    box [txt param_code]
-  in
   match skel with
-  | Top_binding (vb, skel) -> box_of_binding_skel (vb, skel)
-  | Constant constant -> box [txt (Show_ast.constant constant)]
-  | Unknown -> box [txt "?"]
-  | Labeled exp ->
-      box
-        [ box [txt (Show_ast.exp exp)]
-        ; txt "?"
+  | Constant constant -> box "constant" [txt (Show_ast.constant constant)]
+  | Unknown -> box "unknown" [txt "?"]
+  | Bindings_rets (bindings_skels, ret_skels) ->
+      let binding_boxes = List.map html_of_binding_skel bindings_skels in
+      let ret_boxes = List.map html_of_skeleton ret_skels in
+      box "bindings_rets"
+        [ box "bindings" binding_boxes
+        ; box "rets" ret_boxes
         ]
-  | Let (bindings_skels, body_skel) ->
-      let binding_boxes = List.map box_of_binding_skel bindings_skels in
-      div (binding_boxes @ [html_of_skeleton body_skel])
   | Fun (param_label, default_opt, pat, body_skel) ->
-      box [param_label_box param_label default_opt pat; html_of_skeleton body_skel]
+      let param_code = Show_ast.fun_param param_label default_opt pat in
+      box "fun"
+        [ box "param" [label param_code; box "values" []]
+        ; box "ret" [html_of_skeleton body_skel]
+        ]
   | Apply (f_exp, arg_labels_skels) ->
       let arg_box (_arg_label, arg_skel) = html_of_skeleton arg_skel in
-      box @@
-        [ box [txt (Show_ast.exp f_exp)] ] @
-        List.map arg_box arg_labels_skels @
-        [ txt "?" ]
+      box "apply" @@
+        [ label (Show_ast.exp f_exp)
+        ; box "args" (List.map arg_box arg_labels_skels)
+        ; box "ret" [txt "?"]
+        ]
   | Construct (longident, arg_skel_opt) ->
       (* imitate display of Apply *)
-      let arg_box_opt = Option.map html_of_skeleton arg_skel_opt in
-      box @@
-      [ box [txt (Show_ast.longident longident)] ] @
-      Option.to_list arg_box_opt @
-      [ txt "?" ]
-  | Skels skels ->
-    box (List.map html_of_skeleton skels)
+      let arg_box_opt =
+        arg_skel_opt
+        |> Option.map (fun arg_skel -> box "args" [html_of_skeleton arg_skel])
+      in
+      box "construct" @@
+        [ label (Show_ast.longident longident) ] @
+        Option.to_list arg_box_opt @
+        [ box "ret" [txt "?"] ]
 
-and box_of_binding_skel (binding, skel) =
+and html_of_binding_skel (binding, skel) =
   let binding_code =
     Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.exp binding.pvb_expr
   in
-  box [box [txt binding_code]; html_of_skeleton skel]
-
-let string_of_doc doc =
-  ignore (Format.flush_str_formatter ());
-  pp () Format.str_formatter doc;
-  Format.flush_str_formatter ()
+  box "binding" [label binding_code; html_of_skeleton skel]
 
 let html_of_callables callables =
   let html_of_callable (name, arg_count) =
     let arg_strs = List.init arg_count (fun _ -> "?") in
-    box [txt (String.concat " " (name :: arg_strs))]
+    box "callable" [txt (String.concat " " (name :: arg_strs))]
   in
   div ~a:[a_id "toolbox"]
     (List.map html_of_callable callables)
 
-let html_str (callables : (string * int) list) skels =
+let html_str (callables : (string * int) list) bindings_skels =
+  let open Tyxml.Html in
   let doc = 
     html
       (head (title (txt "Manipos")) [link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ();])
       (body @@
         html_of_callables callables ::
-        (List.map html_of_skeleton skels)
+        (List.map html_of_binding_skel bindings_skels)
       )
   in
-  string_of_doc doc
+  ignore (Format.flush_str_formatter ());
+  pp () Format.str_formatter doc;
+  Format.flush_str_formatter ()
 
 
 

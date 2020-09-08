@@ -1,5 +1,79 @@
+:root {
+  --body-margin: 10px;
+  --toolbox-width: 150px;
+}
+
+body {
+  margin: var(--body-margin);
+  padding: 0;
+  width: calc(100% - 3*var(--body-margin) - var(--toolbox-width));
+  font-family: Avenir Next, Avenir;
+}
+
 .box {
+  box-sizing: border-box;
+}
+
+.ret, .rets {
+  border-top: 1px solid black;
+}
+
+.label {
+  background-color: rgb(255, 220, 219);
+}
+
+#toolbox > .box,
+.label,
+.args > .box {
+  padding: 3px;
+}
+
+#toolbox {
+  box-sizing: border-box;
+  border: 2px solid black;
+  width: var(--toolbox-width);
+  position: fixed;
+  right: var(--body-margin);
+}
+
+#toolbox > .box {
   border: 1px solid black;
-  margin: 2px;
-  padding: 2px;
+  padding: 3px;
+  margin: 3px;
+}
+
+/* Top-level bindings */
+body > .binding {
+  margin-bottom: 2em;
+}
+
+body > .binding > .label {
+  background-color: transparent;
+  padding: 3px 0px;
+  font-weight: bold;
+}
+
+/* Fun */
+.fun {
+  border: solid 1px black;
+}
+
+.fun > .ret > .fun {
+  border: none;
+}
+
+.param > .box {
+  display: inline-block;
+}
+
+.param > .label {
+  border-right: 1px solid black;
+}
+
+/* Bindings_rets */
+
+.bindings_rets > .box > .box {
+  border: 1px solid black;
+  display: inline-block;
+  margin: 10px;
 }
