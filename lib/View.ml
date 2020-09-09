@@ -14,8 +14,9 @@ let txt = Tyxml.Html.txt
 let div = Tyxml.Html.div
 let a_class = Tyxml.Html.a_class
 let a_id = Tyxml.Html.a_id
+let a_user_data = Tyxml.Html.a_user_data
 
-let box klass = Tyxml.Html.div ~a:[a_class ["box"; klass]]
+let box ?(attrs = []) klass = Tyxml.Html.div ~a:([a_class ["box"; klass]] @ attrs)
 
 let label str = box "label" [txt str]
 
@@ -23,12 +24,12 @@ let rec html_of_skeleton (skel : skel) =
   match skel with
   | Constant constant -> box "constant" [txt (Show_ast.constant constant)]
   | Unknown -> box "unknown" [txt "?"]
-  | Bindings_rets (bindings_skels, ret_skels) ->
+  | Bindings_rets (scope_exp, bindings_skels, ret_skels) ->
       let binding_boxes = List.map html_of_binding_skel bindings_skels in
       let ret_boxes = List.map html_of_skeleton ret_skels in
       box "bindings_rets"
-        [ box "bindings" binding_boxes
-        ; box "rets" ret_boxes
+        [ box ~attrs:[a_user_data "scope-id" (Ast_id.id_string_of_exp scope_exp)] "bindings" binding_boxes
+        ; box ~attrs:[a_user_data "scope-id" (Ast_id.id_string_of_exp scope_exp)] "rets" ret_boxes
         ]
   | Fun (param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
@@ -62,8 +63,9 @@ and html_of_binding_skel (binding, skel) =
 
 let html_of_callables callables =
   let html_of_callable (name, arg_count) =
-    let arg_strs = List.init arg_count (fun _ -> "?") in
-    box "callable" [txt (String.concat " " (name :: arg_strs))]
+    let arg_strs = List.init arg_count (fun _ -> "(??)") in
+    let code_str = String.concat " " (name :: arg_strs) in
+    box ~attrs:[a_user_data "new-code" code_str] "callable" [txt code_str]
   in
   div ~a:[a_id "toolbox"]
     (List.map html_of_callable callables)
@@ -72,15 +74,18 @@ let html_str (callables : (string * int) list) bindings_skels =
   let open Tyxml.Html in
   let doc = 
     html
-      (head (title (txt "Manipos")) [link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ();])
+      (head (title (txt "Manipos"))
+         [ link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ()
+         ; script ~a:[a_src (Xml.uri_of_string "assets/maniposynth.js")] (txt "")
+         ; script ~a:[a_src (Xml.uri_of_string "assets/reload_on_file_changes.js")] (txt "")
+         ]
+      )
       (body @@
         html_of_callables callables ::
         (List.map html_of_binding_skel bindings_skels)
       )
   in
-  ignore (Format.flush_str_formatter ());
-  pp () Format.str_formatter doc;
-  Format.flush_str_formatter ()
+  (Utils.formatter_to_stringifyer (pp ())) doc;
 
 
 

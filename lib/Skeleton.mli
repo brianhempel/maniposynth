@@ -3,7 +3,7 @@ open Ocamlformat_lib.Migrate_ast.Parsetree
 type t =
   | Constant of constant
   | Unknown
-  | Bindings_rets of binding_skel list * t list
+  | Bindings_rets of expression * binding_skel list * t list
   | Fun of Asttypes.arg_label * expression option * pattern * t
   | Apply of expression * (Asttypes.arg_label * t) list (* can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
   | Construct of Longident.t * t option

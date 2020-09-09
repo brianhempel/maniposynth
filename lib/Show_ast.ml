@@ -15,21 +15,13 @@ let dummy_exp : expression =
   }
  *)
 
-(* The Pprintast functions print to a formatter. Make them output a string instead. *)
-(* Following https://github.com/ocaml/ocaml/blob/4.11/parsing/pprintast.ml string_of_expression *)
-let formatter_to_stringifyer formatter =
-  fun x ->
-    ignore (Format.flush_str_formatter ());
-    formatter Format.str_formatter x;
-    Format.flush_str_formatter ()
-
-let pat pat = (formatter_to_stringifyer Pprintast.pattern) pat
+let pat pat = (Utils.formatter_to_stringifyer Pprintast.pattern) pat
 
 let exp = Pprintast.string_of_expression
 
 let constant constant = exp { dummy_exp with pexp_desc = Pexp_constant constant }
 
-let longident longident = (formatter_to_stringifyer Pprintast.longident) longident
+let longident longident = (Utils.formatter_to_stringifyer Pprintast.longident) longident
 
 (* Pprintast doesn't expose its arg_label function...or does it! *)
 let fun_param param_label default_opt pat =

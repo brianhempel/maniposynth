@@ -5,7 +5,6 @@ type nat = Z
 
 (* Ex: plus (S Z) (S (S (S Z))) *)
 let rec plus a b =
-  let g = 3 + 4 in
   ( ?? )
   (* match b with
   | Z -> a
@@ -14,5 +13,3 @@ let rec plus a b =
         plus1 = plus a nat
       in
       S plus1 *)
-
-and seven = 7

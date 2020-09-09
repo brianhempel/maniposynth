@@ -17,10 +17,6 @@ watch:
 	# Dune's watch just keeps rebuilding over and over. Use our own.
 	./scripts/continuously_make.rb
 
-# Auto-reload chrome when a html/css/etc file changes. Requires Applescript.
-chrome_reloader:
-	./scripts/reload_chrome_on_file_save.rb
-
 setup:
 	opam switch 4.11.0 || opam switch create 4.11.0
 	opam install utop

@@ -1,6 +1,7 @@
 :root {
   --body-margin: 10px;
   --toolbox-width: 150px;
+  --padding: 3px;
 }
 
 body {
@@ -12,6 +13,7 @@ body {
 
 .box {
   box-sizing: border-box;
+  background-color: white;
 }
 
 .ret, .rets {
@@ -20,13 +22,18 @@ body {
 
 .label {
   background-color: rgb(255, 220, 219);
+  padding: var(--padding);
 }
 
-#toolbox > .box,
-.label,
-.args > .box {
-  padding: 3px;
+[draggable=true] {
+  cursor: move;
 }
+
+.current-drop-target {
+  background-color: #ffd;
+}
+
+/* Toolbox */
 
 #toolbox {
   box-sizing: border-box;
@@ -38,11 +45,13 @@ body {
 
 #toolbox > .box {
   border: 1px solid black;
-  padding: 3px;
+  padding: var(--padding);
   margin: 3px;
 }
 
+
 /* Top-level bindings */
+
 body > .binding {
   margin-bottom: 2em;
 }
@@ -53,7 +62,9 @@ body > .binding > .label {
   font-weight: bold;
 }
 
+
 /* Fun */
+
 .fun {
   border: solid 1px black;
 }
@@ -70,10 +81,33 @@ body > .binding > .label {
   border-right: 1px solid black;
 }
 
+
 /* Bindings_rets */
+
+.bindings_rets > .bindings {
+  min-height: 8em;
+}
 
 .bindings_rets > .box > .box {
   border: 1px solid black;
   display: inline-block;
   margin: 10px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+
+/* Apply */
+
+/* Hide function name when just inside a binding. The function name is already displayed by the binding. */
+.binding > .apply > .label {
+  display: none;
+}
+
+.args > .box {
+  border-top: 1px solid black;
+  padding: var(--padding);
+}
+
+.apply > .ret {  
+  padding: var(--padding);
 }
