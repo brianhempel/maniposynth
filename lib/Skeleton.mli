@@ -2,11 +2,19 @@ open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type t =
   | Constant of constant
+
   | Unknown
-  | Bindings_rets of expression * binding_skel list * t list
+
+  (* expr is the scope, the outermost expression (usually a let) *)
+  | Bindings_rets of expression * binding_skel list * t list 
+
   | Fun of Asttypes.arg_label * expression option * pattern * t
-  | Apply of expression * (Asttypes.arg_label * t) list (* can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
+
+  (* (apply_expr, fun_expr, arg_skels). can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
+  | Apply of expression * expression * (Asttypes.arg_label * t) list 
+
   | Construct of Longident.t * t option
+
 and binding_skel = value_binding * t
 
 val show : t -> string

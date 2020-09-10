@@ -17,6 +17,7 @@ type t = Location.t =
 
 
 let of_expr expr = expr.pexp_loc
+let of_pat pat   = pat.ppat_loc
 
 let has_id ?(expr) id =
   match expr with

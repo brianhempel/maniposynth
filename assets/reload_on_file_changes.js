@@ -9,7 +9,7 @@ last_seen_versions = {};
 
 function handle_possible_change (path, latest_version) {
   if (!last_seen_versions[path]) {
-    console.log(path + "\n" + latest_version);
+    // console.log(path + "\n" + latest_version);
     last_seen_versions[path] = latest_version;
   } else if (last_seen_versions[path] != latest_version) {
     document.location.reload();
@@ -18,7 +18,7 @@ function handle_possible_change (path, latest_version) {
 }
 
 function check_for_changes(path) {
-  var request = new XMLHttpRequest();
+  let request = new XMLHttpRequest();
   request.addEventListener("load", function () { handle_possible_change(path, this.responseText) });
   request.addEventListener("loadend", () => wait_and_check_for_changes(path));
   request.open("GET", path);

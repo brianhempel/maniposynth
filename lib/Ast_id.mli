@@ -4,6 +4,7 @@ open Ocamlformat_lib.Migrate_ast.Parsetree
 type t
 
 val of_expr : expression -> t
+val of_pat  : pattern    -> t
 
 val t_of_yojson : Yojson.Safe.t -> t
 val yojson_of_t : t -> Yojson.Safe.t

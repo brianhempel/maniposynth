@@ -19,9 +19,15 @@ let a_user_data = Tyxml.Html.a_user_data
 
 let box ?(attrs = []) klass = Tyxml.Html.div ~a:([a_class ["box"; klass]] @ attrs)
 
-let label str = box "label" [txt str]
+let label ?(attrs = []) str = box ~attrs "label" [txt str]
 
 let ast_id_json_str_of_expr = Ast_id.of_expr %> Ast_id.yojson_of_t %> Yojson.Safe.to_string
+(* let ast_id_json_str_of_pat  = Ast_id.of_pat  %> Ast_id.yojson_of_t %> Yojson.Safe.to_string *)
+
+let a_new_code code_str = a_user_data "new-code" code_str
+let a_scope_id scope_expr = a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)
+let a_expr_id expr        = a_user_data "expr-id-json-str" (ast_id_json_str_of_expr expr)
+(* let a_pat_id pat          = a_user_data "pat-id-json-str" (ast_id_json_str_of_pat pat) *)
 
 let rec html_of_skeleton (skel : skel) =
   match skel with
@@ -31,19 +37,19 @@ let rec html_of_skeleton (skel : skel) =
       let binding_boxes = List.map html_of_binding_skel bindings_skels in
       let ret_boxes = List.map html_of_skeleton ret_skels in
       box "bindings_rets"
-        [ box ~attrs:[a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)] "bindings" binding_boxes
-        ; box ~attrs:[a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)] "rets" ret_boxes
+        [ box ~attrs:[a_scope_id scope_expr] "bindings" binding_boxes
+        ; box ~attrs:[a_scope_id scope_expr] "rets" ret_boxes
         ]
   | Fun (param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
       box "fun"
-        [ box "param" [label param_code; box "values" []]
+        [ box "param" [label ~attrs:[a_new_code param_code] param_code; box "values" []]
         ; box "ret" [html_of_skeleton body_skel]
         ]
-  | Apply (f_expr, arg_labels_skels) ->
+  | Apply (expr, f_expr, arg_labels_skels) ->
       let arg_box (_arg_label, arg_skel) = box "arg" [html_of_skeleton arg_skel] in
       box "apply" @@
-        [ label (Show_ast.expr f_expr)
+        [ label ~attrs:[a_expr_id expr] (Show_ast.expr f_expr)
         ; box "args" (List.map arg_box arg_labels_skels)
         ; box "ret" [txt "?"]
         ]
@@ -53,7 +59,7 @@ let rec html_of_skeleton (skel : skel) =
         arg_skel_opt
         |> Option.map (fun arg_skel -> box "args" [html_of_skeleton arg_skel])
       in
-      box "construct" @@
+      box "apply construct" @@
         [ label (Show_ast.longident longident) ] @
         Option.to_list arg_box_opt @
         [ box "ret" [txt "?"] ]
@@ -68,7 +74,7 @@ let html_of_callables callables =
   let html_of_callable (name, arg_count) =
     let arg_strs = List.init arg_count (fun _ -> "(??)") in
     let code_str = String.concat " " (name :: arg_strs) in
-    box ~attrs:[a_user_data "new-code" code_str] "callable" [txt code_str]
+    box ~attrs:[a_new_code code_str] "callable" [txt code_str]
   in
   div ~a:[a_id "toolbox"]
     (List.map html_of_callable callables)

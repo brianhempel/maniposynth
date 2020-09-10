@@ -2,11 +2,19 @@ open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type t =
   | Constant of constant
+
   | Unknown
-  | Bindings_rets of expression * binding_skel list * t list (* expr is the scope, the outermost expression (usually a let) *)
+
+  (* expr is the scope, the outermost expression (usually a let) *)
+  | Bindings_rets of expression * binding_skel list * t list 
+
   | Fun of Asttypes.arg_label * expression option * pattern * t
-  | Apply of expression * (Asttypes.arg_label * t) list (* can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
+
+  (* (apply_expr, fun_expr, arg_skels). can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
+  | Apply of expression * expression * (Asttypes.arg_label * t) list 
+
   | Construct of Longident.t * t option
+
 and binding_skel = value_binding * t
 
 (* for debugging *)
@@ -16,7 +24,7 @@ let rec show = function
   | Fun (arg_label, default_opt, pat, body_skel)  ->
     let dummy_fun = { Show_ast.dummy_expr with pexp_desc = Pexp_fun (arg_label, default_opt, pat, Show_ast.dummy_expr) } in
     Show_ast.expr dummy_fun ^ show body_skel
-  | Apply (_, _) -> "app lololol"
+  | Apply (_, _, _) -> "app lololol"
   | Construct (_, _) -> "construct lololol"
   | Bindings_rets (_, bindings_skels, ret_skels) ->
     let binding_strs = List.map show_binding bindings_skels in
@@ -38,7 +46,7 @@ let rec skel_of_expr ({ pexp_desc = exp_desc; _ } as expr) =
     | _ -> failwith "impossible: ensure_bindings_rets ensures the skeleton is a bindings_rets"
   in
   match exp_desc with
-  | Pexp_ident _ -> Apply (expr, [])
+  | Pexp_ident _ -> Apply (expr, expr, [])
   | Pexp_constant constant -> Constant constant
   | Pexp_let (_rec_flag, value_bindings, body_expr) ->
       let bindings_skels = List.map (fun vb -> (vb, skeleton_of_value_binding vb)) value_bindings in
@@ -58,7 +66,7 @@ let rec skel_of_expr ({ pexp_desc = exp_desc; _ } as expr) =
       )
   | Pexp_apply (fun_expr, arg_labels_exps) ->
       let arg_labels_skels = List.map (fun (l, e) -> (l, skel_of_expr e)) arg_labels_exps in
-      Apply (fun_expr, arg_labels_skels)
+      Apply (expr, fun_expr, arg_labels_skels)
   | Pexp_match (_scrutinee_expr, cases) ->
     let branch_skels =
       List.map (fun case -> skel_of_expr case.pc_rhs) cases

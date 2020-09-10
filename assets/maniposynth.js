@@ -1,13 +1,24 @@
-function addCodeToScopeBindings(newCode, scopeIdJson) {
-  let action = [
-    "AddCodeToScopeBindings",
-    newCode,
-    scopeIdJson
-  ];
-  var request = new XMLHttpRequest();
+function doAction(action) {
+  let request = new XMLHttpRequest();
   request.open("PATCH", document.location.href);
   request.setRequestHeader("Content-type", "application/json");
   request.send(JSON.stringify(action));
+}
+
+function addCodeToScopeBindings(newCode, scopeIdJson) {
+  doAction([
+    "AddCodeToScopeBindings",
+    newCode,
+    scopeIdJson
+  ]);
+}
+
+function replaceCodeAtExpr(newCode, exprIdJson) {
+  doAction([
+    "ReplaceCodeAtExpr",
+    newCode,
+    exprIdJson
+  ]);
 }
 
 
@@ -16,7 +27,7 @@ function addCodeToScopeBindings(newCode, scopeIdJson) {
 
 // When drag starts, store information.
 function dragstart(event) {
-  node = event.target;
+  let node = event.target;
   event.dataTransfer.setData("application/new-code", node.dataset.newCode);
 }
 
@@ -41,13 +52,23 @@ function dragleave(event) {
 
 function drop(event) {
   event.preventDefault();
-  dropTarget = event.currentTarget;
-  newCode = event.dataTransfer.getData("application/new-code");
-  scopeIdJson = JSON.parse(dropTarget.dataset.scopeIdJsonStr);
-  if (dropTarget.classList.contains("bindings")) {
-    addCodeToScopeBindings(newCode, scopeIdJson);
-  } else if (dropTarget.classList.contains("rets")) {
-    addCodeToScopeRet(newCode, scopeIdJson);
+  let dropTarget = event.currentTarget;
+  let newCode = event.dataTransfer.getData("application/new-code");
+  if (dropTarget.dataset.scopeIdJsonStr) {
+    let scopeIdJson = JSON.parse(dropTarget.dataset.scopeIdJsonStr);
+    if (dropTarget.classList.contains("bindings")) {
+      addCodeToScopeBindings(newCode, scopeIdJson);
+    } else if (dropTarget.classList.contains("rets")) {
+      addCodeToScopeRet(newCode, scopeIdJson);
+    }
+    event.stopPropagation();
+  } else if (dropTarget.dataset.exprIdJsonStr) {
+    let exprIdJson = JSON.parse(dropTarget.dataset.exprIdJsonStr);
+    replaceCodeAtExpr(newCode, exprIdJson);
+    event.stopPropagation();
+  } else {
+    console.log("No valid actions for drop on");
+    console.log(dropTarget);
   }
 }
 
@@ -67,7 +88,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Add drop zone events.
 
-  document.querySelectorAll('[data-scope-id-json-str]').forEach(elem => {
+  document.querySelectorAll('[data-scope-id-json-str],[data-expr-id-json-str]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
     elem.addEventListener("drop", drop);
