@@ -56,14 +56,23 @@ let render_maniposynth out_chan url =
   respond out_chan html_str
 
 let handle_connection in_chan out_chan =
-  (* let rec read_to_empty_line chan =
+  let rec read_header_lines chan : (string * string) list =
     let line = input_line chan in
-    if String.length (String.trim line) == 0 then
-      line
+    if String.length (String.trim line) = 0 then
+      []
     else
-      line ^ "\n" ^ read_to_empty_line chan
-  in *)
+      match StringUtils.split ~limit:2 line ": " with
+      | [key; value] ->
+          (* print_endline (key ^ "\t" ^ value); *)
+          (key, String.trim value) :: read_header_lines chan
+      | _ ->
+          print_endline ("Bad header line: " ^ line);
+          read_header_lines chan
+  in
   let request_str = input_line in_chan in
+  let headers = read_header_lines in_chan in
+  let content_length = int_of_string (ListUtils.assoc_with_default "Content-Length" "0" headers) in
+  let content_str = really_input_string in_chan content_length in
   (* print_endline request_str; "GET /path HTTP/1.1" *)
   (match String.split_on_char ' ' request_str with
   | "GET"::url::_ ->
@@ -73,7 +82,19 @@ let handle_connection in_chan out_chan =
         render_maniposynth out_chan url
       else
         respond_not_found out_chan
+  | "PATCH"::url::_ ->
+      if StringUtils.ends_with url ".ml" then
+        let action_yojson = Yojson.Safe.from_string content_str in
+        (* print_endline content_str; *)
+        let action = Action.t_of_yojson action_yojson in
+        let file_path = "./" ^ url in
+        Action.f file_path action;
+        respond ~content_type:"text/plain" out_chan "Done."
+      else
+        respond_not_found out_chan
   | _ ->
+      print_string "UNHANDLED REQUEST: ";
+      print_endline request_str;
       respond_not_found out_chan
   );
   flush out_chan;

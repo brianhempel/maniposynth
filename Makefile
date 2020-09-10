@@ -24,7 +24,9 @@ setup:
 	opam install tyxml
 	opam install merlin
 	opam install yojson
-	# opam install ppx_deriving
+	# opam install ppxlib
+	opam install ppx_yojson_conv
+	opam install ppx_yojson_conv_lib
 	# Using ocamlformat's parser/printer, which preserves comments.
 	mkdir vendor; cd vendor; curl -L https://github.com/ocaml-ppx/ocamlformat/archive/0.15.0.zip > ocamlformat-0.15.0.zip && unzip ocamlformat-0.15.0.zip && mv ocamlformat-0.15.0 ocamlformat
 	# Need to make certain sub-libraries public so dune will build the whole gambit.
@@ -48,3 +50,5 @@ setup:
 	echo "  -> Conf.t"                                      >> vendor/ocamlformat/lib/Translation_unit.mli
 	echo "  -> Conf.opts"                                   >> vendor/ocamlformat/lib/Translation_unit.mli
 	echo "  -> (string, error) result"                      >> vendor/ocamlformat/lib/Translation_unit.mli
+	# Turn off the check that requires the AST not to change between parse/unparse
+	ruby -e 'path = ARGV[0]; File.write(path, File.read(path).sub(/\(\* Ast not preserved \? \*\)\s+\( if/, "\\0 false && (* Maniposynth hotfix! *)"))' vendor/ocamlformat/lib/Translation_unit.ml

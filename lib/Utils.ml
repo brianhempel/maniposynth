@@ -27,5 +27,7 @@ let formatter_to_stringifyer formatter =
     formatter Format.str_formatter x;
     Format.flush_str_formatter ()
 
+
+(* Function composition and reverse compostion. *)
 let (%)  f g = fun x -> f (g x)
 let (%>) f g = fun x -> g (f x)

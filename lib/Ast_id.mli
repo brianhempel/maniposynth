@@ -1,7 +1,11 @@
-(* Keep these abstract so we can change them later. *)
+open Ocamlformat_lib.Migrate_ast.Parsetree
 
+(* Keep these abstract so we can change them later. *)
 type t
 
-val id_string_of_exp : Ocamlformat_lib.Migrate_ast.Parsetree.expression -> string
+val of_expr : expression -> t
 
-val of_string : string -> t
+val t_of_yojson : Yojson.Safe.t -> t
+val yojson_of_t : t -> Yojson.Safe.t
+
+val has_id : ?expr:expression -> t -> bool

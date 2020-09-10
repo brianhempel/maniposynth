@@ -1,5 +1,7 @@
 open Ocamlformat_lib
 
+(* Comment-preserving parse/unparse using ocamlformat *)
+
 type parsed = Parsetree.toplevel_phrase list Parse_with_comments.with_comments
 
 let conf = Conf.ocamlformat_profile
@@ -12,7 +14,7 @@ let conf_opts : Conf.opts =
 let translation_ops : Parsetree.toplevel_phrase list Translation_unit.t =
   Translation_unit.impl
 
-let parse_string source =
+let parse_file_string source =
   Parse_with_comments.parse
     Migrate_ast.Parse.use_file
     conf
@@ -20,8 +22,9 @@ let parse_string source =
   
 let parse_file input_name =
   let source = Utils.string_of_file input_name in
-  parse_string source
+  parse_file_string source
 
+(* Wants pre-existing file name. *)
 (* On error, returns the unchanged contents of the original file. *)
 let unparse input_name parsed =
   let source = Utils.string_of_file input_name in

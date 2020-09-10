@@ -1,9 +1,9 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
-val dummy_exp : expression
+val dummy_expr : expression
 
 val pat      : pattern    -> string
-val exp      : expression -> string
+val expr     : expression -> string
 val constant : constant   -> string
 
 val longident : Longident.t -> string

@@ -1,5 +1,20 @@
-// When drag starts, store information.
+function addCodeToScopeBindings(newCode, scopeIdJson) {
+  let action = [
+    "AddCodeToScopeBindings",
+    newCode,
+    scopeIdJson
+  ];
+  var request = new XMLHttpRequest();
+  request.open("PATCH", document.location.href);
+  request.setRequestHeader("Content-type", "application/json");
+  request.send(JSON.stringify(action));
+}
 
+
+//////////////// Drag and Drop /////////////////////////////////
+
+
+// When drag starts, store information.
 function dragstart(event) {
   node = event.target;
   event.dataTransfer.setData("application/new-code", node.dataset.newCode);
@@ -28,16 +43,15 @@ function drop(event) {
   event.preventDefault();
   dropTarget = event.currentTarget;
   newCode = event.dataTransfer.getData("application/new-code");
-  scopeId = dropTarget.dataset.scopeId;
+  scopeIdJson = JSON.parse(dropTarget.dataset.scopeIdJsonStr);
   if (dropTarget.classList.contains("bindings")) {
-    addCodeToScopeBindings(newCode, scopeId);
+    addCodeToScopeBindings(newCode, scopeIdJson);
   } else if (dropTarget.classList.contains("rets")) {
-    addCodeToScopeRet(newCode, scopeId);
+    addCodeToScopeRet(newCode, scopeIdJson);
   }
 }
 
 // Attach event handlers on load.
-
 window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items draggable.
@@ -53,7 +67,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Add drop zone events.
 
-  document.querySelectorAll('[data-scope-id]').forEach(elem => {
+  document.querySelectorAll('[data-scope-id-json-str]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
     elem.addEventListener("drop", drop);

@@ -1,7 +1,7 @@
 :root {
   --body-margin: 10px;
   --toolbox-width: 150px;
-  --padding: 3px;
+  --padding: 4px;
 }
 
 body {
@@ -20,7 +20,7 @@ body {
   border-top: 1px solid black;
 }
 
-.label {
+.label, .constant, #toolbox > .box {
   background-color: rgb(255, 220, 219);
   padding: var(--padding);
 }
@@ -88,11 +88,17 @@ body > .binding > .label {
   min-height: 8em;
 }
 
-.bindings_rets > .box > .box {
+.bindings_rets > .box > .box,
+.arg > .box,
+#toolbox > .box {
   border: 1px solid black;
-  display: inline-block;
   margin: 10px;
+  display: inline-block;
   box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+.bindings_rets > .box > .box {
+  /* display: inline-block; */
 }
 
 
@@ -103,9 +109,8 @@ body > .binding > .label {
   display: none;
 }
 
-.args > .box {
+.args > .arg {
   border-top: 1px solid black;
-  padding: var(--padding);
 }
 
 .apply > .ret {  

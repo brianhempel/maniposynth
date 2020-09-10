@@ -1,4 +1,5 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
+open Utils
 
 
 type skel = Skeleton.t
@@ -20,16 +21,18 @@ let box ?(attrs = []) klass = Tyxml.Html.div ~a:([a_class ["box"; klass]] @ attr
 
 let label str = box "label" [txt str]
 
+let ast_id_json_str_of_expr = Ast_id.of_expr %> Ast_id.yojson_of_t %> Yojson.Safe.to_string
+
 let rec html_of_skeleton (skel : skel) =
   match skel with
   | Constant constant -> box "constant" [txt (Show_ast.constant constant)]
   | Unknown -> box "unknown" [txt "?"]
-  | Bindings_rets (scope_exp, bindings_skels, ret_skels) ->
+  | Bindings_rets (scope_expr, bindings_skels, ret_skels) ->
       let binding_boxes = List.map html_of_binding_skel bindings_skels in
       let ret_boxes = List.map html_of_skeleton ret_skels in
       box "bindings_rets"
-        [ box ~attrs:[a_user_data "scope-id" (Ast_id.id_string_of_exp scope_exp)] "bindings" binding_boxes
-        ; box ~attrs:[a_user_data "scope-id" (Ast_id.id_string_of_exp scope_exp)] "rets" ret_boxes
+        [ box ~attrs:[a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)] "bindings" binding_boxes
+        ; box ~attrs:[a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)] "rets" ret_boxes
         ]
   | Fun (param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
@@ -37,10 +40,10 @@ let rec html_of_skeleton (skel : skel) =
         [ box "param" [label param_code; box "values" []]
         ; box "ret" [html_of_skeleton body_skel]
         ]
-  | Apply (f_exp, arg_labels_skels) ->
-      let arg_box (_arg_label, arg_skel) = html_of_skeleton arg_skel in
+  | Apply (f_expr, arg_labels_skels) ->
+      let arg_box (_arg_label, arg_skel) = box "arg" [html_of_skeleton arg_skel] in
       box "apply" @@
-        [ label (Show_ast.exp f_exp)
+        [ label (Show_ast.expr f_expr)
         ; box "args" (List.map arg_box arg_labels_skels)
         ; box "ret" [txt "?"]
         ]
@@ -57,7 +60,7 @@ let rec html_of_skeleton (skel : skel) =
 
 and html_of_binding_skel (binding, skel) =
   let binding_code =
-    Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.exp binding.pvb_expr
+    Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.expr binding.pvb_expr
   in
   box "binding" [label binding_code; html_of_skeleton skel]
 
