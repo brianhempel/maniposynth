@@ -8,6 +8,8 @@ Make sure you have [opam](https://opam.ocaml.org/) and some version of [Ruby](ht
 $ make setup
 ```
 
+Note that `make setup` will install a `custom_merlin` folder alongside your `maniposynth` directory. It cannot be a subdir because that confuses dune.
+
 Various make commands:
 
 ```
@@ -16,7 +18,6 @@ $ make run             # Run the executable.
 $ make repl            # Open an OCaml REPL in the project environment.
 $ make clean           # Remove the _build directory.
 $ make watch           # Automatically rebuild and run on file save.
-$ make chrome_reloader # Reload front tab of chrome whenever an html/css file changes (requires Applescript)
 ```
 
 Read the Makefile for more details.

@@ -1,5 +1,5 @@
 open Yojson.Basic.Util
-open Parsetree
+open Ocamlformat_lib.Migrate_ast.Parsetree
 
 let callable_opt_of_ctor_dec { pcd_name; pcd_args; _ } : (string * int) option =
   match pcd_args with
@@ -42,15 +42,13 @@ let callables_of_string str : (string * int) list =
 
 (* List the callable functions/ctors in a file, along with the number of arguments each expects. *)
 let callables_of_file (path : string) : (string * int) list=
-  let cmd = "ocamlmerlin single dump -what env < " ^ path in
-  let merlin_chan = Unix.open_process_in cmd in
-  let merlin_json = Yojson.Basic.from_channel merlin_chan in
+  let cmd = "../custom_merlin/ocamlmerlin single dump -what env < " ^ path in
+  let merlin_json = Sys_utils.command cmd |> Yojson.Basic.from_string in
   (* {
     "class":"return",
     "value":["type nonrec nat = Z | S of nat","val plus : 'a -> 'b -> 'c"],
     "notifications":[],
     "timing":{"clock":12,"cpu":6,"query":2,"pp":0,"reader":2,"ppx":0,"typer":2,"error":0}
   } *)
-  close_in_noerr merlin_chan;
   let type_and_function_strs = merlin_json |> member "value" |> to_list |> List.map to_string in
   List.concat_map callables_of_string type_and_function_strs

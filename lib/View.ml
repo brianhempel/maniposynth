@@ -53,14 +53,14 @@ let rec html_of_skeleton (skel : skel) =
         ; box "args" (List.map arg_box arg_labels_skels)
         ; box "ret" [txt "?"]
         ]
-  | Construct (longident, arg_skel_opt) ->
+  | Construct (expr, longident, arg_skel_opt) ->
       (* imitate display of Apply *)
       let arg_box_opt =
         arg_skel_opt
-        |> Option.map (fun arg_skel -> box "args" [html_of_skeleton arg_skel])
+        |> Option.map (fun arg_skel -> box "args" [box "arg" [html_of_skeleton arg_skel]])
       in
       box "apply construct" @@
-        [ label (Show_ast.longident longident) ] @
+        [ label ~attrs:[a_expr_id expr] (Show_ast.longident longident) ] @
         Option.to_list arg_box_opt @
         [ box "ret" [txt "?"] ]
 
@@ -83,7 +83,7 @@ let html_str (callables : (string * int) list) bindings_skels =
   let open Tyxml.Html in
   let doc = 
     html
-      (head (title (txt "Manipos"))
+      (head (title (txt "Manipo"))
          [ link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ()
          ; script ~a:[a_src (Xml.uri_of_string "assets/maniposynth.js")] (txt "")
          ; script ~a:[a_src (Xml.uri_of_string "assets/reload_on_file_changes.js")] (txt "")

@@ -13,7 +13,7 @@ type t =
   (* (apply_expr, fun_expr, arg_skels). can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
   | Apply of expression * expression * (Asttypes.arg_label * t) list 
 
-  | Construct of Longident.t * t option
+  | Construct of expression * Longident.t * t option
 
 and binding_skel = value_binding * t
 
@@ -25,7 +25,7 @@ let rec show = function
     let dummy_fun = { Show_ast.dummy_expr with pexp_desc = Pexp_fun (arg_label, default_opt, pat, Show_ast.dummy_expr) } in
     Show_ast.expr dummy_fun ^ show body_skel
   | Apply (_, _, _) -> "app lololol"
-  | Construct (_, _) -> "construct lololol"
+  | Construct (_, _, _) -> "construct lololol"
   | Bindings_rets (_, bindings_skels, ret_skels) ->
     let binding_strs = List.map show_binding bindings_skels in
     "let " ^ String.concat " and " binding_strs ^ " in (" ^ String.concat " | " (List.map show ret_skels) ^  ")"
@@ -76,7 +76,7 @@ let rec skel_of_expr ({ pexp_desc = exp_desc; _ } as expr) =
     | []          -> failwith "impossible: match statement should have at least one branch"
     )
   | Pexp_construct (ident_located, exp_opt) ->
-    Construct (ident_located.txt, Option.map skel_of_expr exp_opt)
+    Construct (expr, ident_located.txt, Option.map skel_of_expr exp_opt)
   | _ -> Unknown
 and skeleton_of_value_binding { pvb_pat = _; pvb_expr = expr; _ } = skel_of_expr expr
 

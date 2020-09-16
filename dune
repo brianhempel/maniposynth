@@ -1,5 +1,11 @@
 (executable
- (name test)
+ (name server)
+ (modules server)
+ (libraries maniposynth_lib))
+
+(executable
+ (name playing)
+ (modules playing)
  (libraries maniposynth_lib))
 
 (vendored_dirs vendor)

@@ -33,12 +33,12 @@ let file_extension_content_types =
 let content_type_opt_of_path path =
   file_extension_content_types
   |> List.find_opt
-      (fun (extn, _) -> StringUtils.ends_with path extn) 
+      (fun (extn, _) -> String_utils.ends_with path extn) 
   |> Option.map snd
 
 let serve_asset out_chan url =
   try
-    let content_str = Utils.string_of_file ("./" ^ url) in
+    let content_str = Sys_utils.string_of_file ("./" ^ url) in
     match content_type_opt_of_path url with
     | Some content_type -> respond ~content_type out_chan content_str
     | None -> respond ~content_type:"application/yolo" out_chan content_str
@@ -61,7 +61,7 @@ let handle_connection in_chan out_chan =
     if String.length (String.trim line) = 0 then
       []
     else
-      match StringUtils.split ~limit:2 line ": " with
+      match String_utils.split ~limit:2 line ": " with
       | [key; value] ->
           (* print_endline (key ^ "\t" ^ value); *)
           (key, String.trim value) :: read_header_lines chan
@@ -71,19 +71,19 @@ let handle_connection in_chan out_chan =
   in
   let request_str = input_line in_chan in
   let headers = read_header_lines in_chan in
-  let content_length = int_of_string (ListUtils.assoc_with_default "Content-Length" "0" headers) in
+  let content_length = int_of_string (List_utils.assoc_with_default "Content-Length" "0" headers) in
   let content_str = really_input_string in_chan content_length in
   (* print_endline request_str; "GET /path HTTP/1.1" *)
   (match String.split_on_char ' ' request_str with
   | "GET"::url::_ ->
-      if StringUtils.starts_with url "/assets/" then
+      if String_utils.starts_with url "/assets/" then
         serve_asset out_chan url
-      else if StringUtils.ends_with url ".ml" then
+      else if String_utils.ends_with url ".ml" then
         render_maniposynth out_chan url
       else
         respond_not_found out_chan
   | "PATCH"::url::_ ->
-      if StringUtils.ends_with url ".ml" then
+      if String_utils.ends_with url ".ml" then
         let action_yojson = Yojson.Safe.from_string content_str in
         (* print_endline content_str; *)
         let action = Action.t_of_yojson action_yojson in

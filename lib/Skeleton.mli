@@ -13,7 +13,7 @@ type t =
   (* (apply_expr, fun_expr, arg_skels). can have 0 arguments, e.g. bare variable usage (var does not have have function type) *)
   | Apply of expression * expression * (Asttypes.arg_label * t) list 
 
-  | Construct of Longident.t * t option
+  | Construct of expression * Longident.t * t option
 
 and binding_skel = value_binding * t
 

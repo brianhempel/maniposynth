@@ -2,3 +2,6 @@ vendor/
 _build/
 ast.ml
 simple.html
+scratch.ml
+*.mono
+*.merlin.cmt

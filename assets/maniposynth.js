@@ -2,6 +2,7 @@ function doAction(action) {
   let request = new XMLHttpRequest();
   request.open("PATCH", document.location.href);
   request.setRequestHeader("Content-type", "application/json");
+  request.addEventListener("loadend", () => document.location.reload() );
   request.send(JSON.stringify(action));
 }
 
