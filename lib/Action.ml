@@ -4,8 +4,8 @@
 *)
 
 type t =
-  | AddCodeToScopeBindings of string * Ast_id.t
-  | ReplaceCodeAtExpr of string * Ast_id.t
+  | AddCodeToScopeBindings of string * string (* code str and scope id str *)
+  | ReplaceCodeAtExpr of string * string (* code str and ast id str *)
   [@@deriving yojson]
 
 module Parsetree   = Ocamlformat_lib.Migrate_ast.Parsetree
@@ -32,11 +32,13 @@ let f file_path action =
   let parsed_with_comments = Parse_unparse.parse_file file_path in
   let ast' = 
     match action with
-    | AddCodeToScopeBindings (new_code, scope_id) ->
-      let expr' = Ast_utils.parse_expr new_code in
+    | AddCodeToScopeBindings (new_code, scope_id_str) ->
+      let expr' = Ast_utils.Exp.of_string new_code in
+      let scope_id = Ast_id.t_of_string scope_id_str in
       add_exp_to_scope_bindings ~expr' ~scope_id parsed_with_comments.ast
-    | ReplaceCodeAtExpr (new_code, expr_id) ->
-      let expr' = Ast_utils.parse_expr new_code in
+    | ReplaceCodeAtExpr (new_code, expr_id_str) ->
+      let expr' = Ast_utils.Exp.of_string new_code in
+      let expr_id = Ast_id.t_of_string expr_id_str in
       Ast_utils.replace_expr_by_id ~expr_id ~expr' parsed_with_comments.ast
   in
   let parsed_with_comments' = { parsed_with_comments with ast = ast' } in

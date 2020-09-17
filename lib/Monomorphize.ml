@@ -55,16 +55,34 @@ let tvar_str_opts_of_type (typ : Types.type_expr) : string option list =
     | Tvar str_opt -> str_opt::idents
     | _ -> idents
   in
-  Btype.fold_type_expr gather_idents [] typ
+  Ast_utils.Type.deep_fold_type_expr gather_idents [] typ
+
+(* let tvars_of_type (typ : Types.type_expr) : string option list =
+  let open Types in
+  let gather_tvars tvars typ =
+    match typ.desc with
+    | Tvar _ -> typ::tvars
+    | _ -> tvars
+  in
+  Btype.fold_type_expr gather_tvars [] typ *)
 
 let is_monomorphic (typ : Types.type_expr) : bool =
-  tvar_str_opts_of_type typ
-  |> List.for_all (function | None -> false | Some str -> not (Typetexp.valid_tyvar_name str))
+  (* Printtyp.raw_type_expr Format.std_formatter typ;
+  Format.pp_print_newline Format.std_formatter ();
+  print_endline (string_of_int (List.length (tvar_str_opts_of_type typ))); *)
+  let result =
+    tvar_str_opts_of_type typ
+    |> List.for_all (function | None -> false | Some str -> not (Typetexp.valid_tyvar_name str))
+  in
+  (* print_endline (string_of_bool result); *)
+  result
 
 let rec all_args_monomorphic (typ : Types.type_expr) : bool =
   match typ.desc with
   | Types.Tlink typ -> all_args_monomorphic typ
   | Types.Tarrow (_label, l_type, r_type, _commutable) ->
+      (* Printtyp.type_expr Format.std_formatter typ;
+      Format.pp_print_newline Format.std_formatter (); *)
       is_monomorphic l_type && all_args_monomorphic r_type
   | _ -> true
 
@@ -90,19 +108,11 @@ let rec all_args_monomorphic (typ : Types.type_expr) : bool =
   in
   iterator.structure iterator structure *)
 
-let structure_of_toplevel_phrases (phrases : Parsetree.toplevel_phrase list) : Parsetree.structure =
-  let open Parsetree in
-  phrases
-  |> List.concat_map (function
-      | Ptop_def structure_items -> structure_items
-      | Ptop_dir _directive      -> failwith "structure_of_toplevel_phrases cannot handle toplevel directive (Ptop_dir)"
-  )
-
-let toplevel_phrases_of_structure structure =
-  [ Parsetree.Ptop_def structure ]
-
 let core_type_of_type_expr type_expr =
+  Printtyp.Naming_context.enable false; (* print "nat" instead of "nat/2" *)
   let type_str = (Utils.formatter_to_stringifyer Printtyp.type_expr) type_expr in
+  (* print_endline type_str; *)
+  Printtyp.Naming_context.reset ();
   Parse.core_type (Lexing.from_string type_str)
 
 let add_monomorphic_bindng_to_toplevel_phrases
@@ -164,9 +174,9 @@ let add_monomorphic_bindng_to_toplevel_phrases
         [structure_item]
   in
   phrases
-  |> structure_of_toplevel_phrases
+  |> Ast_utils.structure_of_toplevel_phrases
   |> List.concat_map map_structure_item
-  |> toplevel_phrases_of_structure
+  |> Ast_utils.toplevel_phrases_of_structure
 
 
 let f scratch_file_path =
@@ -179,7 +189,7 @@ let f scratch_file_path =
         Format.pp_print_newline Format.std_formatter ();
         Printtyp.type_expr Format.std_formatter fun_type;
         Format.pp_print_newline Format.std_formatter (); *)
-        not (all_args_monomorphic fun_type)
+        not (all_args_monomorphic fun_type) (* && binding_pat_str_loced.Location.txt <> "tracepoint" *)
       )
     in
     let var_idents_names_types = simple_vars_of_structure typed_structure in
@@ -192,6 +202,12 @@ let f scratch_file_path =
           None
         else
           let mono_type = ident_type in
+          (* Ident.print Format.std_formatter ident;
+          Format.pp_print_newline Format.std_formatter ();
+          Printtyp.type_expr Format.std_formatter mono_type;
+          Format.pp_print_newline Format.std_formatter ();
+          Printtyp.raw_type_expr Format.std_formatter mono_type;
+          Format.pp_print_newline Format.std_formatter (); *)
           List_utils.assoc3_opt ident let_bound_polymorphic_idents_names_types
           |> Option.map (fun (binding_pat_str_loced, fun_type) -> (ident, longident_loced, mono_type, binding_pat_str_loced, fun_type))
       )
@@ -211,7 +227,12 @@ let f scratch_file_path =
           |> List.find_opt (fun (existing_ident, existing_mono_type, _mono_name) ->
             (* Printtyp.type_expr Format.std_formatter mono_type;
             Printtyp.type_expr Format.std_formatter existing_mono_type;
-            Format.pp_print_newline Format.std_formatter (); *)
+            Format.pp_print_newline Format.std_formatter ();
+            Ident.print Format.std_formatter ident;
+            Ident.print Format.std_formatter existing_ident;
+            Format.pp_print_newline Format.std_formatter ();
+            print_endline (string_of_bool @@ Ident.same ident existing_ident);
+            print_endline (string_of_bool @@ Ctype.equal typed_structure.str_final_env true [mono_type] [existing_mono_type]); *)
             Ident.same ident existing_ident && Ctype.equal typed_structure.str_final_env true [mono_type] [existing_mono_type]
           )
           |> Option.map (fun (_, _, mono_name) -> mono_name)

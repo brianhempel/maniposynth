@@ -7,7 +7,10 @@ val of_expr : expression -> t
 val of_pat  : pattern    -> t
 val of_loc  : Location.t -> t
 
-val t_of_yojson : Yojson.Safe.t -> t
-val yojson_of_t : t -> Yojson.Safe.t
+(* val t_of_yojson : Yojson.Safe.t -> t
+val yojson_of_t : t -> Yojson.Safe.t *)
+
+val t_of_string : string -> t
+val string_of_t : t -> string
 
 val has_id : ?expr:expression -> t -> bool

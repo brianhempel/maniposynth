@@ -1,4 +1,5 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
+open Utils
 
 (* Using parsing locations as id's. *)
 
@@ -19,6 +20,9 @@ type t = Location.t =
 let of_expr expr = expr.pexp_loc
 let of_pat pat   = pat.ppat_loc
 let of_loc loc   = loc
+
+let string_of_t = yojson_of_t %> Yojson.Safe.to_string
+let t_of_string = Yojson.Safe.from_string %> t_of_yojson
 
 let has_id ?(expr) id =
   match expr with

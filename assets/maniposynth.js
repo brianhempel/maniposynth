@@ -6,19 +6,19 @@ function doAction(action) {
   request.send(JSON.stringify(action));
 }
 
-function addCodeToScopeBindings(newCode, scopeIdJson) {
+function addCodeToScopeBindings(newCode, scopeIdStr) {
   doAction([
     "AddCodeToScopeBindings",
     newCode,
-    scopeIdJson
+    scopeIdStr
   ]);
 }
 
-function replaceCodeAtExpr(newCode, exprIdJson) {
+function replaceCodeAtExpr(newCode, exprIdStr) {
   doAction([
     "ReplaceCodeAtExpr",
     newCode,
-    exprIdJson
+    exprIdStr
   ]);
 }
 
@@ -55,17 +55,15 @@ function drop(event) {
   event.preventDefault();
   let dropTarget = event.currentTarget;
   let newCode = event.dataTransfer.getData("application/new-code");
-  if (dropTarget.dataset.scopeIdJsonStr) {
-    let scopeIdJson = JSON.parse(dropTarget.dataset.scopeIdJsonStr);
+  if (dropTarget.dataset.scopeIdStr) {
     if (dropTarget.classList.contains("bindings")) {
-      addCodeToScopeBindings(newCode, scopeIdJson);
+      addCodeToScopeBindings(newCode, dropTarget.dataset.scopeIdStr);
     } else if (dropTarget.classList.contains("rets")) {
-      addCodeToScopeRet(newCode, scopeIdJson);
+      addCodeToScopeRet(newCode, dropTarget.dataset.scopeIdStr);
     }
     event.stopPropagation();
-  } else if (dropTarget.dataset.exprIdJsonStr) {
-    let exprIdJson = JSON.parse(dropTarget.dataset.exprIdJsonStr);
-    replaceCodeAtExpr(newCode, exprIdJson);
+  } else if (dropTarget.dataset.exprIdStr) {
+    replaceCodeAtExpr(newCode, dropTarget.dataset.exprIdStr);
     event.stopPropagation();
   } else {
     console.log("No valid actions for drop on");
@@ -89,7 +87,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Add drop zone events.
 
-  document.querySelectorAll('[data-scope-id-json-str],[data-expr-id-json-str]').forEach(elem => {
+  document.querySelectorAll('[data-scope-id-str],[data-expr-id-str]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
     elem.addEventListener("drop", drop);

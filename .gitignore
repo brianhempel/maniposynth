@@ -5,3 +5,4 @@ simple.html
 scratch.ml
 *.mono
 *.merlin.cmt
+*.tp_placeholders

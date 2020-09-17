@@ -21,13 +21,12 @@ let box ?(attrs = []) klass = Tyxml.Html.div ~a:([a_class ["box"; klass]] @ attr
 
 let label ?(attrs = []) str = box ~attrs "label" [txt str]
 
-let ast_id_json_str_of_expr = Ast_id.of_expr %> Ast_id.yojson_of_t %> Yojson.Safe.to_string
-(* let ast_id_json_str_of_pat  = Ast_id.of_pat  %> Ast_id.yojson_of_t %> Yojson.Safe.to_string *)
+let ast_id_str_of_expr = Ast_id.of_expr %> Ast_id.string_of_t
 
 let a_new_code code_str = a_user_data "new-code" code_str
-let a_scope_id scope_expr = a_user_data "scope-id-json-str" (ast_id_json_str_of_expr scope_expr)
-let a_expr_id expr        = a_user_data "expr-id-json-str" (ast_id_json_str_of_expr expr)
-(* let a_pat_id pat          = a_user_data "pat-id-json-str" (ast_id_json_str_of_pat pat) *)
+let a_scope_id scope_expr = a_user_data "scope-id-str" (ast_id_str_of_expr scope_expr)
+let a_expr_id expr        = a_user_data "expr-id-str" (ast_id_str_of_expr expr)
+(* let a_pat_id pat          = a_user_data "pat-id-str" (ast_id_json_str_of_pat pat) *)
 
 let rec html_of_skeleton (skel : skel) =
   match skel with

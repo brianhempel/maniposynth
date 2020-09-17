@@ -1,3 +1,5 @@
+(* It is possible that if we replace (??) with (failwith "") we do not need to use merlin *)
+
 let typed_structure_of_file path =
   (* ocamlc -bin-annot simple.ml ... but this prodcues partial implemenations, merlin instead produces a single structure *)
   (* ../custom_merlin/ocamlmerlin single dump -what typedtree -filename "simple.ml" < simple.ml *)
@@ -18,4 +20,3 @@ let typed_structure_of_file path =
   | Packed (_, _)            -> failwith "Cmt_format.Packed"
   | Interface _              -> failwith "Cmt_format.Interface"
   | Partial_interface _      -> failwith "Cmt_format.Partial_interface"
-

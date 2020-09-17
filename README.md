@@ -22,3 +22,6 @@ $ make watch           # Automatically rebuild and run on file save.
 
 Read the Makefile for more details.
 
+## Supported Subset of OCaml
+
+All types declared in the file should appear before any let bindings. (Otherwise monomorphization might get stuck in a loop by adding monomorphic definitions that use the type before it exists.)
