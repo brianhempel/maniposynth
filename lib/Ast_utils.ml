@@ -4,7 +4,7 @@ module Migrate_ast = Ocamlformat_lib.Migrate_ast
 module Ast_mapper  = Ocamlformat_lib.Migrate_ast.Ast_mapper
 module Parsetree   = Ocamlformat_lib.Migrate_ast.Parsetree
 
-(* Reminder: type structure = structure_item list *)
+(* Reminder: type Parsetree.structure = structure_item list *)
 
 let structure_of_toplevel_phrases (phrases : Parsetree.toplevel_phrase list) : Parsetree.structure =
   let open Parsetree in
@@ -55,6 +55,15 @@ module Exp = struct
 
   let string = Ast_helper.Exp.constant % Ast_helper.Const.string
 
+  let rec list = function
+    | [] ->
+        Ast_helper.Exp.construct (longident_loced "[]") None
+    | expr::rest ->
+        Ast_helper.Exp.construct
+          (longident_loced "::")
+          (Some (Ast_helper.Exp.tuple [expr; list rest]))
+
+
   let of_string code =
     Lexing.from_string code
     |> Migrate_parsetree.Parse.expression Migrate_ast.selected_version
@@ -65,20 +74,12 @@ end
 
 module Pat = struct
 
+  let var name =
+    Ast_helper.Pat.var ~loc:Location.none (Location.mknoloc name)
+
   let get_var_name_opt (pattern : Parsetree.pattern) =
     match pattern.ppat_desc with
     | Parsetree.Ppat_var name_loced -> Some name_loced.txt
     | _                             -> None
-
-end
-
-module Type = struct
-  (* Btype.fold_type_expr only applys f to the immediate children. *)
-  let deep_fold_type_expr f init typ =
-    let rec f' acc typ =
-      let acc' = Btype.fold_type_expr f' acc typ in
-      f acc' typ
-    in
-    f' init typ
 
 end

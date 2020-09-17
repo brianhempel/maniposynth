@@ -63,3 +63,6 @@ let rec split ?(limit = -1) ?(start_index = 0) str sep =
         :: split ~limit:(limit - 1) ~start_index:(i + length sep) str sep
     | None ->
         [sub str start_index (length str - start_index)]
+
+(* "a b-c d'" => "a_b_c_d_" *)
+let parameterize = map (fun c -> if Char_utils.is_alphanum c then c else '_')

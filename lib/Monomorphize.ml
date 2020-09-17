@@ -42,11 +42,6 @@ let simple_vars_of_structure (structure : Typedtree.structure) : (Ident.t * Long
   iterator.structure iterator structure;
   !idents_names_types
 
-(* let rec arg_types_flat (typ : Types.type_expr) : Types.type_expr list =
-  match typ.desc with
-  | Types.Tarrow (_label, l_type, r_type, _commutable) ->
-      l_type :: arg_types_flat r_type
-  | _ -> [typ] *)
 
 let tvar_str_opts_of_type (typ : Types.type_expr) : string option list =
   let open Types in
@@ -55,7 +50,7 @@ let tvar_str_opts_of_type (typ : Types.type_expr) : string option list =
     | Tvar str_opt -> str_opt::idents
     | _ -> idents
   in
-  Ast_utils.Type.deep_fold_type_expr gather_idents [] typ
+  Type_utils.deep_fold_type_expr gather_idents [] typ
 
 (* let tvars_of_type (typ : Types.type_expr) : string option list =
   let open Types in
@@ -181,7 +176,7 @@ let add_monomorphic_bindng_to_toplevel_phrases
 
 let f scratch_file_path =
   let rec loop mono_counter ident_monotype_mononame_assoc =
-    let typed_structure = Type_utils.typed_structure_of_file scratch_file_path in
+    let (_, typed_structure) = Type_utils.final_env_and_typed_structure_of_file scratch_file_path in
     let let_bound_polymorphic_idents_names_types =
       let_bound_idents_of_structure typed_structure
       |> List.filter (fun (_ident, _binding_pat_str_loced, fun_type) ->
@@ -249,7 +244,7 @@ let f scratch_file_path =
               { parsed_with_comments with ast = ast' }
             in
             let out_str = Parse_unparse.unparse scratch_file_path parsed_with_comments' in
-            print_string @@ out_str;
+            (* print_string @@ out_str; *)
             Sys_utils.save_file scratch_file_path out_str;
             loop (mono_counter + 1) ((ident, mono_type, mono_name)::ident_monotype_mononame_assoc)            
 
@@ -263,7 +258,7 @@ let f scratch_file_path =
               { parsed_with_comments with ast = ast' }
             in
             let out_str = Parse_unparse.unparse scratch_file_path parsed_with_comments' in
-            print_string @@ out_str;
+            (* print_string @@ out_str; *)
             Sys_utils.save_file scratch_file_path out_str;
             loop mono_counter ident_monotype_mononame_assoc
         )

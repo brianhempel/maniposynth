@@ -11,3 +11,6 @@ val ends_with : string -> String.t -> bool
 val find_index : ?start_index:int -> string -> string -> int option
 
 val split : ?limit:int -> ?start_index:int -> string -> string -> string list
+
+(* "a b-c d'" => "a_b_c_d_" *)
+val parameterize : string -> string

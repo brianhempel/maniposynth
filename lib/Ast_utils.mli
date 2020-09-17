@@ -1,6 +1,6 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
-(* Reminder: type structure = structure_item list *)
+(* Reminder: type Parsetree.structure = structure_item list *)
 
 val structure_of_toplevel_phrases : toplevel_phrase list -> structure
 
@@ -31,6 +31,7 @@ val longident_loced : string -> Longident.t Location.loc
 module Exp : sig
   val var    : string -> expression
   val string : string -> expression
+  val list   : expression list -> expression
 
   val of_string : string -> expression
 
@@ -38,12 +39,7 @@ module Exp : sig
 end
 
 module Pat : sig
+  val var : string -> pattern
+
   val get_var_name_opt : pattern -> string option
-end
-
-module Type : sig
-  open Types
-
-  (* Btype.fold_type_expr only applys f to the immediate children. *)
-  val deep_fold_type_expr : ('a -> type_expr -> 'a) -> 'a -> type_expr -> 'a
 end
