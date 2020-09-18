@@ -28,14 +28,37 @@ let a_scope_id scope_expr = a_user_data "scope-id-str" (ast_id_str_of_expr scope
 let a_expr_id expr        = a_user_data "expr-id-str" (ast_id_str_of_expr expr)
 (* let a_pat_id pat          = a_user_data "pat-id-str" (ast_id_json_str_of_pat pat) *)
 
-let rec html_of_value = function Tracing.Ctor (name, _type_name, args) ->
-  box "value" @@
-  match args with
-  | []    -> [txt name]
-  | [arg] -> [txt name; html_of_value arg]
-  | args  -> [txt name; txt "("] @ List.map html_of_value args @ [txt ")"]
 
-let html_of_traced_values_at trace id =
+let rec html_of_value ?new_code ?(destruct_path = ("", [])) = function Tracing.Ctor (ctor_name, type_str, args) ->
+  let new_code_attrs = new_code |> Option.map a_new_code |> Option.to_list in
+  let destuct_path_attrs =
+    match destruct_path with
+    | ("", _)   -> []
+    | (_, [])   -> []
+    | (_, _::_) -> [a_user_data "destruct-path-str" (Action.string_of_destruct_path destruct_path)]
+  in
+  let (scrutinee_code, destructions) = (* Initialize scrutinee for destruction *)
+    match (new_code, destruct_path) with
+    | (Some new_code, ("", [])) -> (new_code, [])
+    | _                         -> destruct_path
+  in
+  let arg_htmls =
+    args |> List.mapi (fun i arg ->
+      let open Action in
+      let destruction = { type_str = type_str; ctor_name = ctor_name; arg_n = i } in
+      let destruct_path = (scrutinee_code, destructions @ [destruction]) in
+      html_of_value ~destruct_path arg
+    )
+  in
+  let attrs = new_code_attrs @ destuct_path_attrs in
+  box ~attrs "value" @@
+    match arg_htmls with
+    | []         -> [txt ctor_name]
+    | [arg_html] -> [txt ctor_name; arg_html]
+    | arg_htmls  -> [txt ctor_name; txt "("] @ arg_htmls @ [txt ")"]
+
+
+let html_of_traced_values_at ?new_code trace id =
   let open Tracing in
   let tracesnaps =
     let target_str = Ast_id.string_of_t id in
@@ -48,7 +71,7 @@ let html_of_traced_values_at trace id =
       box "tracesnap"
         ~attrs:[ a_user_data "frame-n" (string_of_int frame_n)
                ; a_user_data "type" type_str ]
-        [html_of_value value]
+        [html_of_value ?new_code value]
     )
     |> function [] -> [txt "?"] | list -> list
   end
@@ -63,12 +86,12 @@ let rec html_of_skeleton trace (skel : skel) =
       let ret_boxes = List.map recurse ret_skels in
       box "bindings_rets"
         [ box ~attrs:[a_scope_id scope_expr] "bindings" binding_boxes
-        ; box ~attrs:[a_scope_id scope_expr] "rets" ret_boxes
+        ; box "rets" ret_boxes
         ]
   | Fun (param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
       box "fun"
-        [ box "param" [label ~attrs:[a_new_code param_code] param_code; html_of_traced_values_at trace (Ast_id.of_pat pat)]
+        [ box "param" [label ~attrs:[a_new_code param_code] param_code; html_of_traced_values_at ~new_code:param_code trace (Ast_id.of_pat pat)]
         ; box "ret" [recurse body_skel]
         ]
   | Apply (expr, f_expr, arg_labels_skels) ->
@@ -90,10 +113,12 @@ let rec html_of_skeleton trace (skel : skel) =
         [ box "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)] ]
 
 and html_of_binding_skel trace (binding, skel) =
-  let binding_code =
-    Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.expr binding.pvb_expr
-  in
-  box "binding" [label binding_code; html_of_skeleton trace skel]
+  let pat_code = Show_ast.pat binding.pvb_pat in
+  let binding_code = pat_code ^ " = " ^ Show_ast.expr binding.pvb_expr in
+  box "binding" @@
+    [ label ~attrs:[a_new_code pat_code; a_expr_id binding.pvb_expr] binding_code
+    ; html_of_skeleton trace skel
+    ]
 
 let html_of_callables callables =
   let html_of_callable (name, arg_count) =

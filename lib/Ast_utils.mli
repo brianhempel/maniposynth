@@ -21,6 +21,13 @@ val map_exprs
   -> toplevel_phrase list
   -> toplevel_phrase list
 
+(* Thunk iterates deeper, so you can control iteration order. *)
+(* Don't forget to call the thunk! *)
+val iterate_exprs
+  :  ((unit -> unit) -> expression -> unit) 
+  -> toplevel_phrase list
+  -> unit
+
 (* Bottom up: f applied to leaves first. *)
 val map_expr_by_id
   :  expr_id:Ast_id.t
@@ -34,10 +41,6 @@ val replace_expr_by_id
   -> toplevel_phrase list
   -> toplevel_phrase list
 
-val longident : string -> Longident.t
-
-val longident_loced : string -> Longident.t Location.loc
-
 module Exp : sig
   val var    : string -> expression
   val string : string -> expression
@@ -46,6 +49,21 @@ module Exp : sig
   val of_string : string -> expression
 
   val is_fun : expression -> bool
+
+  (* Bottom up. *)
+  val map : (expression -> expression) -> expression -> expression
+
+  val map_by_id
+    :  expr_id:Ast_id.t
+    -> f:(expression -> expression)
+    -> expression
+    -> expression
+
+  val replace_by_id
+    :  expr_id:Ast_id.t
+    -> expr':expression
+    -> expression
+    -> expression
 end
 
 module Pat : sig

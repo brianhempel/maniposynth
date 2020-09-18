@@ -22,6 +22,14 @@ function replaceCodeAtExpr(newCode, exprIdStr) {
   ]);
 }
 
+function destructAndReplaceCodeAtExpr(destructPathStr, exprIdStr) {
+  doAction([
+    "DestructAndReplaceCodeAtExpr",
+    destructPathStr,
+    exprIdStr
+  ]);
+}
+
 
 //////////////// Drag and Drop /////////////////////////////////
 
@@ -29,7 +37,8 @@ function replaceCodeAtExpr(newCode, exprIdStr) {
 // When drag starts, store information.
 function dragstart(event) {
   let node = event.target;
-  event.dataTransfer.setData("application/new-code", node.dataset.newCode);
+  if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
+  if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
 }
 
 function dragend(event) {
@@ -55,15 +64,16 @@ function drop(event) {
   event.preventDefault();
   let dropTarget = event.currentTarget;
   let newCode = event.dataTransfer.getData("application/new-code");
-  if (dropTarget.dataset.scopeIdStr) {
-    if (dropTarget.classList.contains("bindings")) {
-      addCodeToScopeBindings(newCode, dropTarget.dataset.scopeIdStr);
-    } else if (dropTarget.classList.contains("rets")) {
-      addCodeToScopeRet(newCode, dropTarget.dataset.scopeIdStr);
-    }
+  let destructPathStr = event.dataTransfer.getData("application/destruct-path-str");
+  if (dropTarget.dataset.scopeIdStr && dropTarget.classList.contains("bindings") && newCode) {
+    addCodeToScopeBindings(newCode, dropTarget.dataset.scopeIdStr);
     event.stopPropagation();
   } else if (dropTarget.dataset.exprIdStr) {
-    replaceCodeAtExpr(newCode, dropTarget.dataset.exprIdStr);
+    if (newCode) {
+      replaceCodeAtExpr(newCode, dropTarget.dataset.exprIdStr);
+    } else if (destructPathStr) {
+      destructAndReplaceCodeAtExpr(destructPathStr, dropTarget.dataset.exprIdStr);
+    }
     event.stopPropagation();
   } else {
     console.log("No valid actions for drop on");
@@ -76,7 +86,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items draggable.
 
-  document.querySelectorAll('[data-new-code]').forEach(elem => {
+  document.querySelectorAll('[data-new-code],[data-destruct-path-str]').forEach(elem => {
     elem["draggable"] = true;
   });
 

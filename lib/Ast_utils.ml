@@ -1,8 +1,9 @@
 open Utils
+open Name_utils
 
-module Migrate_ast = Ocamlformat_lib.Migrate_ast
-module Ast_mapper  = Ocamlformat_lib.Migrate_ast.Ast_mapper
-module Parsetree   = Ocamlformat_lib.Migrate_ast.Parsetree
+module Migrate_ast  = Ocamlformat_lib.Migrate_ast
+module Ast_mapper   = Ocamlformat_lib.Migrate_ast.Ast_mapper
+module Parsetree    = Ocamlformat_lib.Migrate_ast.Parsetree
 
 (* Reminder: type Parsetree.structure = structure_item list *)
 
@@ -17,7 +18,8 @@ let structure_of_toplevel_phrases (phrases : Parsetree.toplevel_phrase list) : P
 let toplevel_phrases_of_structure structure =
   [ Parsetree.Ptop_def structure ]
 
-let default_mapper = Ast_mapper.default_mapper
+let default_mapper   = Ast_mapper.default_mapper
+let default_iterator = Ast_iterator.default_iterator
 
 let apply_mapper_to_toplevel_phrases (mapper : Ast_mapper.mapper) toplevel_phrases =
   let open Parsetree in
@@ -35,35 +37,42 @@ let apply_iterator_to_toplevel_phrases (iterator : Ast_iterator.iterator) toplev
       | Ptop_dir _directive -> ()
   )
 
-(* Bottom up: f applied to leaves first. *)
-let map_expr_by_id ~expr_id ~f toplevel_phrases =
-  let replacer mapper expr =
-    let expr' = default_mapper.expr mapper expr in
-    if Ast_id.has_id expr_id ~expr:expr'
-    then f expr'
-    else expr'
-  in
-  let mapper = { default_mapper with expr = replacer } in
-  apply_mapper_to_toplevel_phrases mapper toplevel_phrases
-
-let replace_expr_by_id ~expr_id ~expr' toplevel_phrases =
-  map_expr_by_id ~expr_id ~f:(fun _ -> expr') toplevel_phrases
-
+(* Bottom up. *)
 let expr_mapper f =
   let replacer mapper expr =
     let expr' = default_mapper.expr mapper expr in
     f expr'
   in
   { default_mapper with expr = replacer }
-  
+
+(* A thunk to iterate deeper is passed to f, so you can control iteration order. *)
+let expr_iterator f =
+  let iter_exp iterator expr =
+    f (fun () -> default_iterator.expr iterator expr) expr
+  in
+  { default_iterator with expr = iter_exp }
+
+(* Bottom up. *)
 let map_exprs f toplevel_phrases =
   apply_mapper_to_toplevel_phrases (expr_mapper f) toplevel_phrases
 
-let longident name =
-  Option.get (Longident.unflatten [name])
+(* A thunk to iterate deeper is passed to f, so you can control iteration order. *)
+(* Don't forget to call the thunk! *)
+let iterate_exprs f toplevel_phrases =
+  apply_iterator_to_toplevel_phrases (expr_iterator f) toplevel_phrases
 
-let longident_loced name =
-  Location.mknoloc (longident name)
+(* Bottom up: f applied to leaves first. *)
+let map_expr_by_id ~expr_id ~f toplevel_phrases =
+  let replacer expr =
+    if Ast_id.has_id expr_id ~expr
+    then f expr
+    else expr
+  in
+  map_exprs replacer toplevel_phrases
+
+let replace_expr_by_id ~expr_id ~expr' toplevel_phrases =
+  map_expr_by_id ~expr_id ~f:(fun _ -> expr') toplevel_phrases
+
 
 module Exp = struct
   open Parsetree
@@ -87,6 +96,22 @@ module Exp = struct
     |> Migrate_parsetree.Parse.expression Migrate_ast.selected_version
   
   let is_fun expr = match expr.pexp_desc with Pexp_fun _ -> true | _ -> false
+
+  (* Bottom up. *)
+  let map f expr =
+    let mapper = expr_mapper f in
+    mapper.expr mapper expr
+  
+  let map_by_id ~expr_id ~f expr =
+    let replacer expr =
+      if Ast_id.has_id expr_id ~expr
+      then f expr
+      else expr
+    in
+    map replacer expr  
+
+  let replace_by_id ~expr_id ~expr' expr =
+    map_by_id ~expr_id ~f:(fun _ -> expr') expr  
 end
 
 

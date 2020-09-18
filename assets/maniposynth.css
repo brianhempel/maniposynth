@@ -129,5 +129,4 @@ body > .binding > .label {
   display: inline-block;
   font-family: 'Liga Menlo', 'Menlo', 'Monaco', monospace;
   margin: 0 2px;
-  cursor: pointer;
 }

@@ -249,13 +249,33 @@ let f scratch_file_path =
             loop (mono_counter + 1) ((ident, mono_type, mono_name)::ident_monotype_mononame_assoc)            
 
         | Some mono_name ->
+            let non_mono_ident = ident in
             let parsed_with_comments' =
-              let ast' =
-                let expr_id = Ast_id.of_loc longident_loced.loc in
+              let f expr =
+                let open Parsetree in
+                match expr.pexp_desc with
+                | Pexp_ident { txt = _; loc = loc_here } ->
+                    let type_opt =
+                      var_idents_names_types
+                      |> List.find_opt (fun (ident, longident_loced, _ident_type) ->
+                        loc_here = longident_loced.Location.loc && Ident.same ident non_mono_ident
+                      ) |> Option.map (fun (_, _, ident_type) -> ident_type)
+                    in
+                    (match type_opt with
+                    | Some type_here when Ctype.equal typed_structure.str_final_env true [mono_type] [type_here] ->
+                        Ast_utils.Exp.var mono_name
+                    | _ ->
+                        expr
+                    )
+                | _ ->
+                    expr
+                
+                (* let expr_id = Ast_id.of_loc longident_loced.loc in
                 let expr'   = Ast_utils.Exp.var mono_name in
-                Ast_utils.replace_expr_by_id ~expr_id ~expr' parsed_with_comments.ast
+                Ast_utils.replace_expr_by_id ~expr_id ~expr' parsed_with_comments.ast *)
+                
               in
-              { parsed_with_comments with ast = ast' }
+              { parsed_with_comments with ast = Ast_utils.map_exprs f parsed_with_comments.ast }
             in
             let out_str = Parse_unparse.unparse scratch_file_path parsed_with_comments' in
             (* print_string @@ out_str; *)

@@ -31,6 +31,9 @@ let loc = Location.none (* For metaquote *)
 
 let code = Ast_utils.Exp.of_string
 
+let name_from_type = Name_utils.name_from_type
+
+
 let tracepoint_placeholder ?(id : Ast_id.t option) (expr : expression) =
   let id = Option.value id ~default:(Ast_id.of_expr expr) in
   let id_str_exp = Ast_utils.Exp.string (Ast_id.string_of_t id) in
@@ -179,16 +182,12 @@ let tracepoint_mono_name_and_type_opt_of_value_binding (vb : Typedtree.value_bin
   | _ ->
       None
 
-let type_name_str typ =
-  (Utils.formatter_to_stringifyer Printtyp.type_expr) typ
-  |> String_utils.parameterize
-
 let mk_value_of_type_vb (env : Env.t) (typ : Types.type_expr) =
   let typ = Btype.repr typ in (* Remove Tlink, shallow *)
-  let fun_name = "value_of_" ^ type_name_str typ in
+  let fun_name = "value_of_" ^ name_from_type typ in
   let fun_expr =
     let open Types in
-    let param_name = type_name_str typ in
+    let param_name = name_from_type typ in
     (match typ.desc with
     | Tconstr (path, _type_parameters, _abbrev_memo_ref) ->
       (* Path.print Format.std_formatter path;
@@ -204,7 +203,7 @@ let mk_value_of_type_vb (env : Env.t) (typ : Types.type_expr) =
               (* Tag_name (typ1, typ2) -> Ctor ("Tag_name", "type", [value_of_typ typ1, value_of_typ typ2]) *)
               let arg_names =
                 ctor_desc.cstr_args
-                |> List.mapi (fun i arg_type -> type_name_str arg_type ^ string_of_int i)
+                |> List.mapi (fun i arg_type -> name_from_type arg_type ^ string_of_int i)
               in
               let case_pat =
                 (* Tag_name (typ1, typ2) *)
@@ -216,14 +215,14 @@ let mk_value_of_type_vb (env : Env.t) (typ : Types.type_expr) =
                   )
                 in
                 (* Assuming constructors don't need path prefixes .. see https://github.com/ocaml/merlin/blob/v3.3.8/src/analysis/destruct.ml.new for how to change that when the time comes *)
-                Ast_helper.Pat.construct (Ast_utils.longident_loced ctor_desc.cstr_name) args_pat_opt
+                Ast_helper.Pat.construct (Name_utils.longident_loced ctor_desc.cstr_name) args_pat_opt
               in
               let case_expr =
                 (* Ctor ("Tag_name", "type", [value_of_typ typ1, value_of_typ typ2]) *)
                 let ctor_name_expr = Ast_utils.Exp.string ctor_desc.cstr_name in
                 let type_name_expr = Ast_utils.Exp.string ((Utils.formatter_to_stringifyer Printtyp.type_expr) typ) in
                 let arg_exprs_list =
-                  List.map2 (fun arg_type arg_name -> code ("value_of_" ^ type_name_str arg_type ^ " " ^ arg_name))
+                  List.map2 (fun arg_type arg_name -> code ("value_of_" ^ name_from_type arg_type ^ " " ^ arg_name))
                     ctor_desc.cstr_args
                     arg_names
                   |> Ast_utils.Exp.list
@@ -269,7 +268,7 @@ let filled_tracepoint_mono_fun_expr (mono_type : Types.type_expr) : Parsetree.ex
         [ serialize_str "Tracesnap"
         ; string_of_int frame_n
         ; serialize_str id_str
-        ; serialize_value (value_of_|} ^ type_name_str mono_type ^ {| x)
+        ; serialize_value (value_of_|} ^ name_from_type mono_type ^ {| x)
         ] |> String.concat ","
       end;
       output_string trace_out "]\n";
