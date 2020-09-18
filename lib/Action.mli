@@ -1,6 +1,7 @@
 type t =
   | AddCodeToScopeBindings of string * string (* code str and scope id str *)
   | ReplaceCodeAtExpr of string * string (* code str and ast id str *)
+  | DeleteExpr of string (* ast id str *)
   | DestructAndReplaceCodeAtExpr of string * string (* destruct path str and ast id str *)
 
 type destruction =

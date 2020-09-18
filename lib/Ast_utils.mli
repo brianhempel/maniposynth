@@ -53,6 +53,9 @@ module Exp : sig
   (* Bottom up. *)
   val map : (expression -> expression) -> expression -> expression
 
+  (* Don't forget to call the thunk: you control the iteration order. *)
+  val iter : ((unit -> unit) -> expression -> unit) -> expression -> unit
+
   val map_by_id
     :  expr_id:Ast_id.t
     -> f:(expression -> expression)
@@ -70,4 +73,6 @@ module Pat : sig
   val var : string -> pattern
 
   val get_var_name_opt : pattern -> string option
+
+  val all_var_names : pattern -> string list
 end

@@ -21,6 +21,7 @@ let a_new_code code_str = a_user_data "new-code" code_str
 let a_scope_id scope_expr = a_user_data "scope-id-str" (ast_id_str_of_expr scope_expr)
 let a_expr_id expr        = a_user_data "expr-id-str" (ast_id_str_of_expr expr)
 (* let a_pat_id pat          = a_user_data "pat-id-str" (ast_id_json_str_of_pat pat) *)
+let a_branch_path branch_path = a_user_data "branch-path" (Skeleton.string_of_branch_path branch_path)
 
 
 let rec html_of_value ?new_code ?(destruct_path = ("", [])) = function
@@ -73,31 +74,52 @@ let html_of_traced_values_at ?new_code trace id =
                ; a_user_data "type" type_str ]
         [html_of_value ?new_code value]
     )
-    |> function [] -> [txt "?"] | list -> list
+    |> function [] -> [box "nosnaps" [txt "?"]] | list -> list
   end
 
-let rec html_of_skeleton trace (skel : skel) =
-  let recurse = html_of_skeleton trace in
+(* String-ish expr representation, but parts are manipulable. *)
+let rec html_of_expr renamings expr =
+  let recurse = html_of_expr renamings in
+  let default () =
+    box ~attrs:[a_expr_id expr; a_new_code (Show_ast.expr expr)] "expr"
+      [txt (Show_ast.expr (Skeleton.apply_renamings renamings expr))]
+  in
+  match expr.pexp_desc with
+  | Pexp_apply (fun_expr, arg_labels_exps) ->
+      let arg_htmls = List.map (fun (_, e) -> recurse e) arg_labels_exps in
+      box ~attrs:[a_expr_id expr; a_new_code (Show_ast.expr expr)] "expr" @@
+        [txt (Show_ast.expr fun_expr)] @
+        List.concat_map (fun html -> [txt " "; html]) arg_htmls
+  | Pexp_construct (longident_loced, exp_opt) ->
+      let arg_htmls = List.map recurse (Option.to_list exp_opt) in
+      box ~attrs:[a_expr_id expr; a_new_code (Show_ast.expr expr)] "expr" @@
+        [txt (Show_ast.longident longident_loced.txt)] @
+        List.concat_map (fun html -> [txt " "; html]) arg_htmls
+  | _ ->
+      default ()
+
+let rec html_of_skeleton trace renamings (skel : skel) =
+  let recurse = html_of_skeleton trace renamings in
   match skel with
-  | Constant expr ->
+  | Constant (branch_path, expr) ->
       let code = Show_ast.expr expr in
-      box ~attrs:[a_expr_id expr; a_new_code code] "constant" [txt code]
+      box ~attrs:[a_expr_id expr; a_new_code code; a_branch_path branch_path] "constant" [txt code]
   | Unknown ->
       box "unknown" [txt "?"]
   | Bindings_rets (scope_expr, bindings_skels, ret_skels) ->
-      let binding_boxes = List.map (html_of_binding_skel trace) bindings_skels in
+      let binding_boxes = List.map (html_of_binding_skel trace renamings) bindings_skels in
       let ret_boxes = List.map recurse ret_skels in
       box "bindings_rets"
         [ box ~attrs:[a_scope_id scope_expr] "bindings" binding_boxes
         ; box "rets" ret_boxes
         ]
-  | Fun (param_label, default_opt, pat, body_skel) ->
+  | Fun (branch_path, param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
-      box "fun"
+      box ~attrs:[a_branch_path branch_path] "fun"
         [ box "param" [label ~attrs:[a_new_code param_code] param_code; html_of_traced_values_at ~new_code:param_code trace (Ast_id.of_pat pat)]
         ; box "ret" [recurse body_skel]
         ]
-  | Apply (expr, f_expr, arg_labels_skels) ->
+  | Apply (branch_path, expr, f_expr, arg_labels_skels) ->
       let arg_box (_arg_label, arg_skel) = box "arg" [recurse arg_skel] in
       let code = Show_ast.expr expr in
       let perhaps_args =
@@ -106,29 +128,29 @@ let rec html_of_skeleton trace (skel : skel) =
         | _  -> [box "args" (List.map arg_box arg_labels_skels)]
         )
       in
-      box "apply" @@
-        [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.expr f_expr)
+      box ~attrs:[a_branch_path branch_path] "apply" @@
+        [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.expr (Skeleton.apply_renamings renamings f_expr))
         ] @ perhaps_args @
         [ box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
         ]
-  | Construct (expr, longident, arg_skel_opt) ->
+  | Construct (branch_path, expr, longident, arg_skel_opt) ->
       (* imitate display of Apply *)
       let arg_box_opt =
         arg_skel_opt
         |> Option.map (fun arg_skel -> box "args" [box "arg" [recurse arg_skel]])
       in
       let code = Show_ast.expr expr in
-      box "apply construct" @@
+      box ~attrs:[a_branch_path branch_path] "apply construct" @@
         [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.longident longident) ] @
         Option.to_list arg_box_opt @
         [ box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)] ]
 
-and html_of_binding_skel trace (binding, skel) =
+and html_of_binding_skel trace renamings (branch_path, binding, skel) =
   let pat_code = Show_ast.pat binding.pvb_pat in
-  let binding_code = pat_code ^ " = " ^ Show_ast.expr binding.pvb_expr in
-  box "binding" @@
-    [ label ~attrs:[a_new_code pat_code; a_expr_id binding.pvb_expr] binding_code
-    ; html_of_skeleton trace skel
+  box ~attrs:[a_branch_path branch_path; a_expr_id binding.pvb_expr] "binding" @@
+    [ box ~attrs:[a_new_code pat_code] "label"
+        [txt (pat_code ^ " = "); html_of_expr renamings binding.pvb_expr]
+    ; html_of_skeleton trace renamings skel
     ]
 
 let html_of_callables callables =
@@ -144,22 +166,29 @@ let html_str (callables : (string * int) list) (trace : Tracing.tracesnap list) 
   let bindings_skels =
     (* Don't show "current example" binding. *)
     bindings_skels
-    |> List.filter (fun (value_binding, _) ->
+    |> List.filter (fun (_, value_binding, _) ->
       Some "current_ex" <> Ast_utils.Pat.get_var_name_opt value_binding.pvb_pat
     )
   in
   let open Tyxml.Html in
   let doc = 
     html
-      (head (title (txt "Manipo"))
+      (head (title (txt "ManipML"))
          [ link ~rel:[`Stylesheet] ~href:"assets/maniposynth.css" ()
+         ; meta ~a:[a_charset "UTF-8"] ()
          ; script ~a:[a_src (Xml.uri_of_string "assets/maniposynth.js")] (txt "")
          ; script ~a:[a_src (Xml.uri_of_string "assets/reload_on_file_changes.js")] (txt "")
          ]
       )
       (body @@
-        html_of_callables callables ::
-        (List.map (html_of_binding_skel trace) bindings_skels)
+        h1 [txt "ManipML"] ::
+        html_of_callables callables :: begin
+          bindings_skels
+          |> List.map (fun ((_, value_binding, _) as binding_skel) ->
+            let renamings = Skeleton.destruction_renamings_of_expr value_binding.pvb_expr in
+            html_of_binding_skel trace renamings binding_skel
+          )
+        end
       )
   in
   (Utils.formatter_to_stringifyer (pp ())) doc;

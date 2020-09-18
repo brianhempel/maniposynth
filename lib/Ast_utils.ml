@@ -101,7 +101,12 @@ module Exp = struct
   let map f expr =
     let mapper = expr_mapper f in
     mapper.expr mapper expr
-  
+
+  (* Don't forget to call the thunk: you control the iteration order. *)
+  let iter f expr =
+    let iterator = expr_iterator f in
+    iterator.expr iterator expr
+
   let map_by_id ~expr_id ~f expr =
     let replacer expr =
       if Ast_id.has_id expr_id ~expr
@@ -125,4 +130,26 @@ module Pat = struct
     | Parsetree.Ppat_var name_loced -> Some name_loced.txt
     | _                             -> None
 
-end
+  let rec all_var_names (pattern : Parsetree.pattern) : string list =
+    let open Parsetree in
+    match pattern.ppat_desc with
+    | Ppat_any -> []
+    | Ppat_var name_loced -> [name_loced.txt]
+    | Ppat_alias (pat, name_loced) -> name_loced.txt :: all_var_names pat
+    | Ppat_constant _ -> []
+    | Ppat_interval (_, _) -> []
+    | Ppat_tuple pats -> List.concat_map all_var_names pats
+    | Ppat_construct (_, pat_opt) -> Option.to_list pat_opt |> List.concat_map all_var_names
+    | Ppat_variant (_, pat_opt) -> Option.to_list pat_opt |> List.concat_map all_var_names
+    | Ppat_record (fields, _) -> fields |> List.concat_map (fun (_, pat) -> all_var_names pat)
+    | Ppat_array pats -> List.concat_map all_var_names pats
+    | Ppat_or (l_pat, r_pat) -> all_var_names l_pat @ all_var_names r_pat
+    | Ppat_constraint (pat, _) -> all_var_names pat
+    | Ppat_type _ -> []
+    | Ppat_lazy pat -> all_var_names pat
+    | Ppat_unpack { txt = string_opt; _ } -> Option.to_list string_opt (* Module stuff, we'll count it.  *)
+    | Ppat_exception pat -> all_var_names pat
+    | Ppat_extension _ -> []
+    | Ppat_open (_, pat) -> all_var_names pat
+
+  end

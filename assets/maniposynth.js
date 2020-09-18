@@ -22,6 +22,13 @@ function replaceCodeAtExpr(newCode, exprIdStr) {
   ]);
 }
 
+function deleteExpr(exprIdStr) {
+  doAction([
+    "DeleteExpr",
+    exprIdStr
+  ]);
+}
+
 function destructAndReplaceCodeAtExpr(destructPathStr, exprIdStr) {
   doAction([
     "DestructAndReplaceCodeAtExpr",
@@ -140,11 +147,42 @@ function show_current_frame_values() {
     frames_seen.push(frame_n);
     if (current_frame_n() === frame_n) {
       elem.classList.add("in-current-frame");
+      // console.log(elem);
       anything_visible = true;
+    }
+  });
+  document.querySelectorAll('[data-failure-in-frame-n]').forEach(elem => {
+    elem.classList.remove("in-current-frame");
+    let frame_n = parseInt(elem.dataset.failureInFrameN);
+    if (current_frame_n() === frame_n) {
+      // console.log(elem);
+      elem.classList.add("in-current-frame");
     }
   });
   if (!anything_visible && frames_seen.length >= 1) {
     set_frame_n(frames_seen[0]);
+  } else {
+    // Hide skeletons on the branch not taken.
+    var paths_taken = [];
+    document.querySelectorAll('[data-branch-path]').forEach(elem => {
+      if (elem.querySelectorAll('.tracesnap.in-current-frame').length >= 1) {
+        paths_taken.push(elem.dataset.branchPath);
+      }
+    });
+    // console.log(paths_taken);
+    if (paths_taken.length >= 0) {
+      document.querySelectorAll('[data-branch-path]').forEach(elem => {
+        if (paths_taken.includes(elem.dataset.branchPath)) {
+          elem.classList.remove("not-taken");
+        } else {
+          elem.classList.add("not-taken");
+        }
+      });
+    } else {
+      document.querySelectorAll('[data-branch-path]').forEach(elem => {
+        elem.classList.remove("not-taken");
+      });
+    }
   }
 }
 
@@ -160,4 +198,40 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   show_current_frame_values();
+});
+
+
+
+
+
+
+/////////////////// Deletion ///////////////////
+
+function toggleSelect(event) {
+  if (event.currentTarget.classList.contains("selected")) {
+    event.currentTarget.classList.remove("selected");
+  } else {
+    document.querySelectorAll('.selected').forEach(elem => {
+      elem.classList.remove("selected");
+    });
+    event.currentTarget.classList.add("selected");
+  }
+  event.stopPropagation();
+}
+
+// Attach event handlers on load.
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-expr-id-str]').forEach(elem => {
+    elem.addEventListener("click", toggleSelect);
+  });
+});
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Backspace" || event.key === "Delete") {
+    let elem = document.querySelector('[data-expr-id-str].selected')
+    if (elem) {
+      deleteExpr(elem.dataset.exprIdStr);
+      event.stopPropagation();  
+    }
+  }
 });

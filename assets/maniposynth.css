@@ -6,6 +6,7 @@
 
 body {
   margin: var(--body-margin);
+  margin-top: 88px;
   padding: 0;
   width: calc(100% - 3*var(--body-margin) - var(--toolbox-width));
   font-size: 16px;
@@ -13,9 +14,22 @@ body {
   color: #3a3a3a;
 }
 
+h1 {
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  padding: var(--padding) 15px;
+  position: fixed;
+  border-bottom: solid 4px black;
+  font-size: 44px;
+  font-family: "Brush Script MT", cursive;
+  background-color: rgba(255,255,255,0.98);
+}
+
 .box {
   box-sizing: border-box;
-  background-color: white;
+  /* background-color: white; */
 }
 
 .ret, .rets {
@@ -26,25 +40,30 @@ body {
   font-size: 15px;
 }
 
-.label, .constant, #toolbox > .box {
+.label, .constant, .callable {
   background-color: rgb(163, 255, 174);
   padding: var(--padding);
+  min-width: 2em;
+}
+
+.label .expr {
+  display: inline-block;
 }
 
 [draggable=true] {
   cursor: move;
 }
 
-.draggable-hovered,
-.draggable-hovered .box {
+.draggable-hovered {
   /* font-weight: bold; */
-  /* background-color: rgba(100,100,100,0.5); */
-  text-decoration: underline;
+  background-color: rgba(200,200,200,0.5);
+  /* text-decoration: underline; */
   color: #000;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
 }
 
 .current-drop-target {
-  background-color: #ffd;
+  background-color: #ffd !important;
 }
 
 /* Toolbox */
@@ -55,6 +74,7 @@ body {
   width: var(--toolbox-width);
   position: fixed;
   right: var(--body-margin);
+  margin-top: 27px;
 }
 
 #toolbox > .box {
@@ -74,6 +94,11 @@ body > .binding > .label {
   background-color: transparent;
   padding: 3px 0px;
   font-weight: bold;
+}
+
+/* hide RHS of top-level binding */
+body > .binding > .label > .expr {
+  display: none;
 }
 
 
@@ -113,6 +138,12 @@ body > .binding > .label {
   margin: 10px;
   display: inline-block;
   box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  vertical-align: top;
+}
+
+.selected {
+  border: 1px solid blue !important;
+  box-shadow: 4px 4px 10px rgba(0,100,200,1.0) !important;
 }
 
 .bindings_rets > .box > .box {
@@ -135,6 +166,11 @@ body > .binding > .label {
   border-top: none;
 }
 
+.apply .apply .apply > .args,
+.apply .apply .apply > .ret {
+  display: none;
+}
+
 .apply > .ret {  
   padding: var(--padding);
 }
@@ -151,14 +187,41 @@ body > .binding > .label {
 /* Traced values */
 
 .tracesnap {
-  /* display: none; */
+  display: none;
+}
+
+.values {
+  min-height: 1em;
+}
+
+.param .tracesnap {
   display: inline-block;
+  min-width: 70px;
+  opacity: 0.15;
+}
+
+.nosnaps {
+  display: none;
+  /* display: inline-block; */
   /* padding: var(--padding); */
-  opacity: 0.1;
+  /* opacity: 0.15; */
+}
+
+/* [data-failure-in-frame-n].in-current-frame,*/ .nosnaps {
+  opacity: 0.15;
+}
+
+.not-taken {
+  opacity: 0.15;
+}
+
+.not-taken .not-taken {
+  opacity: 1.0; /* don't fade out on nested things */
 }
 
 .tracesnap.in-current-frame {
   opacity: 1.0;
+  display: inline-block;
 }
 
 .value {
@@ -167,7 +230,7 @@ body > .binding > .label {
   padding: 0 3px;
 }
 
-[data-failure-in-frame-n] {
+[data-failure-in-frame-n]:not(.in-current-frame) {
   text-decoration: underline;
   color: blue;
   cursor: pointer;

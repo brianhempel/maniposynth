@@ -8,6 +8,7 @@ open Utils
 type t =
   | AddCodeToScopeBindings of string * string (* code str and scope id str *)
   | ReplaceCodeAtExpr of string * string (* code str and ast id str *)
+  | DeleteExpr of string (* ast id str *)
   | DestructAndReplaceCodeAtExpr of string * string (* destruct path str and ast id str *)
   [@@deriving yojson]
 
@@ -176,6 +177,24 @@ let insert_match file_path (scrutinee_code, destructions) expr_id toplevel_phras
 
   (* let scope_id = scope_id_of_expr_id in *)
 
+(* If expr_id is the RHS of a binding, delete the binding. *)
+let delete_binding expr_id ({ Parsetree.pexp_desc; _ } as expr) =
+  let open Parsetree in
+  match pexp_desc with
+  | Parsetree.Pexp_let (rec_flag, vbs, body) ->
+      (match
+        vbs
+        |> List.filter (fun ({ pvb_expr; _ }) -> not (Ast_id.has_id ~expr:pvb_expr expr_id))
+      with
+      | [] ->
+          body
+      | new_vbs ->
+          { expr with pexp_desc = Parsetree.Pexp_let (rec_flag, new_vbs, body) }
+      )
+  | _ -> expr
+
+
+
 
 
 let f file_path action =
@@ -194,7 +213,12 @@ let f file_path action =
       let destruct_path = destruct_path_of_string destruct_path_str in
       let expr_id = Ast_id.t_of_string expr_id_str in
       insert_match file_path destruct_path expr_id parsed_with_comments.ast
-  in
+    | DeleteExpr expr_id_str ->
+      let expr_id = Ast_id.t_of_string expr_id_str in
+      parsed_with_comments.ast
+      |> Ast_utils.map_exprs (delete_binding expr_id)
+      |> Ast_utils.replace_expr_by_id ~expr_id ~expr':(Ast_utils.Exp.var "??")
+in
   let parsed_with_comments' = { parsed_with_comments with ast = ast' } in
   let new_file_code = Parse_unparse.unparse file_path parsed_with_comments' in
   Sys_utils.save_file file_path new_file_code

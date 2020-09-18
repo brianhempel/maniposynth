@@ -13,5 +13,7 @@ val find_index : ?start_index:int -> string -> string -> int option
 
 val split : ?limit:int -> ?start_index:int -> string -> string -> string list
 
+val replace : string -> target:string -> replacement:string -> string
+
 (* "a b-c d'" => "a_b_c_d_" *)
 val parameterize : string -> string
