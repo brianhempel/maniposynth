@@ -1,7 +1,7 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type t =
-  | Constant of constant
+  | Constant of expression
 
   | Unknown
 
@@ -19,7 +19,7 @@ and binding_skel = value_binding * t
 
 (* for debugging *)
 let rec show = function
-  | Constant constant -> "Constant " ^ Show_ast.constant constant
+  | Constant expr -> "Constant " ^ Show_ast.expr expr
   | Unknown           -> "Unknown"
   | Fun (arg_label, default_opt, pat, body_skel)  ->
     let dummy_fun = { Show_ast.dummy_expr with pexp_desc = Pexp_fun (arg_label, default_opt, pat, Show_ast.dummy_expr) } in
@@ -47,7 +47,7 @@ let rec skel_of_expr ({ pexp_desc = exp_desc; _ } as expr) =
   in
   match exp_desc with
   | Pexp_ident _ -> Apply (expr, expr, [])
-  | Pexp_constant constant -> Constant constant
+  | Pexp_constant _constant -> Constant expr
   | Pexp_let (_rec_flag, value_bindings, body_expr) ->
       let bindings_skels = List.map (fun vb -> (vb, skeleton_of_value_binding vb)) value_bindings in
       (* flatten multiple lets together *)

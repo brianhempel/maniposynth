@@ -1,5 +1,5 @@
 paths_to_watch = [
-  document.location.href,
+  // document.location.href,
   "/assets/maniposynth.css",
   "/assets/maniposynth.js",
   "/assets/reload_on_file_changes.js"
@@ -32,5 +32,5 @@ function wait_and_check_for_changes(path) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // paths_to_watch.forEach(wait_and_check_for_changes);
+  paths_to_watch.forEach(wait_and_check_for_changes);
 });

@@ -4,12 +4,6 @@ open Utils
 
 type skel = Skeleton.t
 
-(* type skel =
-  | Constant of constant
-  | Unknown
-  | Let of (value_binding * t) list * t
-  | Fun of Asttypes.arg_label * expression option * pattern * t
-  | App of t * (Asttypes.arg_label * expression option * pattern) * (Asttypes.arg_label * expression * t) * t *)
 
 let txt = Tyxml.Html.txt
 let div = Tyxml.Html.div
@@ -79,8 +73,11 @@ let html_of_traced_values_at ?new_code trace id =
 let rec html_of_skeleton trace (skel : skel) =
   let recurse = html_of_skeleton trace in
   match skel with
-  | Constant constant -> box "constant" [txt (Show_ast.constant constant)]
-  | Unknown -> box "unknown" [txt "?"]
+  | Constant expr ->
+      let code = Show_ast.expr expr in
+      box ~attrs:[a_expr_id expr; a_new_code code] "constant" [txt code]
+  | Unknown ->
+      box "unknown" [txt "?"]
   | Bindings_rets (scope_expr, bindings_skels, ret_skels) ->
       let binding_boxes = List.map (html_of_binding_skel trace) bindings_skels in
       let ret_boxes = List.map recurse ret_skels in
@@ -96,10 +93,11 @@ let rec html_of_skeleton trace (skel : skel) =
         ]
   | Apply (expr, f_expr, arg_labels_skels) ->
       let arg_box (_arg_label, arg_skel) = box "arg" [recurse arg_skel] in
+      let code = Show_ast.expr expr in
       box "apply" @@
-        [ label ~attrs:[a_expr_id expr] (Show_ast.expr f_expr)
+        [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.expr f_expr)
         ; box "args" (List.map arg_box arg_labels_skels)
-        ; box "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
+        ; box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
         ]
   | Construct (expr, longident, arg_skel_opt) ->
       (* imitate display of Apply *)
@@ -107,10 +105,11 @@ let rec html_of_skeleton trace (skel : skel) =
         arg_skel_opt
         |> Option.map (fun arg_skel -> box "args" [box "arg" [recurse arg_skel]])
       in
+      let code = Show_ast.expr expr in
       box "apply construct" @@
-        [ label ~attrs:[a_expr_id expr] (Show_ast.longident longident) ] @
+        [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.longident longident) ] @
         Option.to_list arg_box_opt @
-        [ box "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)] ]
+        [ box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)] ]
 
 and html_of_binding_skel trace (binding, skel) =
   let pat_code = Show_ast.pat binding.pvb_pat in

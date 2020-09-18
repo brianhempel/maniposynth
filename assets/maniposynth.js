@@ -33,6 +33,14 @@ function destructAndReplaceCodeAtExpr(destructPathStr, exprIdStr) {
 
 //////////////// Drag and Drop /////////////////////////////////
 
+function draggableHover(event) {
+  event.currentTarget.classList.add("draggable-hovered");
+  event.stopPropagation();
+}
+
+function draggableUnhover(event) {
+  event.currentTarget.classList.remove("draggable-hovered");
+}
 
 // When drag starts, store information.
 function dragstart(event) {
@@ -93,6 +101,8 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[draggable=true]').forEach(elem => {
     elem.addEventListener("dragstart", dragstart);
     elem.addEventListener("dragend", dragend);
+    elem.addEventListener("mouseover", draggableHover);
+    elem.addEventListener("mouseout", draggableUnhover);
   });
 
   // Add drop zone events.

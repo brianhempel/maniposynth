@@ -8,7 +8,9 @@ body {
   margin: var(--body-margin);
   padding: 0;
   width: calc(100% - 3*var(--body-margin) - var(--toolbox-width));
+  font-size: 16px;
   font-family: Avenir Next, Avenir;
+  color: #3a3a3a;
 }
 
 .box {
@@ -20,6 +22,10 @@ body {
   border-top: 1px solid black;
 }
 
+.label, .constant {
+  font-size: 15px;
+}
+
 .label, .constant, #toolbox > .box {
   background-color: rgb(163, 255, 174);
   padding: var(--padding);
@@ -27,6 +33,14 @@ body {
 
 [draggable=true] {
   cursor: move;
+}
+
+.draggable-hovered,
+.draggable-hovered .box {
+  /* font-weight: bold; */
+  /* background-color: rgba(100,100,100,0.5); */
+  text-decoration: underline;
+  color: #000;
 }
 
 .current-drop-target {
@@ -74,7 +88,7 @@ body > .binding > .label {
 }
 
 .param > .box {
-  display: inline-block;
+  display: table-cell;
 }
 
 .param > .label {

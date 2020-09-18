@@ -1,7 +1,7 @@
 open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type t =
-  | Constant of constant
+  | Constant of expression
 
   | Unknown
 
