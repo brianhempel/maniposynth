@@ -95,6 +95,10 @@ body > .binding > .label {
   border-right: 1px solid black;
 }
 
+.param > .values {
+  padding: var(--padding);
+}
+
 
 /* Bindings_rets */
 
@@ -103,7 +107,7 @@ body > .binding > .label {
 }
 
 .bindings_rets > .box > .box,
-.arg > .box,
+/* .arg > .box, */
 #toolbox > .box {
   border: 1px solid black;
   margin: 10px;
@@ -127,20 +131,44 @@ body > .binding > .label {
   border-top: 1px solid black;
 }
 
+.args .args > .arg {
+  border-top: none;
+}
+
 .apply > .ret {  
   padding: var(--padding);
 }
 
+.arg > .box > .box {
+  display: table-cell;
+  border: none;
+}
+
+.arg > .box > .box + .box {
+  border-left: 1px solid black;
+}
 
 /* Traced values */
 
 .tracesnap {
+  /* display: none; */
   display: inline-block;
-  padding: var(--padding);
+  /* padding: var(--padding); */
+  opacity: 0.1;
+}
+
+.tracesnap.in-current-frame {
+  opacity: 1.0;
 }
 
 .value {
   display: inline-block;
   font-family: 'Liga Menlo', 'Menlo', 'Monaco', monospace;
-  margin: 0 2px;
+  padding: 0 3px;
+}
+
+[data-failure-in-frame-n] {
+  text-decoration: underline;
+  color: blue;
+  cursor: pointer;
 }

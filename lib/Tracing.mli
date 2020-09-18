@@ -2,6 +2,7 @@ open Ocamlformat_lib.Migrate_ast.Parsetree
 
 type value =
   | Ctor of string * string * value list (* name, type name, args *)
+  | Failure of int (* frame_n *)
 
 type tracesnap =
   | Tracesnap of int * string * value (* frame_n, id str, value *)

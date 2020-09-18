@@ -14,6 +14,7 @@ open Utils
 
 type value =
   | Ctor of string * string * value list (* name, type name, args *)
+  | Failure of int (* frame_n *)
   [@@deriving yojson]
 
 type tracesnap =
@@ -37,7 +38,7 @@ let name_from_type = Name_utils.name_from_type
 let tracepoint_placeholder ?(id : Ast_id.t option) (expr : expression) =
   let id = Option.value id ~default:(Ast_id.of_expr expr) in
   let id_str_exp = Ast_utils.Exp.string (Ast_id.string_of_t id) in
-  [%expr tracepoint frame_n [%e id_str_exp] [%e expr]]
+  [%expr try tracepoint frame_n [%e id_str_exp] [%e expr] with Hole failure_frame_n -> tracepoint_failure frame_n [%e id_str_exp] failure_frame_n]
 
 let rec map_first_non_fun f expr =
   match expr with
@@ -98,7 +99,8 @@ let add_tracepoint_placeholders trace_file_path toplevel_phrases =
     after all the types (it will use a type not in frame and keep trying to monomorphize to infinity)
   *)
   let top_matter : structure_item list =
-    [ [%stri type value = Ctor of string * string * value list (* name, type name, args *)]
+    [ [%stri type value = Ctor of string * string * value list (* name, type name, args *) | Failure of int (* frame_n *)]
+    ; [%stri exception Hole of int (* frame_n *)]
     ; [%stri let serialize_str str : string = [%e code {|"\"" ^ String.escaped str ^ "\""|}]] (* metaquote croaks on string literals so we have to parse our own expr. *)
     ; [%stri let rec serialize_value value : string = [%e code {|
                match value with
@@ -108,12 +110,29 @@ let add_tracepoint_placeholders trace_file_path toplevel_phrases =
                  "," ^ serialize_str type_name ^
                  "," ^ "[" ^ String.concat "," (List.map serialize_value args) ^ "]" ^
                  "]"
+               | Failure frame_n ->
+                 "[" ^ serialize_str "Failure" ^
+                 "," ^ string_of_int frame_n ^
+                 "]"
       |}]] (* metaquote croaks on string literals so we have to parse our own expr. *)
     ; [%stri let insert_value_of_type_functions_here = ()]
     ; [%stri let frame_n_ref = ref 0]
     ; [%stri let next_frame_n () = incr frame_n_ref; !frame_n_ref]
     ; [%stri let frame_n = 0]
     ; [%stri let trace_out = open_out_bin [%e Ast_utils.Exp.string trace_file_path]]
+    ; [%stri let tracepoint_failure frame_n id_str failure_frame_n = [%e code {|
+               output_string trace_out "[";
+               output_string trace_out begin
+                 [ serialize_str "Tracesnap"
+                 ; string_of_int frame_n
+                 ; serialize_str id_str
+                 ; serialize_value (Failure failure_frame_n)
+                 ] |> String.concat ","
+               end;
+               output_string trace_out "]\n";
+               flush trace_out;
+               raise (Hole failure_frame_n)
+      |}]]
     ; [%stri let tracepoint _frame_n _id_str x = x]
     ]
   in
@@ -332,7 +351,7 @@ let fill_tracepoint_placeholders (env : Env.t) (typed_structure : Typedtree.stru
 
 let fill_holes =
   Ast_utils.map_exprs (function
-    | [%expr (??)] -> code {|failwith "??"|}
+    | [%expr (??)] -> code {|raise (Hole frame_n)|}
     | expr       -> expr
   )
 

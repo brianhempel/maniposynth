@@ -23,33 +23,39 @@ let a_expr_id expr        = a_user_data "expr-id-str" (ast_id_str_of_expr expr)
 (* let a_pat_id pat          = a_user_data "pat-id-str" (ast_id_json_str_of_pat pat) *)
 
 
-let rec html_of_value ?new_code ?(destruct_path = ("", [])) = function Tracing.Ctor (ctor_name, type_str, args) ->
-  let new_code_attrs = new_code |> Option.map a_new_code |> Option.to_list in
-  let destuct_path_attrs =
-    match destruct_path with
-    | ("", _)   -> []
-    | (_, [])   -> []
-    | (_, _::_) -> [a_user_data "destruct-path-str" (Action.string_of_destruct_path destruct_path)]
-  in
-  let (scrutinee_code, destructions) = (* Initialize scrutinee for destruction *)
-    match (new_code, destruct_path) with
-    | (Some new_code, ("", [])) -> (new_code, [])
-    | _                         -> destruct_path
-  in
-  let arg_htmls =
-    args |> List.mapi (fun i arg ->
-      let open Action in
-      let destruction = { type_str = type_str; ctor_name = ctor_name; arg_n = i } in
-      let destruct_path = (scrutinee_code, destructions @ [destruction]) in
-      html_of_value ~destruct_path arg
-    )
-  in
-  let attrs = new_code_attrs @ destuct_path_attrs in
-  box ~attrs "value" @@
-    match arg_htmls with
-    | []         -> [txt ctor_name]
-    | [arg_html] -> [txt ctor_name; arg_html]
-    | arg_htmls  -> [txt ctor_name; txt "("] @ arg_htmls @ [txt ")"]
+let rec html_of_value ?new_code ?(destruct_path = ("", [])) = function
+  | Tracing.Failure frame_n ->
+      box ~attrs:[a_user_data "failure-in-frame-n" (string_of_int frame_n)] "value failure" [txt "?"]
+  | Tracing.Ctor (ctor_name, type_str, args) ->
+      let new_code_attrs = new_code |> Option.map a_new_code |> Option.to_list in
+      let destuct_path_attrs =
+        (match destruct_path with
+        | ("", _)   -> []
+        | (_, [])   -> []
+        | (_, _::_) -> [a_user_data "destruct-path-str" (Action.string_of_destruct_path destruct_path)]
+        )
+      in
+      let (scrutinee_code, destructions) = (* Initialize scrutinee for destruction *)
+        (match (new_code, destruct_path) with
+        | (Some new_code, ("", [])) -> (new_code, [])
+        | _                         -> destruct_path
+        )
+      in
+      let arg_htmls =
+        args |> List.mapi (fun i arg ->
+          let open Action in
+          let destruction = { type_str = type_str; ctor_name = ctor_name; arg_n = i } in
+          let destruct_path = (scrutinee_code, destructions @ [destruction]) in
+          html_of_value ~destruct_path arg
+        )
+      in
+      let attrs = new_code_attrs @ destuct_path_attrs in
+      box ~attrs "value" @@
+        (match arg_htmls with
+        | []         -> [txt ctor_name]
+        | [arg_html] -> [txt ctor_name; arg_html]
+        | arg_htmls  -> [txt ctor_name; txt "("] @ arg_htmls @ [txt ")"]
+        )
 
 
 let html_of_traced_values_at ?new_code trace id =
@@ -94,10 +100,16 @@ let rec html_of_skeleton trace (skel : skel) =
   | Apply (expr, f_expr, arg_labels_skels) ->
       let arg_box (_arg_label, arg_skel) = box "arg" [recurse arg_skel] in
       let code = Show_ast.expr expr in
+      let perhaps_args =
+        (match arg_labels_skels with
+        | [] -> []
+        | _  -> [box "args" (List.map arg_box arg_labels_skels)]
+        )
+      in
       box "apply" @@
         [ label ~attrs:[a_expr_id expr; a_new_code code] (Show_ast.expr f_expr)
-        ; box "args" (List.map arg_box arg_labels_skels)
-        ; box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
+        ] @ perhaps_args @
+        [ box ~attrs:[a_new_code code] "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
         ]
   | Construct (expr, longident, arg_skel_opt) ->
       (* imitate display of Apply *)
@@ -129,6 +141,13 @@ let html_of_callables callables =
     (List.map html_of_callable callables)
 
 let html_str (callables : (string * int) list) (trace : Tracing.tracesnap list) bindings_skels =
+  let bindings_skels =
+    (* Don't show "current example" binding. *)
+    bindings_skels
+    |> List.filter (fun (value_binding, _) ->
+      Some "current_ex" <> Ast_utils.Pat.get_var_name_opt value_binding.pvb_pat
+    )
+  in
   let open Tyxml.Html in
   let doc = 
     html

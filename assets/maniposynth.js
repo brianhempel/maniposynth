@@ -113,3 +113,51 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("drop", drop);
   });
 });
+
+
+
+
+/////////////////// Example Management ///////////////////
+
+
+function current_frame_n() {
+  // Frame 0 is the toplevel, frame 1 is the first function call.
+  return parseInt(sessionStorage.getItem("current_frame_n")) || 1;
+}
+
+function set_frame_n(frame_n) {
+  sessionStorage.setItem("current_frame_n", parseInt(frame_n));
+  show_current_frame_values();
+  return current_frame_n();
+}
+
+function show_current_frame_values() {
+  var frames_seen = [];
+  var anything_visible = false;
+  document.querySelectorAll('[data-frame-n]').forEach(elem => {
+    elem.classList.remove("in-current-frame");
+    let frame_n = parseInt(elem.dataset.frameN);
+    frames_seen.push(frame_n);
+    if (current_frame_n() === frame_n) {
+      elem.classList.add("in-current-frame");
+      anything_visible = true;
+    }
+  });
+  if (!anything_visible && frames_seen.length >= 1) {
+    set_frame_n(frames_seen[0]);
+  }
+}
+
+// Attach event handlers on load.
+window.addEventListener('DOMContentLoaded', () => {
+
+  document.querySelectorAll('[data-frame-n]').forEach(elem => {
+    elem.addEventListener("mouseover", e => set_frame_n(e.currentTarget.dataset.frameN));
+  });
+
+  document.querySelectorAll('[data-failure-in-frame-n]').forEach(elem => {
+    elem.addEventListener("click", e => set_frame_n(e.currentTarget.dataset.failureInFrameN));
+  });
+
+  show_current_frame_values();
+});
