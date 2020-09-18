@@ -1,5 +1,5 @@
 paths_to_watch = [
-  document.location.href,
+  // document.location.href,
   "/assets/maniposynth.css",
   "/assets/maniposynth.js",
   "/assets/reload_on_file_changes.js"
@@ -15,12 +15,14 @@ function handle_possible_change (path, latest_version) {
     document.location.reload();
     return;
   }
+  wait_and_check_for_changes(path);
 }
 
 function check_for_changes(path) {
   let request = new XMLHttpRequest();
   request.addEventListener("load", function () { handle_possible_change(path, this.responseText) });
-  request.addEventListener("loadend", () => wait_and_check_for_changes(path));
+  request.addEventListener("error", () => wait_and_check_for_changes(path));
+  request.addEventListener("timeout", () => wait_and_check_for_changes(path));
   request.open("GET", path);
   request.send();
 }

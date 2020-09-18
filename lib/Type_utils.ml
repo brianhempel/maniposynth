@@ -21,7 +21,8 @@ let final_env_and_typed_structure_of_file path =
       (* and  https://github.com/ocaml/ocaml/blob/4.11/tools/read_cmt.ml *)
       Envaux.reset_cache ();
       List.iter Load_path.add_dir (List.rev cmt.cmt_loadpath);
-      (Envaux.env_of_only_summary (List_utils.last structure.str_items).str_env, structure)
+      (Envaux.env_of_only_summary structure.str_final_env, structure)
+      (* (Envaux.env_of_only_summary (List_utils.last structure.str_items).str_env, structure) *)
   | Partial_implementation _ -> failwith "Cmt_format.Partial_implementation"
   | Packed (_, _)            -> failwith "Cmt_format.Packed"
   | Interface _              -> failwith "Cmt_format.Interface"

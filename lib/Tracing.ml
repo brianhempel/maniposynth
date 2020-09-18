@@ -1,4 +1,5 @@
 open Parsetree
+open Utils
 
 (* 
   Tracepoints:
@@ -11,7 +12,24 @@ open Parsetree
   4. Construct returns (basically Apply returns)
 *)
 
+type value =
+  | Ctor of string * string * value list (* name, type name, args *)
+  [@@deriving yojson]
+
+type tracesnap =
+  | Tracesnap of int * string * value (* frame_n, id str, value *)
+  [@@deriving yojson]
+
+type trace = tracesnap list
+
+(* let value_of_nat nat =
+  match nat with
+  | Z      -> Ctor ("Z", "nat", [])
+  | S nat1 -> Ctor ("S", "nat", [value_of_nat nat1]) *)
+
 let loc = Location.none (* For metaquote *)
+
+let code = Ast_utils.Exp.of_string
 
 let tracepoint_placeholder ?(id : Ast_id.t option) (expr : expression) =
   let id = Option.value id ~default:(Ast_id.of_expr expr) in
@@ -62,7 +80,8 @@ let add_tracepoint_placeholders trace_file_path toplevel_phrases =
     | [%expr fun [%p? param] -> [%e? body]] ->
         if not (Ast_utils.Exp.is_fun body) then
           let loc = expr.pexp_loc in
-          [%expr fun [%p param] -> let frame_n = next_frame_n () in [%e body]]
+          let body' = mapper.expr mapper body in
+          [%expr fun [%p param] -> let frame_n = next_frame_n () in [%e body']]
         else
           default_mapper.expr mapper expr
     | _ ->
@@ -77,11 +96,12 @@ let add_tracepoint_placeholders trace_file_path toplevel_phrases =
   *)
   let top_matter : structure_item list =
     [ [%stri type value = Ctor of string * string * value list (* name, type name, args *)]
-    ; [%stri let serialize_str str : string = [%e Ast_utils.Exp.of_string {|"\"" ^ String.escaped str ^ "\""|}]] (* metaquote croaks on string literals so we have to parse our own expr. *)
-    ; [%stri let rec serialize_value value : string = [%e Ast_utils.Exp.of_string {|
+    ; [%stri let serialize_str str : string = [%e code {|"\"" ^ String.escaped str ^ "\""|}]] (* metaquote croaks on string literals so we have to parse our own expr. *)
+    ; [%stri let rec serialize_value value : string = [%e code {|
                match value with
                | Ctor (ctor_name, type_name, args) ->
-                 "[" ^ serialize_str ctor_name ^
+                 "[" ^ serialize_str "Ctor" ^
+                 "," ^ serialize_str ctor_name ^
                  "," ^ serialize_str type_name ^
                  "," ^ "[" ^ String.concat "," (List.map serialize_value args) ^ "]" ^
                  "]"
@@ -115,14 +135,6 @@ let add_tracepoint_placeholders trace_file_path toplevel_phrases =
   |> Ast_utils.toplevel_phrases_of_structure
 
 
-(* type value =
-  | Ctor of string * string * value list (* name, type name, args *)
-  [@@deriving yojson] *)
-
-(* let value_of_nat nat =
-  match nat with
-  | Z      -> Ctor ("Z", "nat", [])
-  | S nat1 -> Ctor ("S", "nat", [value_of_nat nat1]) *)
 
 (* let rec serialize_value value : string =
   let serialize_str str = "\"" ^ String.escaped str ^ "\"" in
@@ -179,10 +191,10 @@ let mk_value_of_type_vb (env : Env.t) (typ : Types.type_expr) =
     let param_name = type_name_str typ in
     (match typ.desc with
     | Tconstr (path, _type_parameters, _abbrev_memo_ref) ->
-      Path.print Format.std_formatter path;
+      (* Path.print Format.std_formatter path;
       Format.pp_print_newline Format.std_formatter ();
       !Env.print_path Format.std_formatter path;
-      Format.pp_print_newline Format.std_formatter ();
+      Format.pp_print_newline Format.std_formatter (); *)
       (match fst (Env.find_type_descrs path env) with
       | [] -> failwith "no constructors"
       | ctor_descs ->
@@ -211,7 +223,7 @@ let mk_value_of_type_vb (env : Env.t) (typ : Types.type_expr) =
                 let ctor_name_expr = Ast_utils.Exp.string ctor_desc.cstr_name in
                 let type_name_expr = Ast_utils.Exp.string ((Utils.formatter_to_stringifyer Printtyp.type_expr) typ) in
                 let arg_exprs_list =
-                  List.map2 (fun arg_type arg_name -> Ast_utils.Exp.of_string ("value_of_" ^ type_name_str arg_type ^ " " ^ arg_name))
+                  List.map2 (fun arg_type arg_name -> code ("value_of_" ^ type_name_str arg_type ^ " " ^ arg_name))
                     ctor_desc.cstr_args
                     arg_names
                   |> Ast_utils.Exp.list
@@ -236,7 +248,7 @@ Goal:
 let tracepoint_mono1 = fun frame_n -> fun id_str -> fun x ->
   output_string trace_out "[";
   output_string trace_out begin
-    [ serialize_str "Tracepoint"
+    [ serialize_str "Tracesnap"
     ; string_of_int frame_n
     ; serialize_str id_str
     ; serialize_value (value_of_TYPE x)
@@ -250,11 +262,11 @@ let tracepoint_mono1 = fun frame_n -> fun id_str -> fun x ->
 
 let filled_tracepoint_mono_fun_expr (mono_type : Types.type_expr) : Parsetree.expression =
   (* let tracepoint_mono1 frame_n id_str x = ... *)
-  let code = {|
+  code @@ {|
     fun frame_n -> fun id_str -> fun x ->
       output_string trace_out "[";
       output_string trace_out begin
-        [ serialize_str "Tracepoint"
+        [ serialize_str "Tracesnap"
         ; string_of_int frame_n
         ; serialize_str id_str
         ; serialize_value (value_of_|} ^ type_name_str mono_type ^ {| x)
@@ -263,8 +275,7 @@ let filled_tracepoint_mono_fun_expr (mono_type : Types.type_expr) : Parsetree.ex
       output_string trace_out "]\n";
       flush trace_out;
       x
-  |} in
-  Ast_utils.Exp.of_string code
+  |}
 
 
 (* Based on https://github.com/ocaml/merlin/blob/v3.3.8/src/analysis/destruct.ml.new *)
@@ -320,3 +331,45 @@ let fill_tracepoint_placeholders (env : Env.t) (typed_structure : Typedtree.stru
   |> Ast_utils.apply_mapper_to_toplevel_phrases fill_tracepoint_monos_mapper
   |> Ast_utils.apply_mapper_to_toplevel_phrases add_value_of_type_functions_mapper
 
+let fill_holes =
+  Ast_utils.map_exprs (function
+    | [%expr (??)] -> code {|failwith "??"|}
+    | expr       -> expr
+  )
+
+
+let run_with_tracing file_path : trace =
+  let parsed_with_comments = Parse_unparse.parse_file file_path in
+  let trace_file_path = file_path ^ ".trace" in
+  let ast' = add_tracepoint_placeholders trace_file_path parsed_with_comments.ast in
+  let parsed_with_comments' = { parsed_with_comments with ast = ast'; comments = [] } in
+  let out_str = Parse_unparse.unparse file_path parsed_with_comments' in
+  (* print_string @@ out_str; *)
+  let tp_file_path = file_path ^ ".tp_placeholders" in
+  let mono_file_path = tp_file_path ^ ".mono.ml" in
+  (* Sys_utils.save_file tp_file_path out_str;
+  Sys_utils.copy_file tp_file_path mono_file_path; *)
+  Sys_utils.save_file mono_file_path out_str;
+  Monomorphize.f mono_file_path;
+  let parsed_with_comments = Parse_unparse.parse_file mono_file_path in
+  let (env, typed_structure) = Type_utils.final_env_and_typed_structure_of_file mono_file_path in
+  let ast' =
+    parsed_with_comments.ast
+    |> fill_tracepoint_placeholders env typed_structure
+    |> fill_holes
+  in
+  let parsed_with_comments' = { parsed_with_comments with ast = ast' } in
+  let out_str = Parse_unparse.unparse file_path parsed_with_comments' in
+  (* print_string @@ out_str; *)
+  let with_tracing_file_path = file_path ^ ".with_tracing.ml" in
+  Sys_utils.save_file with_tracing_file_path out_str;
+  (* print_string @@ Sys_utils.command ("ocaml " ^ with_tracing_file_path); *)
+  ignore @@ Sys_utils.command ("ocaml " ^ with_tracing_file_path);
+  let trace =
+    Sys_utils.string_of_file trace_file_path
+    |> String.trim
+    |> String.split_on_char '\n'
+    |> List.map (Yojson.Safe.from_string %> tracesnap_of_yojson)
+  in
+  trace
+;;

@@ -21,7 +21,7 @@ body {
 }
 
 .label, .constant, #toolbox > .box {
-  background-color: rgb(255, 220, 219);
+  background-color: rgb(163, 255, 174);
   padding: var(--padding);
 }
 
@@ -115,4 +115,19 @@ body > .binding > .label {
 
 .apply > .ret {  
   padding: var(--padding);
+}
+
+
+/* Traced values */
+
+.tracesnap {
+  display: inline-block;
+  padding: var(--padding);
+}
+
+.value {
+  display: inline-block;
+  font-family: 'Liga Menlo', 'Menlo', 'Monaco', monospace;
+  margin: 0 2px;
+  cursor: pointer;
 }

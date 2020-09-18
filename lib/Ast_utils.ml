@@ -25,7 +25,15 @@ let apply_mapper_to_toplevel_phrases (mapper : Ast_mapper.mapper) toplevel_phras
   |> List.map (function
       | Ptop_def structure -> Ptop_def (mapper.structure mapper structure)
       | Ptop_dir directive -> Ptop_dir directive
-  )  
+  )
+
+let apply_iterator_to_toplevel_phrases (iterator : Ast_iterator.iterator) toplevel_phrases =
+  let open Parsetree in
+  toplevel_phrases
+  |> List.iter (function
+      | Ptop_def structure  -> iterator.structure iterator structure
+      | Ptop_dir _directive -> ()
+  )
 
 (* Bottom up: f applied to leaves first. *)
 let map_expr_by_id ~expr_id ~f toplevel_phrases =
@@ -40,6 +48,16 @@ let map_expr_by_id ~expr_id ~f toplevel_phrases =
 
 let replace_expr_by_id ~expr_id ~expr' toplevel_phrases =
   map_expr_by_id ~expr_id ~f:(fun _ -> expr') toplevel_phrases
+
+let expr_mapper f =
+  let replacer mapper expr =
+    let expr' = default_mapper.expr mapper expr in
+    f expr'
+  in
+  { default_mapper with expr = replacer }
+  
+let map_exprs f toplevel_phrases =
+  apply_mapper_to_toplevel_phrases (expr_mapper f) toplevel_phrases
 
 let longident name =
   Option.get (Longident.unflatten [name])

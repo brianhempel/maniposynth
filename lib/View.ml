@@ -28,13 +28,39 @@ let a_scope_id scope_expr = a_user_data "scope-id-str" (ast_id_str_of_expr scope
 let a_expr_id expr        = a_user_data "expr-id-str" (ast_id_str_of_expr expr)
 (* let a_pat_id pat          = a_user_data "pat-id-str" (ast_id_json_str_of_pat pat) *)
 
-let rec html_of_skeleton (skel : skel) =
+let rec html_of_value = function Tracing.Ctor (name, _type_name, args) ->
+  box "value" @@
+  match args with
+  | []    -> [txt name]
+  | [arg] -> [txt name; html_of_value arg]
+  | args  -> [txt name; txt "("] @ List.map html_of_value args @ [txt ")"]
+
+let html_of_traced_values_at trace id =
+  let open Tracing in
+  let tracesnaps =
+    let target_str = Ast_id.string_of_t id in
+    trace
+    |> List.filter (function Tracesnap (_, id_str, _) -> target_str = id_str)
+  in
+  box "values" @@ begin
+    tracesnaps
+    |> List.map (function Tracesnap (frame_n, type_str, value) ->
+      box "tracesnap"
+        ~attrs:[ a_user_data "frame-n" (string_of_int frame_n)
+               ; a_user_data "type" type_str ]
+        [html_of_value value]
+    )
+    |> function [] -> [txt "?"] | list -> list
+  end
+
+let rec html_of_skeleton trace (skel : skel) =
+  let recurse = html_of_skeleton trace in
   match skel with
   | Constant constant -> box "constant" [txt (Show_ast.constant constant)]
   | Unknown -> box "unknown" [txt "?"]
   | Bindings_rets (scope_expr, bindings_skels, ret_skels) ->
-      let binding_boxes = List.map html_of_binding_skel bindings_skels in
-      let ret_boxes = List.map html_of_skeleton ret_skels in
+      let binding_boxes = List.map (html_of_binding_skel trace) bindings_skels in
+      let ret_boxes = List.map recurse ret_skels in
       box "bindings_rets"
         [ box ~attrs:[a_scope_id scope_expr] "bindings" binding_boxes
         ; box ~attrs:[a_scope_id scope_expr] "rets" ret_boxes
@@ -42,32 +68,32 @@ let rec html_of_skeleton (skel : skel) =
   | Fun (param_label, default_opt, pat, body_skel) ->
       let param_code = Show_ast.fun_param param_label default_opt pat in
       box "fun"
-        [ box "param" [label ~attrs:[a_new_code param_code] param_code; box "values" []]
-        ; box "ret" [html_of_skeleton body_skel]
+        [ box "param" [label ~attrs:[a_new_code param_code] param_code; html_of_traced_values_at trace (Ast_id.of_pat pat)]
+        ; box "ret" [recurse body_skel]
         ]
   | Apply (expr, f_expr, arg_labels_skels) ->
-      let arg_box (_arg_label, arg_skel) = box "arg" [html_of_skeleton arg_skel] in
+      let arg_box (_arg_label, arg_skel) = box "arg" [recurse arg_skel] in
       box "apply" @@
         [ label ~attrs:[a_expr_id expr] (Show_ast.expr f_expr)
         ; box "args" (List.map arg_box arg_labels_skels)
-        ; box "ret" [txt "?"]
+        ; box "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)]
         ]
   | Construct (expr, longident, arg_skel_opt) ->
       (* imitate display of Apply *)
       let arg_box_opt =
         arg_skel_opt
-        |> Option.map (fun arg_skel -> box "args" [box "arg" [html_of_skeleton arg_skel]])
+        |> Option.map (fun arg_skel -> box "args" [box "arg" [recurse arg_skel]])
       in
       box "apply construct" @@
         [ label ~attrs:[a_expr_id expr] (Show_ast.longident longident) ] @
         Option.to_list arg_box_opt @
-        [ box "ret" [txt "?"] ]
+        [ box "ret" [html_of_traced_values_at trace (Ast_id.of_expr expr)] ]
 
-and html_of_binding_skel (binding, skel) =
+and html_of_binding_skel trace (binding, skel) =
   let binding_code =
     Show_ast.pat binding.pvb_pat ^ " = " ^ Show_ast.expr binding.pvb_expr
   in
-  box "binding" [label binding_code; html_of_skeleton skel]
+  box "binding" [label binding_code; html_of_skeleton trace skel]
 
 let html_of_callables callables =
   let html_of_callable (name, arg_count) =
@@ -78,7 +104,7 @@ let html_of_callables callables =
   div ~a:[a_id "toolbox"]
     (List.map html_of_callable callables)
 
-let html_str (callables : (string * int) list) bindings_skels =
+let html_str (callables : (string * int) list) (trace : Tracing.tracesnap list) bindings_skels =
   let open Tyxml.Html in
   let doc = 
     html
@@ -90,7 +116,7 @@ let html_str (callables : (string * int) list) bindings_skels =
       )
       (body @@
         html_of_callables callables ::
-        (List.map html_of_binding_skel bindings_skels)
+        (List.map (html_of_binding_skel trace) bindings_skels)
       )
   in
   (Utils.formatter_to_stringifyer (pp ())) doc;

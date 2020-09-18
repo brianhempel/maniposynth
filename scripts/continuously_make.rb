@@ -2,7 +2,7 @@
 
 # Expected to be run from the project root via `make watch`.
 
-EXE_PATH = "_build/default/test.exe"
+EXE_PATH = "_build/default/server.exe"
 
 
 server_pid = nil
@@ -19,7 +19,7 @@ loop do
         Process.kill(3, server_pid)
         Process.wait
       end
-      server_pid = Process.spawn("./_build/default/test.exe")
+      server_pid = Process.spawn("./" + EXE_PATH)
     end
   end
 end

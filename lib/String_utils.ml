@@ -12,6 +12,9 @@ let prefix str len =
 let suffix str len =
   safe_sub str (length str - len) len
 
+let drop str len =
+  suffix str (length str - len)
+
 (* Tail recursive string matcher to see if target containts str at the given indices. *)
 let rec matches_at_indices_ str str_i target target_i target_len =
   if target_i >= target_len then

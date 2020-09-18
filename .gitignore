@@ -3,7 +3,8 @@ _build/
 ast.ml
 simple.html
 scratch.ml
-*.mono
+*.mono*
 *.merlin.cmt
 *.tp_placeholders
 *.trace*
+*.with_tracing*

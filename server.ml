@@ -45,11 +45,12 @@ let serve_asset out_chan url =
   with Sys_error _ -> respond_not_found out_chan
 
 let render_maniposynth out_chan url =
-  let path = "./" ^ url in
+  let path = String_utils.drop url 1 in
   let parsed_with_comments = Parse_unparse.parse_file path in
   let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
   let callables = Read_execution_env.callables_of_file path in
-  let html_str = View.html_str callables bindings_skels in
+  let trace = Tracing.run_with_tracing path in
+  let html_str = View.html_str callables trace bindings_skels in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
@@ -87,7 +88,7 @@ let handle_connection in_chan out_chan =
         let action_yojson = Yojson.Safe.from_string content_str in
         (* print_endline content_str; *)
         let action = Action.t_of_yojson action_yojson in
-        let file_path = "./" ^ url in
+        let file_path = String_utils.drop url 1 in
         Action.f file_path action;
         respond ~content_type:"text/plain" out_chan "Done."
       else

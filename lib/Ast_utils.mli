@@ -11,6 +11,16 @@ val apply_mapper_to_toplevel_phrases
   -> toplevel_phrase list
   -> toplevel_phrase list
 
+val apply_iterator_to_toplevel_phrases
+  :  Ast_iterator.iterator
+  -> toplevel_phrase list
+  -> unit
+
+val map_exprs
+  :  (expression -> expression)
+  -> toplevel_phrase list
+  -> toplevel_phrase list
+
 (* Bottom up: f applied to leaves first. *)
 val map_expr_by_id
   :  expr_id:Ast_id.t
