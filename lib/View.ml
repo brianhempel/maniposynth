@@ -188,7 +188,16 @@ let html_str (callables : (string * int) list) (trace : Tracing.tracesnap list) 
             let renamings = Skeleton.destruction_renamings_of_expr value_binding.pvb_expr in
             html_of_binding_skel trace renamings binding_skel
           )
-        end
+        end @
+        [ form ~a:[a_id "set-example-form"]
+            [ input ~a:[a_name "func"; a_placeholder "Func"] ()
+            ; input ~a:[a_name "arg1"; a_placeholder "Arg 1"] ()
+            ; input ~a:[a_name "arg2"; a_placeholder "Arg 2"] ()
+            ; input ~a:[a_name "arg3"; a_placeholder "Arg 3"] ()
+            ; button [txt "Set Example"]
+            ]
+
+        ]
       )
   in
   (Utils.formatter_to_stringifyer (pp ())) doc;

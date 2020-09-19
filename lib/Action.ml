@@ -10,6 +10,7 @@ type t =
   | ReplaceCodeAtExpr of string * string (* code str and ast id str *)
   | DeleteExpr of string (* ast id str *)
   | DestructAndReplaceCodeAtExpr of string * string (* destruct path str and ast id str *)
+  | SetExample of string * string * string * string (* func name and three arg strs *)
   [@@deriving yojson]
 
 type destruction =
@@ -27,8 +28,7 @@ module Ast_helper  = Ocamlformat_lib.Migrate_ast.Selected_version.Ast_helper
 let string_of_destruct_path = yojson_of_destruct_path %> Yojson.Safe.to_string
 let destruct_path_of_string = Yojson.Safe.from_string %> destruct_path_of_yojson
 
-
-let unique_var_name toplevel_phrases =
+let unique_names toplevel_phrases =
   let names_ref = ref [] in
   let open Ast_iterator in
   let iterator =
@@ -50,6 +50,11 @@ let unique_var_name toplevel_phrases =
   in
   Ast_utils.apply_iterator_to_toplevel_phrases iterator toplevel_phrases;
   let used_names = List.sort_uniq String.compare !names_ref in
+  used_names
+
+
+let unique_var_name toplevel_phrases =
+  let used_names = unique_names toplevel_phrases in
   fun ?(more_names = []) -> fun base_name ->
     let rec loop n =
       let candidate = base_name ^ string_of_int n in
@@ -194,7 +199,77 @@ let delete_binding expr_id ({ Parsetree.pexp_desc; _ } as expr) =
   | _ -> expr
 
 
+let set_example func_name arg1_str arg2_str arg3_str toplevel_phrases =
+  let used_names = unique_names toplevel_phrases in
+  let fun_seems_to_exist = List.mem func_name used_names in
+  let current_ex_seems_to_exist = List.mem "current_ex" used_names in
+  let arg_strs = [arg1_str; arg2_str; arg3_str] |> List.map String.trim |> List.filter (fun str -> String.length str >= 1) in
+  let open Parsetree in
+  let arg_exp_strs = arg_strs |> List.map (fun arg -> "(" ^ arg ^ ")") in
+  let toplevel_phrases =
+    let current_ex_expr = Ast_utils.Exp.of_string (func_name ^ String.concat " " arg_exp_strs) in
+    if not current_ex_seems_to_exist then
+      let loc = Location.none in
+      toplevel_phrases @
+      [ Ptop_def [[%stri let current_ex = [%e current_ex_expr]]]]
+    else
+      let set_current_ex_mapper =
+        let open Ast_mapper in
+        let map_vb _mapper (vb : value_binding) =
+          match Ast_utils.Pat.get_var_name_opt vb.pvb_pat with
+          | Some "current_ex" -> { vb with pvb_expr = current_ex_expr }
+          | _                 -> vb  (* No need to recurse, current example is at top level *)
+        in
+        { default_mapper with value_binding = map_vb }
+      in
+      toplevel_phrases
+      |> Ast_utils.apply_mapper_to_toplevel_phrases set_current_ex_mapper
+  in
+  let toplevel_phrases =
+    if not fun_seems_to_exist then
+      (* Put the function after the types *)
+      toplevel_phrases
+      |> List.map (fun phrase ->
+          match phrase with
+          | Ptop_dir _ -> phrase
+          | Ptop_def structure_items ->
+            Ptop_def begin
+              structure_items
+              |> List.concat_map (fun structure_item ->
+                  (match structure_item.pstr_desc with
+                  | Pstr_value (_, _)->
+                      let arg_exps = arg_exp_strs |> List.map Ast_utils.Exp.of_string in
+                      let choose_name = unique_var_name toplevel_phrases in
+                      let (_, arg_names) =
+                        arg_exps
+                        |> List.fold_left_map
+                          (fun more_names arg_exp ->
+                            let arg_name = choose_name ~more_names (suggested_name_for_expr arg_exp) in
+                            (arg_name::more_names, arg_name)
+                          ) []
+                      in
+                      let pat = Ast_utils.Pat.var func_name in
+                      let fun_expr =
+                        Ast_utils.Exp.of_string @@
+                          (arg_names |> List.map (fun name -> "fun " ^ name ^ " ->") |> String.concat " ")
+                          ^ " (??)"
+                      in
+                      let loc = Location.none in
+                      [ [%stri let rec [%p pat] = [%e fun_expr]]
+                      ; structure_item
+                      ]
+                  | _ ->
+                      [structure_item]
+                  )
+              )
+            end
+      )
+    else
+      toplevel_phrases
+  in
+  toplevel_phrases
 
+  
 
 
 let f file_path action =
@@ -218,6 +293,9 @@ let f file_path action =
       parsed_with_comments.ast
       |> Ast_utils.map_exprs (delete_binding expr_id)
       |> Ast_utils.replace_expr_by_id ~expr_id ~expr':(Ast_utils.Exp.var "??")
+    | SetExample (func_name, arg1_str, arg2_str, arg3_str) ->
+      set_example func_name arg1_str arg2_str arg3_str parsed_with_comments.ast
+
 in
   let parsed_with_comments' = { parsed_with_comments with ast = ast' } in
   let new_file_code = Parse_unparse.unparse file_path parsed_with_comments' in

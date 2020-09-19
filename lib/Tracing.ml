@@ -387,6 +387,7 @@ let run_with_tracing file_path : trace =
     Sys_utils.string_of_file trace_file_path
     |> String.trim
     |> String.split_on_char '\n'
+    |> List.filter (not % String.equal "") (* Split on empty string produces [""] *)
     |> List.map (Yojson.Safe.from_string %> tracesnap_of_yojson)
   in
   trace

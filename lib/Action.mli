@@ -3,6 +3,7 @@ type t =
   | ReplaceCodeAtExpr of string * string (* code str and ast id str *)
   | DeleteExpr of string (* ast id str *)
   | DestructAndReplaceCodeAtExpr of string * string (* destruct path str and ast id str *)
+  | SetExample of string * string * string * string (* func name and three arg strs *)
 
 type destruction =
   { type_str  : string

@@ -66,6 +66,18 @@ h1 {
   background-color: #ffd !important;
 }
 
+/* Example */
+
+#set-example-form {
+  margin-top: 27px;
+  display: inline-block;
+}
+
+input {
+  width: 50px;
+  margin-right: var(--padding);
+}
+
 /* Toolbox */
 
 #toolbox {

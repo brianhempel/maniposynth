@@ -37,6 +37,15 @@ function destructAndReplaceCodeAtExpr(destructPathStr, exprIdStr) {
   ]);
 }
 
+function setExample(funcStr, arg1Str, arg2Str, arg3Str) {
+  doAction([
+    "SetExample",
+    funcStr,
+    arg1Str,
+    arg2Str,
+    arg3Str
+  ]);
+}
 
 //////////////// Drag and Drop /////////////////////////////////
 
@@ -234,4 +243,26 @@ document.addEventListener("keydown", function(event) {
       event.stopPropagation();  
     }
   }
+});
+
+
+
+
+/////////////////// Set Example ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  let form = document.getElementById('set-example-form');
+
+  form.addEventListener("submit", (event) => {
+    console.log("Set example.");
+    let fd = new FormData(event.target);
+    setExample(
+      fd.get("func"),
+      fd.get("arg1"),
+      fd.get("arg2"),
+      fd.get("arg3"),
+    );
+    event.preventDefault();
+    event.stopPropagation();
+  });
 });
