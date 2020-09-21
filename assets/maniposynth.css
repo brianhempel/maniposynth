@@ -23,7 +23,7 @@ h1 {
   position: fixed;
   border-bottom: solid 4px black;
   font-size: 44px;
-  font-family: "Brush Script MT", cursive;
+  font-family: "SignPainter", "Brush Script MT", cursive;
   background-color: rgba(255,255,255,0.98);
 }
 
