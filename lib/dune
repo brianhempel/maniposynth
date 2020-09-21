@@ -1,5 +1,0 @@
-(library
- (name maniposynth_lib)
- (libraries compiler-libs.common ocamlformat.ocamlformat_lib tyxml yojson ppx_yojson_conv_lib)
- (preprocess (pps ppxlib.metaquot ppx_yojson_conv)))
-

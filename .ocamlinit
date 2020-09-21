@@ -1,6 +1,0 @@
-open Maniposynth_lib
-
-let path = "simple.ml"
-let parsed = Parse_unparse.parse_file path
-
-
