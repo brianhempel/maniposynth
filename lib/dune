@@ -1,0 +1,4 @@
+(library
+ (name maniposynth_lib)
+ (libraries compiler-libs.common)
+ )
