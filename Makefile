@@ -1,6 +1,6 @@
 ./_build/default/interpreter.exe: *.ml dune **/dune # lib/*.ml lib/*.mli dune **/dune
-	dune build --auto-promote interpreter.exe
 	touch ./_build/default/interpreter.exe # Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
+	dune build --auto-promote interpreter.exe
 
 build_and_run: ./_build/default/interpreter.exe
 	./_build/default/interpreter.exe
