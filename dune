@@ -1,5 +1,5 @@
 (executable
  (name interpreter)
  (modules interpreter)
- (libraries compiler-libs.common unix maniposynth_lib)
+ (libraries compiler-libs.common unix base stdio maniposynth_lib)
  )
