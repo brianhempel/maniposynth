@@ -1,5 +1,5 @@
 (executable
  (name interpreter)
  (modules interpreter)
- (libraries compiler-libs.common unix base stdio maniposynth_lib)
+ (libraries camlboot_interpreter maniposynth_lib)
  )

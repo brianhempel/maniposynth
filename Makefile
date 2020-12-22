@@ -13,5 +13,6 @@ watch:
 
 setup:
 	opam init
-	opam switch 4.11.1 || opam switch create 4.11.1
+	opam switch 4.07.1 || opam switch create 4.07.1
 	opam install utop
+	# opam install base stdio

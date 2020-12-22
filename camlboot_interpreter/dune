@@ -1,0 +1,4 @@
+(library
+ (name camlboot_interpreter)
+ (libraries compiler-libs.common unix)
+ )
