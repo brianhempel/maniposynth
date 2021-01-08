@@ -5,13 +5,14 @@ let cc x d = ptr @@ Constructor (x, d, None)
 let builtin_exn_handler wrap_exn f =
   try f ()
   with exn ->
-    let bt = Printexc.get_raw_backtrace () in
+    (* let bt = Printexc.get_raw_backtrace () in *)
     let exn =
       match wrap_exn exn with
       | None -> exn
       | Some exn_code -> InternalException exn_code
     in
-    Printexc.raise_with_backtrace exn bt
+    raise exn
+    (* Printexc.raise_with_backtrace exn bt *)
 
 let prim1 f wrap_exn unwrap1 wrap =
   ptr @@ Prim

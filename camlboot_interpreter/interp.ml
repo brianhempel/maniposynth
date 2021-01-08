@@ -309,8 +309,8 @@ module Compiler_files = struct
   ]
 end
 
-let bytecode_compiler_units = []
-  (* let compiler_source_path = compiler_source_path () in
+let bytecode_compiler_units =
+  let compiler_source_path = compiler_source_path () in
   let fullpath file = Filename.concat compiler_source_path file in
   List.map (fun modfile -> stdlib_flag, fullpath modfile)
   ( Compiler_files.utils
@@ -322,10 +322,10 @@ let bytecode_compiler_units = []
   @ Compiler_files.driver
   @ Compiler_files.bytegen
   @ Compiler_files.bytecode_main
-  ) *)
+  )
 
-let native_compiler_units = []
-  (* let compiler_source_path = compiler_source_path () in
+let native_compiler_units =
+  let compiler_source_path = compiler_source_path () in
   let fullpath file = Filename.concat compiler_source_path file in
   List.map (fun modfile -> stdlib_flag, fullpath modfile)
   ( Compiler_files.utils
@@ -338,15 +338,13 @@ let native_compiler_units = []
   @ Compiler_files.middle_end
   @ Compiler_files.asmcomp
   @ Compiler_files.native_main
-  ) *)
+  )
 
 let run_ocamlc () =
-  ()
-  (* ignore (load_rec_units stdlib_env bytecode_compiler_units) *)
+  ignore (load_rec_units stdlib_env bytecode_compiler_units)
 
 let run_ocamlopt () =
-  ()
-  (* ignore (load_rec_units stdlib_env native_compiler_units) *)
+  ignore (load_rec_units stdlib_env native_compiler_units)
 
 let run_files files =
   (* let rev_files = ref [] in

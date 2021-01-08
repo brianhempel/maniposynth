@@ -41,7 +41,7 @@ let apply loc = function
 let rev_apply loc = function
   | [ (_, x); (_, f) ] ->
     let open Parsetree in
-    Some (exp_of_desc loc (Pexp_apply (f, [ (Nolabel, x) ])))
+    Some (exp_of_desc loc (Pexp_apply (f, [ (Asttypes.Nolabel, x) ])))
   | _ -> None
 
 external reraise : exn -> 'a = "%reraise"
