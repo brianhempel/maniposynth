@@ -1,5 +1,11 @@
 (executable
- (name interpreter)
- (modules interpreter)
+ (name server)
+ (modules server)
+ (libraries compiler-libs.common core maniposynth_lib)
+ )
+
+(executable
+ (name interpret_simple_ml)
+ (modules interpret_simple_ml)
  (libraries camlboot_interpreter maniposynth_lib)
  )

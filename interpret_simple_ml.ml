@@ -1,6 +1,6 @@
 
 let main () =
-  Interp.run_files ["simple.ml"]
+  Camlboot_interpreter.Interp.run_files ["simple.ml"]
 ;;
 
 main ()

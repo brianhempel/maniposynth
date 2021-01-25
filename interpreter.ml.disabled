@@ -30,7 +30,7 @@ let main () =
     ; Filename.concat "camlboot_interpreter" "primitives.ml"
     ; Filename.concat "camlboot_interpreter" "interp.ml"
     ; "interpret_simple_ml.ml"
-    ; "simple.ml"
+    (* ; "simple.ml" *)
     ]
 ;;
 

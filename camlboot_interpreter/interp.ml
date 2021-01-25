@@ -98,6 +98,8 @@ let load_rec_units env flags_and_units =
     env
     flags_and_units
 
+(* THIS IS WHAT TAKES FOREVER WHEN THE INTERPRETER INTERPRETS ITSELF *)
+(* LAZY LOAD STDLIB MODULES AS NEEDED? *)
 let stdlib_env =
   let env = Runtime_base.initial_env in
   let env = load_rec_units env stdlib_units in
