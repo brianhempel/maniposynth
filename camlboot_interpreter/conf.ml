@@ -1,6 +1,6 @@
-let trace = false
-let tracearg_from = 742740000
-let tracecur = ref 0
+let log_fun_calls = false
+let log_fun_calls_arg_from = 742740000
+let log_fun_calls_cur = ref 0
 
 let debug =
   match Sys.getenv_opt "OCAMLINTERP_DEBUG" with

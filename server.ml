@@ -47,13 +47,14 @@ let serve_asset out_chan url =
 
 let render_maniposynth out_chan url =
   let path = String.drop_prefix url 1 in
-  let parsed = path |> In_channel.read_all |> Lexing.from_string |> Parse.use_file in
+  let parsed = Camlboot_interpreter.Interp.parse path in
   (* let parsed_with_comments = Parse_unparse.parse_file path in
   let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
   let callables = Read_execution_env.callables_of_file path in
   let trace = Tracing.run_with_tracing path in
   let html_str = View.html_str callables trace bindings_skels in *)
-  let html_str = View.html_str parsed in
+  let trace = Camlboot_interpreter.Interp.run_files [path] in
+  let html_str = View.html_str parsed trace in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

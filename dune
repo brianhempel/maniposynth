@@ -1,7 +1,7 @@
 (executable
  (name server)
  (modules server)
- (libraries compiler-libs.common core maniposynth_lib)
+ (libraries compiler-libs.common core camlboot_interpreter maniposynth_lib)
  )
 
 (executable

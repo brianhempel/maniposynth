@@ -38,7 +38,7 @@ let rec take n li = match n, li with
     | _, [] -> invalid_arg "List.take"
     | n, x::xs -> x :: take (n - 1) xs
 
-let rec apply prims vf args =
+let rec apply prims trace vf args =
   let vf, extral, extram =
     match Ptr.get vf with
     | Fun_with_extra_args (vf, extral, extram) -> (vf, extral, extram)
@@ -54,22 +54,23 @@ let rec apply prims vf args =
         assert (s = s');
         eval_expr
           prims
-          (pattern_bind prims fenv p (ptr @@ Constructor ("Some", 0, Some arg)))
+          (pattern_bind prims fenv trace p (ptr @@ Constructor ("Some", 0, Some arg)))
+          trace
           e
       | Optional s, Labelled s', Some _
       | Optional s, Optional s', None
       | Labelled s, Labelled s', None ->
         assert (s = s');
-        eval_expr prims (pattern_bind prims fenv p arg) e
+        eval_expr prims (pattern_bind prims fenv trace p arg) trace e
       | Optional s, Optional s', Some def ->
         assert (s = s');
         let arg =
           match Ptr.get arg with
-          | Constructor ("None", 0, None) -> eval_expr prims fenv def
+          | Constructor ("None", 0, None) -> eval_expr prims fenv trace def
           | Constructor ("Some", 0, Some arg) -> arg
           | _ -> assert false
         in
-        eval_expr prims (pattern_bind prims fenv p arg) e
+        eval_expr prims (pattern_bind prims fenv trace p arg) trace e
       | _ -> assert false)
     | _ -> assert false
   in
@@ -78,12 +79,14 @@ let rec apply prims vf args =
     | Fun (Optional _, None, p, e, fenv) ->
       eval_expr
         prims
-        (pattern_bind prims fenv p (ptr @@ Constructor ("None", 0, None)))
+        (pattern_bind prims fenv trace p (ptr @@ Constructor ("None", 0, None)))
+        trace
         e
     | Fun (Optional _, Some def, p, e, fenv) ->
       eval_expr
         prims
-        (pattern_bind prims fenv p (eval_expr prims fenv def))
+        (pattern_bind prims fenv trace p (eval_expr prims fenv trace def))
+        trace
         e
     | _ -> assert false
   in
@@ -104,7 +107,7 @@ let rec apply prims vf args =
   let rec apply_one vf arg =
     match Ptr.get vf with
     | Fun (Nolabel, _default, p, e, fenv) ->
-      eval_expr prims (pattern_bind prims fenv p arg) e
+      eval_expr prims (pattern_bind prims fenv trace p arg) trace e
     | Fun (((Labelled s | Optional s) as lab), _default, p, e, fenv) ->
       if has_labelled
       then
@@ -118,8 +121,8 @@ let rec apply prims vf args =
           apply_one (apply_optional_noarg vf) arg)
       else if lab = Optional s
       then apply_one (apply_optional_noarg vf) arg
-      else eval_expr prims (pattern_bind prims fenv p arg) e
-    | Function (cl, fenv) -> eval_match prims fenv cl (Ok arg)
+      else eval_expr prims (pattern_bind prims fenv trace p arg) trace e
+    | Function (cl, fenv) -> eval_match prims fenv trace cl (Ok arg)
     | Prim prim -> prim arg
     | _ ->
       Format.eprintf "%a@." pp_print_value vf;
@@ -149,8 +152,15 @@ let rec apply prims vf args =
     in
     apply_loop vf)
 
-and eval_expr prims env expr =
+and eval_expr prims env trace expr =
+  let attach_trace value =
+    let trace_entry = (expr.pexp_loc, -1, value) in
+    trace := Trace.add trace_entry !trace;
+    value
+  in
+  attach_trace @@
   match expr.pexp_desc with
+  | Pexp_ident { txt = Lident "??"; _ } -> ptr @@ String (Bytes.of_string "💣")
   | Pexp_ident id ->
      begin match env_get_value_or_lvar env id with
        | Value v -> v
@@ -160,29 +170,29 @@ and eval_expr prims env expr =
      end
   | Pexp_constant c -> value_of_constant c
   | Pexp_let (recflag, vals, e) ->
-    eval_expr prims (eval_bindings prims env recflag vals) e
+    eval_expr prims (eval_bindings prims env trace recflag vals) trace e
   | Pexp_function cl -> ptr @@ Function (cl, env)
   | Pexp_fun (label, default, p, e) -> ptr @@ Fun (label, default, p, e, env)
   | Pexp_apply (f, l) ->
-    (match Ptr.get @@ eval_expr prims env f with
+    (match Ptr.get @@ eval_expr prims env trace f with
     | Fexpr fexpr ->
       let loc = expr.pexp_loc in
       (match fexpr loc l with
       | None ->
         Format.eprintf "%a@.F-expr failure.@." Location.print_loc loc;
         assert false
-      | Some expr -> eval_expr prims env expr)
+      | Some expr -> eval_expr prims env trace expr)
     | func_value ->
-      let args = List.map (fun (lab, e) -> (lab, eval_expr prims env e)) l in
-      if trace
+      let args = List.map (fun (lab, e) -> (lab, eval_expr prims env trace e)) l in
+      if log_fun_calls
       then (
         match f.pexp_desc with
         | Pexp_ident lident ->
           Format.eprintf
             "apply %s"
             (String.concat "." (Longident.flatten lident.txt));
-          incr tracecur;
-          if !tracecur > tracearg_from
+          incr log_fun_calls_cur;
+          if !log_fun_calls_cur > log_fun_calls_arg_from
           then
             Format.eprintf
               " %a"
@@ -192,48 +202,48 @@ and eval_expr prims env expr =
               args;
           Format.eprintf "@."
         | _ -> ());
-      apply prims (ptr @@ func_value) args)
+      apply prims trace (ptr @@ func_value) args)
   | Pexp_tuple l ->
-    let args = List.map (eval_expr prims env) l in
+    let args = List.map (eval_expr prims env trace) l in
     ptr @@ Tuple args
-  | Pexp_match (e, cl) -> eval_match prims env cl (eval_expr_exn prims env e)
-  | Pexp_coerce (e, _, _) -> eval_expr prims env e
-  | Pexp_constraint (e, _) -> eval_expr prims env e
+  | Pexp_match (e, cl) -> eval_match prims env trace cl (eval_expr_exn prims env trace e)
+  | Pexp_coerce (e, _, _) -> eval_expr prims env trace e
+  | Pexp_constraint (e, _) -> eval_expr prims env trace e
   | Pexp_sequence (e1, e2) ->
-    let _ = eval_expr prims env e1 in
-    eval_expr prims env e2
+    let _ = eval_expr prims env trace e1 in
+    eval_expr prims env trace e2
   | Pexp_while (e1, e2) ->
-    while is_true (eval_expr prims env e1) do
-      ignore (eval_expr prims env e2)
+    while is_true (eval_expr prims env trace e1) do
+      ignore (eval_expr prims env trace e2)
     done;
     unit
   | Pexp_for (p, e1, e2, flag, e3) ->
-    let v1 = Runtime_base.unwrap_int (eval_expr prims env e1) in
-    let v2 = Runtime_base.unwrap_int (eval_expr prims env e2) in
+    let v1 = Runtime_base.unwrap_int (eval_expr prims env trace e1) in
+    let v2 = Runtime_base.unwrap_int (eval_expr prims env trace e2) in
     if flag = Upto
     then
       for x = v1 to v2 do
         let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr prims (pattern_bind prims env p vx) e3)
+        ignore (eval_expr prims (pattern_bind prims env trace p vx) trace e3)
       done
     else
       for x = v1 downto v2 do
         let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr prims (pattern_bind prims env p vx) e3)
+        ignore (eval_expr prims (pattern_bind prims env trace p vx) trace e3)
       done;
     unit
   | Pexp_ifthenelse (e1, e2, e3) ->
-    if is_true (eval_expr prims env e1)
-    then eval_expr prims env e2
+    if is_true (eval_expr prims env trace e1)
+    then eval_expr prims env trace e2
     else (
       match e3 with
       | None -> unit
-      | Some e3 -> eval_expr prims env e3)
+      | Some e3 -> eval_expr prims env trace e3)
   | Pexp_unreachable -> failwith "reached unreachable"
   | Pexp_try (e, cs) ->
-    (try eval_expr prims env e
+    (try eval_expr prims env trace e
      with InternalException v ->
-       (try eval_match prims env cs (Ok v)
+       (try eval_match prims env trace cs (Ok v)
         with Match_fail -> raise (InternalException v)))
   | Pexp_construct (c, e) ->
     let cn = lident_name c.txt in
@@ -241,14 +251,14 @@ and eval_expr prims env expr =
     let ee =
       match e with
       | None -> None
-      | Some e -> Some (eval_expr prims env e)
+      | Some e -> Some (eval_expr prims env trace e)
     in
     ptr @@ Constructor (cn, d, ee)
   | Pexp_variant (cn, e) ->
     let ee =
       match e with
       | None -> None
-      | Some e -> Some (eval_expr prims env e)
+      | Some e -> Some (eval_expr prims env trace e)
     in
     ptr @@ Constructor (cn, Hashtbl.hash cn, ee)
   | Pexp_record (r, e) ->
@@ -256,39 +266,39 @@ and eval_expr prims env expr =
       match e with
       | None -> SMap.empty
       | Some e ->
-        (match Ptr.get @@ eval_expr prims env e with
+        (match Ptr.get @@ eval_expr prims env trace e with
         | Record r -> r
         | _ -> mismatch expr.pexp_loc; assert false)
     in
     ptr @@ Record
       (List.fold_left
          (fun rc ({ txt = lident; _ }, ee) ->
-           SMap.add (lident_name lident) (ref (eval_expr prims env ee)) rc)
+           SMap.add (lident_name lident) (ref (eval_expr prims env trace ee)) rc)
          base
          r)
   | Pexp_field (e, { txt = lident; _ }) ->
-    (match Ptr.get @@ eval_expr prims env e with
+    (match Ptr.get @@ eval_expr prims env trace e with
     | Record r -> !(SMap.find (lident_name lident) r)
     | _ -> mismatch expr.pexp_loc; assert false)
   | Pexp_setfield (e1, { txt = lident; _ }, e2) ->
-    let v1 = eval_expr prims env e1 in
-    let v2 = eval_expr prims env e2 in
+    let v1 = eval_expr prims env trace e1 in
+    let v2 = eval_expr prims env trace e2 in
     (match Ptr.get @@ v1 with
     | Record r ->
       SMap.find (lident_name lident) r := v2;
       unit
     | _ -> mismatch expr.pexp_loc; assert false)
-  | Pexp_array l -> ptr @@ Array (Array.of_list (List.map (eval_expr prims env) l))
+  | Pexp_array l -> ptr @@ Array (Array.of_list (List.map (eval_expr prims env trace) l))
   | Pexp_send (obj_expr, meth) ->
-     let obj = eval_expr prims env obj_expr in
+     let obj = eval_expr prims env trace obj_expr in
      (match Ptr.get obj with
-      | Object obj -> eval_obj_send expr.pexp_loc prims obj meth
+      | Object obj -> eval_obj_send expr.pexp_loc prims trace obj meth
       | _ -> mismatch expr.pexp_loc; assert false)
   | Pexp_new lid ->
      let (class_expr, class_env) = env_get_class env lid in
-     eval_obj_new prims !class_env class_expr
+     eval_obj_new prims !class_env trace class_expr
   | Pexp_setinstvar (x, e) ->
-     let v = eval_expr prims env e in
+     let v = eval_expr prims env trace e in
      let x = { x with Location.txt = Longident.Lident x.txt } in
      begin match env_get_value_or_lvar env x with
        | Value _ -> mismatch expr.pexp_loc; assert false
@@ -301,7 +311,7 @@ and eval_expr prims env expr =
      begin match env.current_object with
        | None -> mismatch expr.pexp_loc; assert false
        | Some obj ->
-          let new_obj = eval_obj_override prims env obj fields in
+          let new_obj = eval_obj_override prims env trace obj fields in
           ptr @@ Object new_obj
      end
   | Pexp_letexception ({ pext_name = name; pext_kind = k; _ }, e) ->
@@ -313,12 +323,12 @@ and eval_expr prims env expr =
       | Pext_rebind path ->
         env_set_constr name.txt (env_get_constr env path) env
     in
-    eval_expr prims nenv e
+    eval_expr prims nenv trace e
   | Pexp_letmodule (name, me, e) ->
-    let m = eval_module_expr prims env me in
-    eval_expr prims (env_set_module name.txt m env) e
+    let m = eval_module_expr prims env trace me in
+    eval_expr prims (env_set_module name.txt m env) trace e
   | Pexp_assert e ->
-    if is_true (eval_expr prims env e)
+    if is_true (eval_expr prims env trace e)
     then unit
     else (
       (*failwith "assert failure"*)
@@ -329,9 +339,9 @@ and eval_expr prims env expr =
       raise
         (InternalException
            (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
-  | Pexp_lazy e -> ptr @@ Lz (ref (fun () -> eval_expr prims env e))
-  | Pexp_poly (e, _ty) -> eval_expr prims env e
-  | Pexp_newtype (_, e) -> eval_expr prims env e
+  | Pexp_lazy e -> ptr @@ Lz (ref (fun () -> eval_expr prims env trace e))
+  | Pexp_poly (e, _ty) -> eval_expr prims env trace e
+  | Pexp_newtype (_, e) -> eval_expr prims env trace e
   | Pexp_open (_, lident, e) ->
     let nenv =
       match env_get_module_data env lident with
@@ -340,38 +350,44 @@ and eval_expr prims env expr =
         env
       | module_data -> env_extend false env module_data
     in
-    eval_expr prims nenv e
+    eval_expr prims nenv trace e
   | Pexp_object _ -> unsupported expr.pexp_loc; assert false
-  | Pexp_pack me -> ptr @@ ModVal (eval_module_expr prims env me)
+  | Pexp_pack me -> ptr @@ ModVal (eval_module_expr prims env trace me)
   | Pexp_extension _ -> unsupported expr.pexp_loc; assert false
 
-and eval_expr_exn prims env expr =
-  try Ok (eval_expr prims env expr) with InternalException v -> Error v
+and eval_expr_exn prims env trace expr =
+  try Ok (eval_expr prims env trace expr) with InternalException v -> Error v
 
-and bind_value prims env vb =
-  let v = eval_expr prims env vb.pvb_expr in
-  pattern_bind prims env vb.pvb_pat v
+and bind_value prims env trace vb =
+  let v = eval_expr prims env trace vb.pvb_expr in
+  pattern_bind prims env trace vb.pvb_pat v
 
-and eval_bindings prims env recflag defs =
+and eval_bindings prims env trace recflag defs =
   match recflag with
     | Nonrecursive ->
-       List.fold_left (bind_value prims) env defs
+       List.fold_left (fun env vb -> bind_value prims env trace vb) env defs
     | Recursive ->
        let dummies = List.map (fun _ -> Ptr.dummy ()) defs in
        let declare env vb dummy =
-         pattern_bind prims env vb.pvb_pat dummy in
+         pattern_bind prims env trace vb.pvb_pat dummy in
        let define env vb dummy =
-         let v = eval_expr prims env vb.pvb_expr in
+         let v = eval_expr prims env trace vb.pvb_expr in
          Ptr.backpatch dummy (Ptr.get v) in
        let nenv = List.fold_left2 declare env defs dummies in
        List.iter2 (define nenv) defs dummies;
        nenv
 
-and pattern_bind prims env pat v =
+and pattern_bind prims env trace pat v =
+  let attach_trace value env =
+    let trace_entry = (pat.ppat_loc, -1, value) in
+    trace := Trace.add trace_entry !trace;
+    env
+  in
+  attach_trace v @@
   match pat.ppat_desc with
   | Ppat_any -> env
   | Ppat_var s -> env_set_value s.txt v env
-  | Ppat_alias (p, s) -> env_set_value s.txt v (pattern_bind prims env p v)
+  | Ppat_alias (p, s) -> env_set_value s.txt v (pattern_bind prims env trace p v)
   | Ppat_constant c ->
     if value_equal (value_of_constant c) v then env else raise Match_fail
   | Ppat_interval (c1, c2) ->
@@ -382,7 +398,7 @@ and pattern_bind prims env pat v =
     (match Ptr.get v with
     | Tuple vl ->
       assert (List.length l = List.length vl);
-      List.fold_left2 (pattern_bind prims) env l vl
+      List.fold_left2 (fun env -> pattern_bind prims env trace) env l vl
     | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_construct (c, p) ->
     let cn = lident_name c.txt in
@@ -393,7 +409,7 @@ and pattern_bind prims env pat v =
       if dn <> ddn then raise Match_fail;
       (match (p, e) with
       | None, None -> env
-      | Some p, Some e -> pattern_bind prims env p e
+      | Some p, Some e -> pattern_bind prims env trace p e
       | _ -> mismatch pat.ppat_loc; assert false)
     | String s ->
       assert (lident_name c.txt = "Format");
@@ -410,13 +426,13 @@ and pattern_bind prims env pat v =
           | Instance_variable _ -> assert false
           | Value v -> v
       in
-      let fmt = apply prims fmt_ebb_of_string [ (Nolabel, ptr @@ String s) ] in
+      let fmt = apply prims trace fmt_ebb_of_string [ (Nolabel, ptr @@ String s) ] in
       let fmt =
         match Ptr.get fmt with
         | Constructor ("Fmt_EBB", _, Some fmt) -> fmt
         | _ -> mismatch pat.ppat_loc; assert false
       in
-      pattern_bind prims env p (ptr @@ Tuple [ fmt; v ])
+      pattern_bind prims env trace p (ptr @@ Tuple [ fmt; v ])
     | _ ->
       Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v;
       assert false)
@@ -426,7 +442,7 @@ and pattern_bind prims env pat v =
       if cn <> name then raise Match_fail;
       (match (p, e) with
       | None, None -> env
-      | Some p, Some e -> pattern_bind prims env p e
+      | Some p, Some e -> pattern_bind prims env trace p e
       | _ -> mismatch pat.ppat_loc; assert false)
     | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_record (rp, _) ->
@@ -434,7 +450,7 @@ and pattern_bind prims env pat v =
     | Record r ->
       List.fold_left
         (fun env (lident, p) ->
-          pattern_bind prims env p !(SMap.find (lident_name lident.txt) r))
+          pattern_bind prims env trace p !(SMap.find (lident_name lident.txt) r))
         env
         rp
     | _ -> mismatch pat.ppat_loc; assert false)
@@ -443,12 +459,12 @@ and pattern_bind prims env pat v =
         | Array vs ->
            let vs = Array.to_list vs in
            if List.length ps <> List.length vs then raise Match_fail;
-           List.fold_left2 (fun env p v -> pattern_bind prims env p v) env ps vs
+           List.fold_left2 (fun env p v -> pattern_bind prims env trace p v) env ps vs
         | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_or (p1, p2) ->
-    (try pattern_bind prims env p1 v
-     with Match_fail -> pattern_bind prims env p2 v)
-  | Ppat_constraint (p, _) -> pattern_bind prims env p v
+    (try pattern_bind prims env trace p1 v
+     with Match_fail -> pattern_bind prims env trace p2 v)
+  | Ppat_constraint (p, _) -> pattern_bind prims env trace p v
   | Ppat_type _ -> unsupported pat.ppat_loc; assert false
   | Ppat_lazy _ -> unsupported pat.ppat_loc; assert false
   | Ppat_unpack name ->
@@ -459,34 +475,34 @@ and pattern_bind prims env pat v =
   | Ppat_extension _ -> unsupported pat.ppat_loc; assert false
   | Ppat_open _ -> unsupported pat.ppat_loc; assert false
 
-and pattern_bind_exn prims env pat v =
+and pattern_bind_exn prims env trace pat v =
   match pat.ppat_desc with
-  | Ppat_exception p -> pattern_bind prims env p v
+  | Ppat_exception p -> pattern_bind prims env trace p v
   | _ -> raise Match_fail
 
-and pattern_bind_checkexn prims env pat v =
+and pattern_bind_checkexn prims env trace pat v =
   match v with
-  | Ok v -> pattern_bind prims env pat v
-  | Error v -> pattern_bind_exn prims env pat v
+  | Ok v -> pattern_bind prims env trace pat v
+  | Error v -> pattern_bind_exn prims env trace pat v
 
-and eval_match prims env cl arg =
+and eval_match prims env trace cl arg =
   match cl with
   | [] ->
     (match arg with
     | Ok _ -> raise Match_fail
     | Error v -> raise (InternalException v))
   | c :: cl ->
-    (match pattern_bind_checkexn prims env c.pc_lhs arg with
-    | exception Match_fail -> eval_match prims env cl arg
+    (match pattern_bind_checkexn prims env trace c.pc_lhs arg with
+    | exception Match_fail -> eval_match prims env trace cl arg
     | nenv ->
       let guard_ok =
         match c.pc_guard with
         | None -> true
-        | Some guard -> is_true (eval_expr prims nenv guard)
+        | Some guard -> is_true (eval_expr prims nenv trace guard)
       in
       if guard_ok
-      then eval_expr prims nenv c.pc_rhs
-      else eval_match prims env cl arg)
+      then eval_expr prims nenv trace c.pc_rhs
+      else eval_match prims env trace cl arg)
 
 and lookup_viewed_object obj =
   let rec lookup obj = function
@@ -495,7 +511,7 @@ and lookup_viewed_object obj =
        lookup (SMap.find parent obj.named_parents) parent_view
   in lookup obj obj.parent_view
 
-and eval_expr_in_object prims obj expr_in_object =
+and eval_expr_in_object prims trace obj expr_in_object =
   let expr_env = match expr_in_object.source with
       | Parent parent -> parent.env
       | Current_object -> (lookup_viewed_object obj).env
@@ -505,7 +521,7 @@ and eval_expr_in_object prims obj expr_in_object =
     let self_pattern = match expr_in_object.source with
       | Parent parent -> parent.self
       | Current_object -> (lookup_viewed_object obj).self in
-    pattern_bind prims env self_pattern (ptr @@ Object self_view) in
+    pattern_bind prims env trace self_pattern (ptr @@ Object self_view) in
   let add_parent obj name env =
     let parent_view =
       { obj with parent_view = name :: obj.parent_view } in
@@ -521,23 +537,23 @@ and eval_expr_in_object prims obj expr_in_object =
     |> SSet.fold add_variable expr_in_object.instance_variable_scope
     |> activate_object obj
   in
-  eval_expr prims env expr_in_object.expr
+  eval_expr prims env trace expr_in_object.expr
 
-and eval_obj_send loc prims obj meth =
+and eval_obj_send loc prims trace obj meth =
   match SMap.find meth.txt (lookup_viewed_object obj).methods with
     | exception Not_found ->
        mismatch loc; assert false
     | expr_in_object ->
-       eval_expr_in_object prims obj expr_in_object
+       eval_expr_in_object prims trace obj expr_in_object
 
-and eval_obj_override prims env obj fields =
+and eval_obj_override prims env trace obj fields =
   let override_field (x, e) obj =
-    let v = eval_expr prims env e in
+    let v = eval_expr prims env trace e in
     { obj with variables = SMap.add x.txt (ref v) obj.variables } in
   let obj = List.fold_right override_field fields obj in
   obj
 
-and eval_class_expr prims env class_expr =
+and eval_class_expr prims env trace class_expr =
   (* To avoid redundancy we express evaluation of class expressions by
      rewriting the non-base cases into usual expressions (fun => fun,
      etc.).  For example
@@ -547,7 +563,7 @@ and eval_class_expr prims env class_expr =
     fun x -> new <clexp>
   *)
   let eval_as_exp exp_desc =
-    eval_expr prims env {
+    eval_expr prims env trace {
         pexp_desc = exp_desc;
         pexp_loc = class_expr.pcl_loc;
         pexp_attributes = class_expr.pcl_attributes;
@@ -585,16 +601,16 @@ and eval_class_expr prims env class_expr =
   | Pcl_let (rec_flag, bindings, cle) ->
      eval_as_exp (Pexp_let (rec_flag, bindings, new_ cle))
   | Pcl_constraint (cle, _cty) ->
-     eval_obj_new prims env cle
+     eval_obj_new prims env trace cle
   | Pcl_open (ov_flag, open_, cle) ->
      eval_as_exp (Pexp_open (ov_flag, open_, new_ cle))
   | Pcl_extension _ ->
      unsupported class_expr.pcl_loc; assert false
   | Pcl_structure class_structure ->
-     let obj = eval_class_structure prims env class_expr.pcl_loc class_structure in
+     let obj = eval_class_structure prims env trace class_expr.pcl_loc class_structure in
      ptr @@ Object obj
 
-and eval_class_structure prims env loc class_structure =
+and eval_class_structure prims env trace loc class_structure =
   let eval_obj_field ((rev_inits,
                        parents, parents_in_scope,
                        variables, variables_in_scope,
@@ -617,7 +633,7 @@ and eval_class_structure prims env loc class_structure =
         variables_in_scope,
         methods)
     | Pcf_val (lab, _mut_flag, Cfk_concrete (_ov_flag, expr)) ->
-       let v = eval_expr prims env expr in
+       let v = eval_expr prims env trace expr in
        (rev_inits,
         parents,
         SSet.remove lab.txt parents_in_scope,
@@ -641,7 +657,7 @@ and eval_class_structure prims env loc class_structure =
          match expr_in_object.source with
            | Parent _ -> expr_in_object
            | Current_object -> { expr_in_object with source = Parent parent } in
-       begin match Ptr.get @@ eval_class_expr prims env class_expr with
+       begin match Ptr.get @@ eval_class_expr prims env trace class_expr with
          | Object parent ->
             let rev_inits =
               let parent_initializers =
@@ -710,15 +726,15 @@ and eval_class_structure prims env loc class_structure =
     parent_view = [];
   }
 
-and eval_obj_initializers prims _env obj =
+and eval_obj_initializers prims _env trace obj =
   let eval_init expr =
-    Runtime_base.unwrap_unit (eval_expr_in_object prims obj expr) in
+    Runtime_base.unwrap_unit (eval_expr_in_object prims trace obj expr) in
   List.iter eval_init obj.initializers
 
-and eval_obj_new prims env class_expr =
-  match Ptr.get @@ eval_class_expr prims env class_expr with
+and eval_obj_new prims env trace class_expr =
+  match Ptr.get @@ eval_class_expr prims env trace class_expr with
     | Object obj ->
-       eval_obj_initializers prims env obj;
+       eval_obj_initializers prims env trace obj;
        ptr @@ Object obj
     | other ->
        (* Class expressions may validly return non-Obj values,
@@ -730,19 +746,19 @@ and eval_obj_new prims env class_expr =
         *)
        ptr @@ other
 
-and eval_module_expr prims env me =
+and eval_module_expr prims env trace me =
   match me.pmod_desc with
   | Pmod_ident lident -> env_get_module env lident
-  | Pmod_structure str -> Module (make_module_data (eval_structure prims env str))
+  | Pmod_structure str -> Module (make_module_data (eval_structure prims env trace str))
   | Pmod_functor ({ txt = arg_name; _ }, _, e) -> Functor (arg_name, e, env)
-  | Pmod_constraint (me, _) -> eval_module_expr prims env me
+  | Pmod_constraint (me, _) -> eval_module_expr prims env trace me
   | Pmod_apply (me1, me2) ->
-    let m1 = eval_module_expr prims env me1 in
-    let m2 = eval_module_expr prims env me2 in
+    let m1 = eval_module_expr prims env trace me1 in
+    let m2 = eval_module_expr prims env trace me2 in
     let arg_name, body, env = eval_functor_data env me.pmod_loc m1 in
-    eval_module_expr prims (env_set_module arg_name m2 env) body
+    eval_module_expr prims (env_set_module arg_name m2 env) trace body
   | Pmod_unpack e ->
-    (match Ptr.get @@ eval_expr prims env e with
+    (match Ptr.get @@ eval_expr prims env trace e with
     | ModVal m -> m
     | _ -> mismatch me.pmod_loc; assert false)
   | Pmod_extension _ -> unsupported me.pmod_loc; assert false
@@ -752,13 +768,13 @@ and eval_functor_data _env _loc = function
   | Unit _ -> failwith "tried to apply a simple module unit"
   | Functor (arg_name, body, env) -> (arg_name, body, env)
 
-and eval_structitem prims env it =
+and eval_structitem prims env trace it =
   match it.pstr_desc with
   | Pstr_eval (e, _) ->
-    let v = eval_expr prims env e in
+    let v = eval_expr prims env trace e in
     Format.printf "%a@." pp_print_value v;
     env
-  | Pstr_value (recflag, defs) -> eval_bindings prims env recflag defs
+  | Pstr_value (recflag, defs) -> eval_bindings prims env trace recflag defs
   | Pstr_primitive { pval_name = { txt = name; loc }; pval_prim = l; _ } ->
     let prim_name = List.hd l in
     let prim =
@@ -797,7 +813,7 @@ and eval_structitem prims env it =
       env_set_constr name.txt d env
     | Pext_rebind path -> env_set_constr name.txt (env_get_constr env path) env)
   | Pstr_module { pmb_name = name; pmb_expr = me; _ } ->
-     env_set_module name.txt (eval_module_expr prims env me) env
+     env_set_module name.txt (eval_module_expr prims env trace me) env
   | Pstr_recmodule _ -> unsupported it.pstr_loc; assert false
   | Pstr_modtype _ -> env
   | Pstr_open { popen_lid = lident; _ } ->
@@ -813,19 +829,20 @@ and eval_structitem prims env it =
      env
   | Pstr_class_type _ -> env
   | Pstr_include { pincl_mod = me; pincl_loc = loc; _ } ->
-    let m = eval_module_expr prims env me in
+    let m = eval_module_expr prims env trace me in
     env_extend true env (get_module_data loc m)
   | Pstr_attribute _ -> env
   | Pstr_extension _ -> unsupported it.pstr_loc; assert false
 
-and eval_structure_ prims env str =
+and eval_structure_ prims env trace str =
   match str with
   | [] -> env
   | it :: str ->
     eval_structure_
       prims
-      (eval_structitem prims env it)
+      (eval_structitem prims env trace it)
+      trace
       str
 
-and eval_structure prims env str =
-  eval_structure_ prims (prevent_export env) str
+and eval_structure prims env trace str =
+  eval_structure_ prims (prevent_export env) trace str

@@ -4,6 +4,8 @@ open Parsetree
 module SMap = Map.Make (String)
 module SSet = Set.Make (String)
 
+type frame_no = int
+
 type module_unit_id = Path of string
 module UStore = Map.Make(struct
   type t = module_unit_id
