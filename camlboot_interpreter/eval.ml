@@ -160,7 +160,7 @@ and eval_expr prims env trace expr =
   in
   attach_trace @@
   match expr.pexp_desc with
-  | Pexp_ident { txt = Lident "??"; _ } -> ptr @@ String (Bytes.of_string "💣")
+  | Pexp_ident { txt = Lident "??"; _ } -> ptr @@ Bomb
   | Pexp_ident id ->
      begin match env_get_value_or_lvar env id with
        | Value v -> v
