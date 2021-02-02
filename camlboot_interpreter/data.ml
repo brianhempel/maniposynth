@@ -46,6 +46,7 @@ let onptr f = fun v -> f (Ptr.get v)
 
 type value = value_ Ptr.t
 and value_ =
+  | Bomb
   | Int of int
   | Int32 of int32
   | Int64 of int64
@@ -193,6 +194,7 @@ let is_true = onptr @@ function
   | _ -> assert false
 
 let rec pp_print_value ff = onptr @@ function
+  | Bomb -> Format.fprintf ff "💣"
   | Int n -> Format.fprintf ff "%d" n
   | Int32 n -> Format.fprintf ff "%ldl" n
   | Int64 n -> Format.fprintf ff "%LdL" n
@@ -281,6 +283,8 @@ let value_of_constant const = ptr @@ match const with
   | Pconst_string (s, _) -> String (Bytes.of_string s)
 
 let rec value_compare v1 v2 = match Ptr.get v1, Ptr.get v2 with
+  | Bomb, _ -> failwith "tried to compare 💣"
+  | _, Bomb -> failwith "tried to compare 💣"
   | Fun _, _
   | Function _, _
   | _, Fun _

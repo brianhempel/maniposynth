@@ -56,6 +56,7 @@ let rec html_of_value (value : Data.value) =
   let open Data in
   let value_ = Ptr.get value in
   match value_ with
+  | Bomb                                     -> "💣"
   | Int int                                  -> string_of_int int
   | Int32 int32                              -> Int32.to_string int32
   | Int64 int64                              -> Int64.to_string int64

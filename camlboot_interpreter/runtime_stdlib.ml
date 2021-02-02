@@ -113,6 +113,7 @@ external format_float : string -> float -> string = "caml_format_float"
 external random_seed : unit -> int array = "caml_sys_random_seed"
 
 let seeded_hash_param meaningful total seed = onptr @@ function
+  | Bomb -> failwith "tried to hash 💣"
   | Int n -> Hashtbl.seeded_hash_param meaningful total seed n
   | Int32 n -> Hashtbl.seeded_hash_param meaningful total seed n
   | Int64 n -> Hashtbl.seeded_hash_param meaningful total seed n
