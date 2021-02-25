@@ -152,7 +152,7 @@ let rec apply prims vf args =
 
 and eval_expr prims env expr =
   match expr.pexp_desc with
-  | Pexp_ident { txt = Lident "??"; _ } -> Bomb
+  (* | Pexp_ident { txt = Longident.Lident "??"; _ } -> Bomb *)
   | Pexp_ident id ->
      begin match env_get_value_or_lvar env id with
        | Value v -> v

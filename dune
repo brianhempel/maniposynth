@@ -9,3 +9,10 @@
  (modules interpret_simple_ml)
  (libraries camlboot_interpreter maniposynth_lib)
  )
+
+(executable
+ (name interpret_intepreter_interpreting_simple_ml)
+ (modules interpret_intepreter_interpreting_simple_ml)
+ (libraries camlboot_interpreter maniposynth_lib)
+ )
+

@@ -15,6 +15,13 @@ run: ./_build/default/server.exe
 interpret_simple_ml: ./_build/default/interpret_simple_ml.exe
 	OCAMLINTERP_DEBUG=true ./_build/default/interpret_simple_ml.exe
 
+./_build/default/interpret_intepreter_interpreting_simple_ml.exe: *.ml dune **/dune **/*.ml # lib/*.ml lib/*.mli dune **/dune
+	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
+	touch ./_build/default/interpret_intepreter_interpreting_simple_ml.exe; dune build --auto-promote interpret_intepreter_interpreting_simple_ml.exe
+
+interpret_intepreter_interpreting_simple_ml:
+	OCAMLINTERP_DEBUG=true ./_build/default/interpret_intepreter_interpreting_simple_ml.exe
+
 clean:
 	rm -rf _build/
 
