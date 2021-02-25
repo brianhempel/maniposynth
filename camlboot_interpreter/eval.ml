@@ -412,7 +412,6 @@ and eval_bindings prims env trace_state frame_no recflag defs =
       let dummy_env = List.fold_left (fun env name -> env_set_value name Bomb env) env rec_names in
       let vals = List.map (fun vb -> eval_expr prims dummy_env trace_state frame_no vb.pvb_expr) defs in
       let nenv = List.fold_left2 (fun env name v -> env_set_value name v env) env rec_names vals in
-      (* START HERE: test by interpreting itself :/ *)
       let rec packpatch_env = function
         | Fun (_, _, _, _, env_ref)  -> env_ref := nenv
         | Function (_, env_ref)      -> env_ref := nenv
@@ -428,7 +427,8 @@ and eval_bindings prims env trace_state frame_no recflag defs =
       nenv
 
 and pattern_bind prims env trace_state frame_no pat v =
-  (* START HERE frame_no handling here needs to be done carefully. Probably needs to be explicitly passed from eval *)
+  (* frame_no is passed in here because pattern matches can execute code, which will change the trace_state frame_no for later calls to pattern_bind *)
+  (* (namely the str = "Format" case) *)
   let attach_trace value env =
     let trace_entry = (pat.ppat_loc, frame_no, value) in
     trace_state.trace <- Trace.add trace_entry trace_state.trace;
