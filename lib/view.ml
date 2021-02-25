@@ -80,13 +80,12 @@ let rec html_of_value (value : Data.value) =
   | Object _                                 -> "object"
 
 
-let html_of_values_for_loc _trace _loc =
-  ""
-  (* trace
+let html_of_values_for_loc trace loc =
+  trace
   |> Trace.entries_for_loc loc
   |> List.map Trace.Entry.value
   |> List.map html_of_value
-  |> String.concat "\n" *)
+  |> String.concat "\n"
 
 
 let html_box_of_vb (vb : Parsetree.value_binding) =
@@ -167,7 +166,7 @@ let html_of_structure_item trace (item : Parsetree.structure_item) =
   | Pstr_extension (_, _)       -> failwith "can't handle Pstr_extension"
 
 
-let html_str (structure_items : Parsetree.structure) (trace) =
+let html_str (structure_items : Parsetree.structure) (trace : Trace.t) =
   html
     [ head
         [ title "Maniposynth"

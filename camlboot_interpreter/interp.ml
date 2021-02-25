@@ -82,7 +82,9 @@ let eval_env_flag ~loc env flag =
      let module_ident = Location.mkloc module_ident loc in
      env_extend false env (env_get_module_data env module_ident)
 
-let load_rec_units env flags_and_units =
+let load_rec_units env trace_state flags_and_units =
+  trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
+  let frame_no = trace_state.frame_no in
   let unit_paths = List.map snd flags_and_units in
   let env = List.fold_left declare_unit env unit_paths in
   List.fold_left
@@ -92,7 +94,7 @@ let load_rec_units env flags_and_units =
       let module_contents =
         let loc = Location.in_file unit_path in
         let local_env = List.fold_left (eval_env_flag ~loc) global_env flags in
-        eval_structure Primitives.prims local_env (parse unit_path)
+        eval_structure Primitives.prims local_env trace_state frame_no (parse unit_path)
       in
       define_unit global_env unit_path (make_module_data module_contents)
     )
@@ -103,7 +105,7 @@ let load_rec_units env flags_and_units =
 (* LAZY LOAD STDLIB MODULES AS NEEDED? *)
 let stdlib_env =
   let env = Runtime_base.initial_env in
-  let env = load_rec_units env stdlib_units in
+  let env = load_rec_units env Trace.new_trace_state stdlib_units in
   env
 
 module Compiler_files = struct
@@ -344,10 +346,10 @@ let native_compiler_units =
   )
 
 let run_ocamlc () =
-  ignore (load_rec_units stdlib_env bytecode_compiler_units)
+  ignore (load_rec_units stdlib_env Trace.new_trace_state bytecode_compiler_units)
 
 let run_ocamlopt () =
-  ignore (load_rec_units stdlib_env native_compiler_units)
+  ignore (load_rec_units stdlib_env Trace.new_trace_state native_compiler_units)
 
 
 let run_files files =
@@ -355,14 +357,16 @@ let run_files files =
   let anon_fun file = rev_files := file :: !rev_files in
   Arg.parse [] anon_fun "";
   let files = List.rev !rev_files in *)
+  let trace_state = Trace.new_trace_state in
   begin try
     files
     |> List.map (fun file -> stdlib_flag, file)
-    |> load_rec_units stdlib_env
+    |> load_rec_units stdlib_env trace_state
     |> ignore
   with InternalException value ->
     Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value
-  end
+  end;
+  trace_state.trace
 
 (* let _ = load_rec_units stdlib_env [stdlib_flag, "test.ml"] *)
 (* let () =
