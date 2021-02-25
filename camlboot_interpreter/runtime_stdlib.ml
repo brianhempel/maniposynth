@@ -1,15 +1,15 @@
 open Data
 open Runtime_lib
 
-let wrap_in_channel ic = ptr @@ InChannel ic
+let wrap_in_channel ic = InChannel ic
 
-let unwrap_in_channel = onptr @@ function
+let unwrap_in_channel = function
   | InChannel ic -> ic
   | _ -> assert false
 
-let wrap_out_channel oc = ptr @@ OutChannel oc
+let wrap_out_channel oc = OutChannel oc
 
-let unwrap_out_channel = onptr @@ function
+let unwrap_out_channel = function
   | OutChannel oc -> oc
   | _ -> assert false
 
@@ -24,7 +24,7 @@ let wrap_open_flag = function
   | Open_text -> cc "Open_text" 7
   | Open_nonblock -> cc "Open_nonblock" 8
 
-let unwrap_open_flag = onptr @@ function
+let unwrap_open_flag = function
   | Constructor ("Open_rdonly", _, None) -> Open_rdonly
   | Constructor ("Open_wronly", _, None) -> Open_wronly
   | Constructor ("Open_append", _, None) -> Open_append
@@ -39,20 +39,20 @@ let unwrap_open_flag = onptr @@ function
 let rec wrap_list wrapf = function
   | [] -> cc "[]" 0
   | x :: l ->
-     ptr @@ Constructor ("::", 0,
-                         Some (ptr @@ Tuple [ wrapf x; wrap_list wrapf l ]))
+     Constructor ("::", 0,
+                         Some (Tuple [ wrapf x; wrap_list wrapf l ]))
 
-let rec unwrap_list unwrapf = onptr @@ function
+let rec unwrap_list unwrapf = function
   | Constructor ("[]", _, None) -> []
   | Constructor ("::", _, Some arg) ->
-    begin match Ptr.get arg with
+    begin match arg with
       | Tuple [ x; l ] ->
          unwrapf x :: unwrap_list unwrapf l
       | _ -> assert false
     end
   | _ -> assert false
 
-let unwrap_marshal_flag = onptr @@ function
+let unwrap_marshal_flag = function
   | Constructor ("No_sharing", _, None) -> Marshal.No_sharing
   | Constructor ("Closures", _, None) -> Marshal.Closures
   | Constructor ("Compat_32", _, None) -> Marshal.Compat_32
@@ -112,7 +112,7 @@ external format_int : string -> int -> string = "caml_format_int"
 external format_float : string -> float -> string = "caml_format_float"
 external random_seed : unit -> int array = "caml_sys_random_seed"
 
-let seeded_hash_param meaningful total seed = onptr @@ function
+let seeded_hash_param meaningful total seed = function
   | Bomb -> failwith "tried to hash 💣"
   | Int n -> Hashtbl.seeded_hash_param meaningful total seed n
   | Int32 n -> Hashtbl.seeded_hash_param meaningful total seed n

@@ -1,71 +1,71 @@
 open Data
 
-let wrap_int n = ptr @@ Int n
-let unwrap_int  = onptr @@ function
+let wrap_int n = Int n
+let unwrap_int  = function
   | Int n -> n
   | _ -> assert false
 
-let wrap_int32 n = ptr @@ Int32 n
-let unwrap_int32 = onptr @@ function
+let wrap_int32 n = Int32 n
+let unwrap_int32 = function
   | Int32 n -> n
   | _ -> assert false
 
-let wrap_int64 n = ptr @@ Int64 n
-let unwrap_int64 = onptr @@ function
+let wrap_int64 n = Int64 n
+let unwrap_int64 = function
   | Int64 n -> n
   | _ -> assert false
 
-let wrap_nativeint n = ptr @@ Nativeint n
-let unwrap_nativeint = onptr @@ function
+let wrap_nativeint n = Nativeint n
+let unwrap_nativeint = function
   | Nativeint n -> n
   | v ->
      Format.eprintf "unwrap_nativeint %a@."
-       pp_print_value (Ptr.create v);
+       pp_print_value v;
      assert false
 
-let wrap_float f = ptr @@ Float f
-let unwrap_float = onptr @@ function
+let wrap_float f = Float f
+let unwrap_float = function
   | Float f -> f
   | _ -> assert false
 
 let unwrap_bool = is_true
 
-let wrap_bool b = ptr @@
+let wrap_bool b =
   if b then Constructor ("true", 1, None) else Constructor ("false", 0, None)
 
 let wrap_unit () = unit
 
-let unwrap_unit = onptr @@ function
+let unwrap_unit = function
   | Constructor ("()", 0, None) -> ()
   | _ -> assert false
 
-let wrap_bytes s = ptr @@ String s
+let wrap_bytes s = String s
 
-let unwrap_bytes = onptr @@ function
+let unwrap_bytes = function
   | String s -> s
   | _ -> assert false
 
-let wrap_string s = ptr @@ String (Bytes.of_string s)
+let wrap_string s = String (Bytes.of_string s)
 
-let unwrap_string = onptr @@ function
+let unwrap_string = function
   | String s -> Bytes.to_string s
   | _ -> assert false
 
-let wrap_string_unsafe s = ptr @@ String (Bytes.unsafe_of_string s)
+let wrap_string_unsafe s = String (Bytes.unsafe_of_string s)
 
-let unwrap_string_unsafe = onptr @@ function
+let unwrap_string_unsafe = function
   | String s -> Bytes.unsafe_to_string s
   | _ -> assert false
 
-let wrap_char c = ptr @@ Int (int_of_char c)
+let wrap_char c = Int (int_of_char c)
 
-let unwrap_char = onptr @@ function
+let unwrap_char = function
   | Int n -> char_of_int (n land 255)
   | _ -> assert false
 
-let wrap_array wrapf a = ptr @@ Array (Array.map wrapf a)
+let wrap_array wrapf a = Array (Array.map wrapf a)
 
-let unwrap_array unwrapf = onptr @@ function
+let unwrap_array unwrapf = function
   | Array a -> Array.map unwrapf a
   | _ -> assert false
 

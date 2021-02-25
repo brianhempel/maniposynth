@@ -12,47 +12,14 @@ module UStore = Map.Make(struct
   let compare (Path a) (Path b) = String.compare a b
 end)
 
-module Ptr : sig
-  type 'a t
-  val create : 'a -> 'a t
-
-  exception Null
-  val get : 'a t -> 'a
-
-  val dummy : unit -> 'a t
-
-  exception Full
-  val backpatch : 'a t -> 'a -> unit
-end = struct
-  type 'a t = 'a option ref
-
-  let create v = ref (Some v)
-
-  exception Null
-  let get ptr = match !ptr with
-    | None -> raise Null
-    | Some v -> v
-
-  let dummy () = ref None
-
-  exception Full
-  let backpatch ptr v = match !ptr with
-      | Some _ -> raise Full
-      | None -> ptr := Some v
-end
-
-let ptr v = Ptr.create v
-let onptr f = fun v -> f (Ptr.get v)
-
-type value = value_ Ptr.t
-and value_ =
+type value =
   | Bomb
   | Int of int
   | Int32 of int32
   | Int64 of int64
   | Nativeint of nativeint
-  | Fun of arg_label * expression option * pattern * expression * env
-  | Function of case list * env
+  | Fun of arg_label * expression option * pattern * expression * env ref
+  | Function of case list * env ref
   | String of bytes
   | Float of float
   | Tuple of value list
@@ -186,14 +153,14 @@ and expr_in_object = {
 
 exception InternalException of value
 
-let unit = ptr @@ Constructor ("()", 0, None)
+let unit = Constructor ("()", 0, None)
 
-let is_true = onptr @@ function
+let is_true = function
   | Constructor ("true", _, None) -> true
   | Constructor ("false", _, None) -> false
   | _ -> assert false
 
-let rec pp_print_value ff = onptr @@ function
+let rec pp_print_value ff = function
   | Bomb -> Format.fprintf ff "💣"
   | Int n -> Format.fprintf ff "%d" n
   | Int32 n -> Format.fprintf ff "%ldl" n
@@ -270,7 +237,7 @@ let read_caml_int s =
   done;
   Int64.mul sign !c
 
-let value_of_constant const = ptr @@ match const with
+let value_of_constant const = match const with
   | Pconst_integer (s, (None | Some 'l')) ->
     Int (Int64.to_int (read_caml_int s))
   | Pconst_integer (s, Some 'L') -> Int64 (read_caml_int s)
@@ -282,7 +249,7 @@ let value_of_constant const = ptr @@ match const with
   | Pconst_float (f, _) -> Float (float_of_string f)
   | Pconst_string (s, _) -> String (Bytes.of_string s)
 
-let rec value_compare v1 v2 = match Ptr.get v1, Ptr.get v2 with
+let rec value_compare v1 v2 = match v1, v2 with
   | Bomb, _ -> failwith "tried to compare 💣"
   | _, Bomb -> failwith "tried to compare 💣"
   | Fun _, _
