@@ -4,9 +4,8 @@ let sprintf = Printf.sprintf
 
 let rec print_attrs attrs  =
   match attrs with
-  | (name, Some value)::rest -> sprintf " %s=\"%s\"%s" name value (print_attrs rest)
-  | (name, None)::rest       -> sprintf " %s%s"        name       (print_attrs rest)
-  | []                       -> ""
+  | (name, value)::rest -> sprintf " %s=\"%s\"%s" name value (print_attrs rest)
+  | []                  -> ""
 
 let tag name ?(attrs = []) inners =
   sprintf "<%s%s>%s</%s>" name (print_attrs attrs) (String.concat "" inners) name
@@ -20,21 +19,22 @@ let head ?(attrs = []) inners = tag "head" ~attrs inners
 let title ?(attrs = []) str = tag "title" ~attrs [str]
 let meta attrs = lone_tag "meta" ~attrs ()
 let stylesheet href =
-  lone_tag "link" ~attrs:[("rel", Some "stylesheet"); ("href", Some href)] ()
+  lone_tag "link" ~attrs:[("rel", "stylesheet"); ("href", href)] ()
 
 let script ?src ?(attrs = []) str =
   match src with
-  | Some src_str -> tag "script" ~attrs:(("src", Some src_str)::attrs) [str]
+  | Some src_str -> tag "script" ~attrs:(("src", src_str)::attrs) [str]
   | None         -> tag "script" ~attrs                                [str]
 
 
 let body  ?(attrs = [])       inners = tag "body" ~attrs inners
 let div   ?(attrs = [])       inners = tag "div" ~attrs inners
+let span  ?(attrs = [])       inners = tag "span" ~attrs inners
 let table ?(attrs = [])       inners = tag "table" ~attrs inners
 let tr    ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td    ?(attrs = [])       inners = tag "td" ~attrs inners
 let box   ?(attrs = []) klass inners =
-  let attrs = ("class", Some ("box " ^ klass))::attrs in
+  let attrs = ("class", ("box " ^ klass))::attrs in
   div ~attrs inners
 
 let string_of_pat = Formatter_to_stringifier.f Pprintast.pattern
@@ -48,14 +48,15 @@ let string_of_arg_label =
 
 let html_box label content =
   table
-    [ tr [td ~attrs:[("class", Some "label")] [label]]
-    ; tr [td ~attrs:[("class", Some "values")] [content]]
+    [ tr [td ~attrs:[("class", "label")] [label]]
+    ; tr [td ~attrs:[("class", "values")] [content]]
     ]
 
-let rec html_of_value (value : Data.value) =
+let rec html_of_value ((value_, _) as value : Data.value) =
   let open Data in
-  (* let value_ = value in *)
-  match value with
+  let wrap_value str = span ~attrs:[("class", "value"); ("data-value", Serialize.string_of_value value)] [str] in
+  wrap_value @@
+  match value_ with
   | Bomb                                     -> "💣"
   | Int int                                  -> string_of_int int
   | Int32 int32                              -> Int32.to_string int32
@@ -114,13 +115,13 @@ let rec fun_rows trace (param_label : Asttypes.arg_label) param_exp_opt param_pa
 
 and rows_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
   let single_exp () =
-    [ tr [td ~attrs:[("colspan", Some "2")] [""]]
-    ; tr [td ~attrs:[("colspan", Some "2")] [html_box_of_exp trace exp]]
+    [ tr [td ~attrs:[("colspan", "2")] [""]]
+    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace exp]]
     ]
   in
   let unhandled node_kind_str =
-    [ tr [td ~attrs:[("colspan", Some "2")] [""]]
-    ; tr [td ~attrs:[("colspan", Some "2")] ["don't know how to handle nodes of kind " ^ node_kind_str]]
+    [ tr [td ~attrs:[("colspan", "2")] [""]]
+    ; tr [td ~attrs:[("colspan", "2")] ["don't know how to handle nodes of kind " ^ node_kind_str]]
     ]
   in
   let open Parsetree in
@@ -141,16 +142,24 @@ and rows_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
 let html_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
   table (rows_ensure_vbs_canvas_of_exp trace exp)
 
-let html_of_top_level_value_binding trace (vb : Parsetree.value_binding) =
-  box "value_binding"
-    @@ [ string_of_pat vb.pvb_pat ^ " =" ]
-    @  [ html_ensure_vbs_canvas_of_exp trace vb.pvb_expr ]
+let htmls_of_top_level_value_binding trace (vb : Parsetree.value_binding) =
+  let drop_target_before_vb (vb : Parsetree.value_binding) =
+    div ~attrs:
+      [ ("data-before-vb-id", Serialize.string_of_loc vb.pvb_loc)
+      ; ("style", "height: 2em")
+      ] []
+  in
+  [ drop_target_before_vb vb
+  ; box "value_binding"
+      @@ [ string_of_pat vb.pvb_pat ^ " =" ]
+      @  [ html_ensure_vbs_canvas_of_exp trace vb.pvb_expr ]
+  ]
 
 let html_of_structure_item trace (item : Parsetree.structure_item) =
   let open Parsetree in
   match item.pstr_desc with
   | Pstr_eval (_, _)            -> failwith "can't handle Pstr_eval"
-  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.map (html_of_top_level_value_binding trace) vbs)
+  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
   | Pstr_typext _               -> failwith "can't handle Pstr_typext"
@@ -170,7 +179,7 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) =
   html
     [ head
         [ title "Maniposynth"
-        ; meta [("charset", Some "UTF-8")]
+        ; meta [("charset", "UTF-8")]
         ; stylesheet "/assets/maniposynth.css"
         ; script ~src:"/assets/maniposynth.js" ""
         ; script ~src:"/assets/reload_on_file_changes.js" ""

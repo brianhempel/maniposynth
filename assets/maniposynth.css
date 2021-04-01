@@ -12,9 +12,6 @@ body {
   /* color: #3a3a3a; */
 }
 
-body > * {
-  margin-bottom: 2em;
-}
 
 .box {
   /* border: solid 1px black; */
@@ -31,4 +28,19 @@ table {
 td {
   border: solid 1px black;
   padding: var(--padding);
+}
+
+[draggable=true] {
+  /* cursor: grab; */
+  cursor: move;
+}
+
+.draggable-hovered {
+  /* background-color: rgba(200,200,200,0.5); */
+  /* color: #000; */
+  box-shadow: 2px 2px 7px rgba(0,0,0,0.3);
+}
+
+.current-drop-target {
+  background-color: rgb(255, 247, 232);
 }

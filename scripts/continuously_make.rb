@@ -4,6 +4,13 @@
 
 server_pid = nil
 
+at_exit do
+  begin
+    server_pid && Process.kill(-2, server_pid) # kill process group
+  rescue
+  end
+end
+
 loop do
   if system("make --question")
     sleep 0.1
@@ -12,8 +19,11 @@ loop do
     puts
     if success
       if server_pid
-        Process.kill(-2, server_pid) # kill process group
-        Process.wait
+        begin
+          Process.kill(-2, server_pid) # kill process group
+          Process.wait
+        rescue
+        end
       end
       server_pid = Process.spawn("make run",  :pgroup => true)
     end

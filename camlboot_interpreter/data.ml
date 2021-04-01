@@ -4,7 +4,7 @@ open Parsetree
 module SMap = Map.Make (String)
 module SSet = Set.Make (String)
 
-type frame_no = int
+type frame_no = int (* execution frame numbers for tracing *)
 
 type module_unit_id = Path of string
 module UStore = Map.Make(struct
@@ -12,7 +12,8 @@ module UStore = Map.Make(struct
   let compare (Path a) (Path b) = String.compare a b
 end)
 
-type value =
+type value = value_ * vtrace
+and value_ =
   | Bomb
   | Int of int
   | Int32 of int32
@@ -36,6 +37,17 @@ type value =
   | Object of object_value
 
 and fexpr = Location.t -> (arg_label * expression) list -> expression option
+
+and vtrace = (trace_pt * tp_type) list
+and trace_pt = frame_no * Location.t (* Ast_id.t is AST exp/pat ids *)
+and tp_type =
+  | Intro (* val introduction *)
+  | Use (* var usage *)
+  | Ret (* pass-through expression return (e.g. function application result) *)
+  | PatMatch of value * projection list (* subvalue path within a root value *)
+and projection =
+  | Child of int (* 0-indexed *)
+  | Field of string
 
 and 'a env_map = (bool * 'a) SMap.t
 (* the boolean tracks whether the value should be exported in the
@@ -153,14 +165,18 @@ and expr_in_object = {
 
 exception InternalException of value
 
-let unit = Constructor ("()", 0, None)
+let new_vtrace v_ = (v_, [])
 
-let is_true = function
+let unit = new_vtrace @@ Constructor ("()", 0, None)
+
+let is_true (v_, _) =
+  match v_ with
   | Constructor ("true", _, None) -> true
   | Constructor ("false", _, None) -> false
   | _ -> assert false
 
-let rec pp_print_value ff = function
+let rec pp_print_value ff (v_, _) =
+  match v_ with
   | Bomb -> Format.fprintf ff "💣"
   | Int n -> Format.fprintf ff "%d" n
   | Int32 n -> Format.fprintf ff "%ldl" n
@@ -237,7 +253,7 @@ let read_caml_int s =
   done;
   Int64.mul sign !c
 
-let value_of_constant const = match const with
+let value_of_constant const = new_vtrace @@ match const with
   | Pconst_integer (s, (None | Some 'l')) ->
     Int (Int64.to_int (read_caml_int s))
   | Pconst_integer (s, Some 'L') -> Int64 (read_caml_int s)
@@ -249,7 +265,8 @@ let value_of_constant const = match const with
   | Pconst_float (f, _) -> Float (float_of_string f)
   | Pconst_string (s, _) -> String (Bytes.of_string s)
 
-let rec value_compare v1 v2 = match v1, v2 with
+let rec value_compare (v_1, _) (v_2, _) =
+  match v_1, v_2 with
   | Bomb, _ -> failwith "tried to compare 💣"
   | _, Bomb -> failwith "tried to compare 💣"
   | Fun _, _

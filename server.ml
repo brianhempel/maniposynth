@@ -64,7 +64,7 @@ let render_maniposynth out_chan url =
 let colon_space = String.Search_pattern.create ": "
 
 let handle_connection in_chan out_chan =
-  (* let rec read_header_lines chan : (string * string) list =
+  let rec read_header_lines chan : (string * string) list =
     let line = In_channel.input_line_exn chan in
     let trim = String.strip ~drop:Char.is_whitespace in
     if String.length (trim line) = 0 then
@@ -88,11 +88,10 @@ let handle_connection in_chan out_chan =
       | _ ->
           print_endline ("Bad header line: " ^ line);
           read_header_lines chan *)
-  in *)
+  in
   let request_str = In_channel.input_line_exn in_chan in
-  (* let headers = read_header_lines in_chan in *)
-  (* let content_length = int_of_string (List.Assoc.find headers ~equal:String.equal "Content-Length" |> Option.value ~default:"0") in *)
-  (* let content_str = In_channel.input_all in_chan in *)
+  let headers = read_header_lines in_chan in
+  let content_length = int_of_string (List.Assoc.find headers ~equal:String.equal "Content-Length" |> Option.value ~default:"0") in
   (* print_endline request_str; "GET /path HTTP/1.1" *)
   (match String.split ~on:' ' request_str with
   | "GET"::url::_ ->
@@ -102,16 +101,28 @@ let handle_connection in_chan out_chan =
         render_maniposynth out_chan url
       else
         respond_not_found out_chan
-  (* | "PATCH"::url::_ ->
-      if String.is_suffix url ~suffix:".ml" then
-        let action_yojson = Yojson.Safe.from_string content_str in
+  | "PATCH"::url::_ ->
+      if String.is_suffix url ~suffix:".ml" then begin
+        (* print_endline "hi"; *)
+        (* START HERE read request *)
+        (* let content_str = In_channel.input_all in_chan in *)
+        let content_str =
+          let buf = Bytes.create content_length in
+          In_channel.really_input_exn in_chan ~buf ~pos:0 ~len:content_length;
+          Bytes.to_string buf
+        in
+        (* print_endline "bye"; *)
         (* print_endline content_str; *)
+        let action_yojson = Yojson.Safe.from_string content_str in
         let action = Action.t_of_yojson action_yojson in
-        let file_path = String_utils.drop url 1 in
-        Action.f file_path action;
+        let path = String.drop_prefix url 1 in
+        let parsed = Camlboot_interpreter.Interp.parse path in
+        let parsed' = Action.f action parsed in
+        Pprintast.structure Format.std_formatter parsed';
+        print_endline "";
         respond ~content_type:"text/plain" out_chan "Done."
-      else
-        respond_not_found out_chan *)
+      end else
+        respond_not_found out_chan
   | _ ->
       print_string "UNHANDLED REQUEST: ";
       print_endline request_str;
