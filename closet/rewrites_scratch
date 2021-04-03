@@ -1,0 +1,115 @@
+Selected Axioms of Fig 1.3 in Li, Huiqing and Thompson, Simon (2005) Formalisation of Haskell Refactorings.
+Itself adapted from Ariola, Zena M. and Blom, Stefan (1997) Lambda Calculi plus Letrec.
+
+Primes indicate possible renaming.
+
+v ::= x | λx.e
+e ::= v | e1 e2 | letrec D in e
+D ::= · | x=e , D  (Unordered recursive declarations)
+
+(λx.e) e1  ≡  letrec x = e1 in e
+
+(letrec D in e) e1      ≡  letrec D' in e' e1
+e1 (letrec D in e)      ≡  letrec D' in e1 e'
+λx.(letrec D1,D2 in e)  ≡  letrec D2 in λx.(letrec D1 in e)  if defined_vars(D1) disjoint from free_vars(D2), and x ∉ free_vars(D2)
+
+letrec x = letrec D in e1, D1 in e  ≡  letrec x = e1', D', D1 in e
+letrec D1 in letrec D in e = letrec D1, D' in e'
+
+
+
+Search AST for target location and mobile vb and trigger an appropriate movement:
+
+None. In proper location, we're done.
+None, failure to find either target or vb. No results.
+Move up
+    let y = e1 in
+    let x = e in
+    e2
+    ➜
+    let x' = e in
+    let y = e1 in
+    e2'
+Unnest
+    let y =
+      let x = e in
+      e1 in
+    e2
+    ➜
+    let x' = e in
+    let y = e1' in
+    e2
+Move above let, top level
+    let y = e1
+    let x = e
+    e2
+    ➜
+    let x' = e
+    let y = e1
+    e2'
+Move above other, top level
+    thing
+    let x = e
+    ➜
+    let x' = e
+    thing
+Unnest to top level
+    let y =
+      let x = e in
+      e1
+    ➜
+    let x' = e
+    let y = e1'
+Move out of fun
+    fun x -> let x = e in e1
+    ➜
+    let x' = e in fun x -> e1'
+Move out of function
+    function ... | pi -> let x = e in ei | ...
+    ➜
+    let x' = e in function ... | pi -> ei' | ...
+Move out of application lhs
+    (let x = e in e1) e2 ...
+    ➜
+    let x' = e in e1' e2 ...
+Move out of application rhs
+    e1 ... (let x = e in ei) ...
+    ➜
+    let x' = e in e1 ... ei' ...
+Move out of match/try scrutinee
+    match/try let x = e in e1 with ...
+    ➜
+    let x' = e in match/try e1' with ...
+Move out of match/try branch
+    match/try e1 with ... | pi -> let x = e in ei | ...
+    ➜
+    let x' = e in match/try e1 with ... | pi -> ei' | ...
+Move out of tuple
+    (..., let x = e in e1, ...)
+    ➜
+    let x' = e in (..., e1', ...)
+Move out of ctor
+    C (let x = e in e1)
+    ➜
+    let x = e in C e1
+Move out of record
+    {...; l = let x = e in e1; ...}
+    ➜
+    let x' = e in {...; l = e1'; ...}
+Move out of projection
+    (let x = e in e1).l
+    ➜
+    let x' = e in e1'.l
+Move out of ITE guard
+    if let x = e in e1 then e2 else e3
+    ➜
+    let x' = e in if e1' then e2 else e3
+Move out of ITE then
+    if e1 then let x = e in e2 else e3
+    ➜
+    let x' = e in if e1 then e2' else e3
+Move out of ITE else
+    if e1 then e2 else let x = e in e3
+    ➜
+    let x' = e in if e1 then e2 else e3'
+

@@ -35,8 +35,6 @@ B /Users/brian/.opam/4.07.1/lib/ppx_inline_test/config
 B /Users/brian/.opam/4.07.1/lib/ppx_inline_test/runtime-lib
 B /Users/brian/.opam/4.07.1/lib/ppx_module_timer/runtime
 B /Users/brian/.opam/4.07.1/lib/ppx_sexp_conv/runtime-lib
-B /Users/brian/.opam/4.07.1/lib/ppx_yojson_conv/runtime-lib
-B /Users/brian/.opam/4.07.1/lib/ppx_yojson_conv_lib
 B /Users/brian/.opam/4.07.1/lib/sexplib
 B /Users/brian/.opam/4.07.1/lib/sexplib/unix
 B /Users/brian/.opam/4.07.1/lib/sexplib0
@@ -87,8 +85,6 @@ S /Users/brian/.opam/4.07.1/lib/ppx_inline_test/config
 S /Users/brian/.opam/4.07.1/lib/ppx_inline_test/runtime-lib
 S /Users/brian/.opam/4.07.1/lib/ppx_module_timer/runtime
 S /Users/brian/.opam/4.07.1/lib/ppx_sexp_conv/runtime-lib
-S /Users/brian/.opam/4.07.1/lib/ppx_yojson_conv/runtime-lib
-S /Users/brian/.opam/4.07.1/lib/ppx_yojson_conv_lib
 S /Users/brian/.opam/4.07.1/lib/sexplib
 S /Users/brian/.opam/4.07.1/lib/sexplib/unix
 S /Users/brian/.opam/4.07.1/lib/sexplib0

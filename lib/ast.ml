@@ -1,6 +1,6 @@
 open Parsetree
 
-type program = structure_item list
+type program = structure_item list (* === structure *)
 
 type everything =
   { vbs          : value_binding list
@@ -95,8 +95,14 @@ let partition pred list =
 module Loc = struct
   type t = Location.t
 
-  module Position = struct
+  module Pos = struct
     type t = Lexing.position
+
+    (* Fresh positions are given new, negative values. *)
+    let counter = ref 0
+    let next () = decr counter; !counter
+    let fresh () =
+      Lexing.{ pos_fname = "newloc"; pos_lnum = next (); pos_bol = -1; pos_cnum = -1 }
 
     let to_string { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
       "{ pos_fname = " ^ pos_fname ^
@@ -106,22 +112,73 @@ module Loc = struct
       "}"
   end
 
+  (* let none = Location.none *)
+  let fresh () =
+    Location.{ loc_start = Pos.fresh (); loc_end = Pos.fresh (); loc_ghost = false }
+
+  let mk txt = Location.mkloc txt (fresh ())
+
   let to_string { Location.loc_start; loc_end; loc_ghost } =
-    "{ loc_start = " ^ Position.to_string loc_start ^
-    "; loc_end = " ^ Position.to_string loc_end ^
+    "{ loc_start = " ^ Pos.to_string loc_start ^
+    "; loc_end = " ^ Pos.to_string loc_end ^
     "; loc_ghost = " ^ string_of_bool loc_ghost ^ " " ^
     "}"
 end
 
-module Exp = struct
-  type t = expression
-  let all prog = (everything prog).exps
-  let loc { pexp_loc; _ } = pexp_loc
+module Common
+  (Node : sig
+    type t
+    val loc : t -> Location.t
+    val iter : (t -> unit) -> program -> unit
+    val map : (t -> t) -> program -> program
+  end) = struct
 
-  let map f struct_items =
-    let map_exp mapper e = f (dflt_mapper.expr mapper e) in
-    let mapper = { dflt_mapper with expr = map_exp } in
-    mapper.structure mapper struct_items
+  (* type t = Node.t *)
+  let loc = Node.loc
+  let iter = Node.iter
+  let map = Node.map
+
+  exception Found of Node.t
+
+  let replace_by pred node' prog =
+    Node.map (fun node -> if pred node then node' else node) prog
+
+  let replace target_loc = replace_by (loc %> (=) target_loc)
+
+  let find_by pred prog : Node.t =
+    try
+      prog |> iter (fun node -> if pred node then raise (Found node));
+      failwith "find_by: couldn't find node"
+    with Found node -> node
+
+  (* Returns extracted node, and a function that takes a node and replaces that element. *)
+  let extract_by pred prog : Node.t * (Node.t -> program) =
+    let node = find_by pred prog in
+    ( node
+    , fun node' -> replace_by ((==) node) node' prog (* Physical equality (==) will work here because node is always boxed and was pulled out of prog *)
+    )
+
+  let extract target_loc = extract_by (loc %> (=) target_loc)
+end
+
+module Exp = struct
+  include Common(struct
+    type t = expression
+    let loc { pexp_loc; _ } = pexp_loc
+    let iter f struct_items =
+      let iter_exp iter e = dflt_iter.expr iter e; f e in
+      let iter = { dflt_iter with expr = iter_exp } in
+      iter.structure iter struct_items
+    let map f struct_items =
+      let map_exp mapper e = f (dflt_mapper.expr mapper e) in
+      let mapper = { dflt_mapper with expr = map_exp } in
+      mapper.structure mapper struct_items
+  end)
+
+  include Ast_helper.Exp (* Exp builders *)
+  let var name = ident (Loc.mk @@ Longident.parse name)
+
+  let all prog = (everything (Sis prog)).exps
 end
 
 
@@ -129,13 +186,19 @@ module Vb = struct
   type t = value_binding
   let all prog = (everything (Sis prog)).vbs
   let loc { pvb_loc; _ } = pvb_loc
+
+  include Ast_helper.Vb (* Vb builders *)
+
   let pat { pvb_pat; _ } = pvb_pat
 end
 
 module Pat = struct
   type t = pattern
-  let all prog = (everything prog).pats
+  let all prog = (everything (Sis prog)).pats
   let loc { ppat_loc; _ } = ppat_loc
+
+  include Ast_helper.Pat (* Pat builders *)
+  let var name = Ast_helper.Pat.var (Loc.mk name)
 
   let flatten pat = (everything (Pat pat)).pats
   (* let rec one_var (pat : pattern) =
@@ -150,6 +213,8 @@ module StructItem = struct
   type t = structure_item
   let all prog = (everything (Sis prog)).struct_items
   let loc { pstr_loc; _ } = pstr_loc
+
+  include Ast_helper.Str (* Structure item builders *)
 
   let value { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
 

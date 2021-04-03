@@ -1,14 +1,15 @@
 (executable
  (name server)
  (modules server)
- (libraries compiler-libs.common core camlboot_interpreter maniposynth_lib yojson ppx_yojson_conv_lib)
- (preprocess (pps ppx_yojson_conv))
+ (libraries compiler-libs.common core camlboot_interpreter maniposynth_lib yojson)
+ ; (preprocess (pps ppx_yojson_conv))
  )
 
 (executable
  (name interpret_simple_ml)
  (modules interpret_simple_ml)
  (libraries camlboot_interpreter maniposynth_lib)
+ ; (preprocess (pps ppx_yojson_conv))
  )
 
 ; (executable
