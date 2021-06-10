@@ -1,9 +1,9 @@
-# ./_build/default/matcher_scratch.exe: matcher_scratch.ml dune matchee
+# ./_build/default/scratch.exe: scratch.ml dune simple.ml
 # 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
-# 	touch ./_build/default/matcher_scratch.exe; dune build --auto-promote matcher_scratch.exe
+# 	touch ./_build/default/scratch.exe; dune build --auto-promote scratch.exe
 
-# run: ./_build/default/matcher_scratch.exe
-# 	./_build/default/matcher_scratch.exe
+# run: ./_build/default/scratch.exe
+# 	./_build/default/scratch.exe
 
 ./_build/default/server.exe: *.ml dune **/dune **/*.ml # lib/*.ml lib/*.mli dune **/dune
 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.

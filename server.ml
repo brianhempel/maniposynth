@@ -104,7 +104,6 @@ let handle_connection in_chan out_chan =
   | "PATCH"::url::_ ->
       if String.is_suffix url ~suffix:".ml" then begin
         (* print_endline "hi"; *)
-        (* START HERE read request *)
         (* let content_str = In_channel.input_all in_chan in *)
         let content_str =
           let buf = Bytes.create content_length in
@@ -118,8 +117,11 @@ let handle_connection in_chan out_chan =
         let path = String.drop_prefix url 1 in
         let parsed = Camlboot_interpreter.Interp.parse path in
         let parsed' = Action.f action parsed in
-        Pprintast.structure Format.std_formatter parsed';
-        print_endline "";
+        (* Pprintast.structure Format.std_formatter parsed'; *)
+        Out_channel.with_file path ~f:begin fun out ->
+          Formatter_to_stringifier.f Pprintast.structure parsed'
+          |> Out_channel.output_string out
+        end;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan

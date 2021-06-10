@@ -90,6 +90,7 @@ let insert_vb_before_vb before_vb_loc vb' old =
 let move_vb_before_vb before_vb_loc vb_loc old =
   (* let (restore_names, old) = assign_unique_names old in *)
   let mobile_vb, old' = remove_vb vb_loc old in
+  print_endline @@ StructItems.to_string old';
   insert_vb_before_vb before_vb_loc mobile_vb old'
 
 (*
@@ -115,10 +116,10 @@ let insert_value_before vb_loc (_, (vtrace : vtrace)) old =
   vtrace
   |>@@ (fun ((_, loc), _) -> all_exps |>@? (Exp.loc %> (=) loc))
   |>@@ begin fun e ->
-    let name = "neeeeeew_var" in
+    let name = Binding_preservation.Name.gen [([], "asdf.ml", old)] in
     let vb' = Vb.mk (Pat.var name) e in
     old
-    |> Exp.replace (Exp.loc e) (Exp.var name)
+    |> Exp.(replace (loc e) (var name))
     |> insert_vb_before_vb vb_loc vb'
   end
 
@@ -129,16 +130,35 @@ Strategy 1: Move an existing binding
 
 Strategy 2: Insert a new binding
   1. For a Intro/Use in the value trace...
-  2. Move the associated expression into a new binding at the location indicated by the user 3. Replace the expression with a reference to the variable
+  2. Move the associated expression into a new binding at the location indicated by the user
+  3. Replace the expression with a reference to the variable
 *)
 let drop_value_before vb_loc (value : value) old =
-  match move_value_before_vb vb_loc value old with
-  | new_prog::_ -> new_prog
-  | []          -> begin
-    match insert_value_before vb_loc value old with
+  let print_locs locs prog =
+    locs |> List.iter (Loc.name_of_origin prog %> print_endline) in
+  let print_uses uses prog =
+    uses |> List.iter begin fun (def_loc, use_loc) ->
+      print_endline @@ Loc.name_of_origin prog def_loc ^ " <- " ^ Loc.string_of_origin prog use_loc
+    end in
+  let old_uses, old_free = Binding_preservation.binding_map_and_free [([], "asdf.ml", old)] in
+  print_endline "Uses before:";
+  print_uses old_uses old;
+  print_endline "Free before:";
+  print_locs old_free old;
+  let new_prog =
+    match move_value_before_vb vb_loc value old with
     | new_prog::_ -> new_prog
-    | []          -> old
-  end
+    | []          ->
+    begin match insert_value_before vb_loc value old with
+      | new_prog::_ -> new_prog
+      | []          -> old
+    end in
+  let new_uses, new_free = Binding_preservation.binding_map_and_free [([], "asdf.ml", new_prog)] in
+  print_endline "Uses after:";
+  print_uses new_uses new_prog;
+  print_endline "Free after:";
+  print_locs new_free new_prog;
+  new_prog
 
 let f : t -> Ast.program -> Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->

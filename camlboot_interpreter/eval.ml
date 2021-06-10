@@ -175,11 +175,12 @@ and eval_expr prims env trace_state frame_no expr =
   match expr.pexp_desc with
   | Pexp_ident { txt = Longident.Lident "??"; _ } -> intro @@ new_vtrace @@ Bomb
   | Pexp_ident id -> use @@
-     begin match env_get_value_or_lvar env id with
+     begin try match env_get_value_or_lvar env id with
        | Value v -> v
        | Instance_variable (obj, name) ->
           let var = SMap.find name obj.variables in
           !var
+       with Not_found -> new_vtrace @@ Bomb
      end
   | Pexp_constant c -> intro @@ value_of_constant c
   | Pexp_let (recflag, vals, e) ->

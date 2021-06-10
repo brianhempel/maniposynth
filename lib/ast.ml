@@ -91,8 +91,8 @@ let partition pred list =
     list
     ([], [])
 
-
-module Loc = struct
+(* Module renamed to Loc at the end of this file. Use Loc. Has to do with dependency ordering. *)
+module Loc_ = struct
   type t = Location.t
 
   module Pos = struct
@@ -118,12 +118,22 @@ module Loc = struct
 
   let mk txt = Location.mkloc txt (fresh ())
 
+  let loc { Location.loc; txt = _ } = loc
+  let txt { Location.txt; loc = _ } = txt
+
   let to_string { Location.loc_start; loc_end; loc_ghost } =
     "{ loc_start = " ^ Pos.to_string loc_start ^
     "; loc_end = " ^ Pos.to_string loc_end ^
     "; loc_ghost = " ^ string_of_bool loc_ghost ^ " " ^
     "}"
 end
+
+module Longident = struct
+  include Longident
+
+  let to_string = flatten %> String.concat "."
+end
+
 
 module Common
   (Node : sig
@@ -176,9 +186,23 @@ module Exp = struct
   end)
 
   include Ast_helper.Exp (* Exp builders *)
-  let var name = ident (Loc.mk @@ Longident.parse name)
+  let var name =
+    let loc = Loc_.fresh () in
+    ident ~loc { loc = loc; txt = Longident.parse name }
 
   let all prog = (everything (Sis prog)).exps
+
+  let to_string = Pprintast.string_of_expression
+
+  let ident_lid_loced (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_ident lid_loced -> Some lid_loced
+    | _                    -> None
+
+  let ctor_lid_loced (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_construct (lid_loced, _) -> Some lid_loced
+    | _                             -> None
 end
 
 
@@ -189,23 +213,57 @@ module Vb = struct
 
   include Ast_helper.Vb (* Vb builders *)
 
-  let pat { pvb_pat; _ } = pvb_pat
+  let to_string vb =
+    Formatter_to_stringifier.f Pprintast.pattern vb.pvb_pat ^ " = " ^
+    Pprintast.string_of_expression vb.pvb_expr
+
+  let pat { pvb_pat;  _ } = pvb_pat
+  let exp { pvb_expr; _ } = pvb_expr
 end
 
 module Pat = struct
-  type t = pattern
+  include Common(struct
+    type t = pattern
+    let loc { ppat_loc; _ } = ppat_loc
+    let iter f struct_items =
+      let iter_pat iter p = dflt_iter.pat iter p; f p in
+      let iter = { dflt_iter with pat = iter_pat } in
+      iter.structure iter struct_items
+    let map f struct_items =
+      let map_pat mapper p = f (dflt_mapper.pat mapper p) in
+      let mapper = { dflt_mapper with pat = map_pat } in
+      mapper.structure mapper struct_items
+  end)
+
   let all prog = (everything (Sis prog)).pats
-  let loc { ppat_loc; _ } = ppat_loc
 
   include Ast_helper.Pat (* Pat builders *)
-  let var name = Ast_helper.Pat.var (Loc.mk name)
+  let var name =
+    let loc = Loc_.fresh () in
+    Ast_helper.Pat.var ~loc { loc = loc; txt = name }
 
   let flatten pat = (everything (Pat pat)).pats
+
+  let to_string = Formatter_to_stringifier.f Pprintast.pattern
   (* let rec one_var (pat : pattern) =
     match pat.ppat_desc with
     | Ppat_var _               -> Some pat
     | Ppat_constraint (pat, _) -> one_var pat
     | _                        -> None *)
+
+  let name_loced (pat : pattern) =
+    match pat.ppat_desc with
+    | Ppat_var name_loced        -> Some name_loced
+    | Ppat_alias (_, name_loced) -> Some name_loced
+    | _                          -> None
+
+  let ctor_lid_loced (pat : pattern) =
+    match pat.ppat_desc with
+    | Ppat_construct (lid_loced, _) -> Some lid_loced
+    | _                             -> None
+
+  let names_loced     = flatten %>@& name_loced
+  let ctor_lids_loced = flatten %>@& ctor_lid_loced
 end
 
 (* Structure Item (i.e. top-level clauses) *)
@@ -217,6 +275,26 @@ module StructItem = struct
   include Ast_helper.Str (* Structure item builders *)
 
   let value { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
+
+  (* let name_loced { pstr_desc; _ } =
+    match pstr_desc with
+    | Pstr_eval (_, _) -> (??)
+    | Pstr_value (_, _) -> (??)
+    | Pstr_primitive value_desc -> Some value_desc.pval_name
+    | Pstr_type (_, _) -> (??)
+    | Pstr_typext _ -> (??)
+    | Pstr_exception _ -> (??)
+    | Pstr_module _ -> (??)
+    | Pstr_recmodule _ -> (??)
+    | Pstr_modtype _ -> (??)
+    | Pstr_open _ -> (??)
+    | Pstr_class _ -> (??)
+    | Pstr_class_type _ -> (??)
+    | Pstr_include _ -> (??)
+    | Pstr_attribute _ -> (??)
+    | Pstr_extension (_, _) -> (??) *)
+
+  let to_string si = Pprintast.string_of_structure [si]
 
   let map f struct_items =
     let map_si mapper si = f (dflt_mapper.structure_item mapper si) in
@@ -230,8 +308,43 @@ module StructItems = struct
   type t = structure
   let all prog = prog
 
+  let to_string = Pprintast.string_of_structure
+
   let map f struct_items =
     let map_sis mapper sis = f (dflt_mapper.structure mapper sis) in
     let mapper = { dflt_mapper with structure = map_sis } in
     mapper.structure mapper struct_items
+end
+
+
+module Loc = struct
+  include Loc_
+
+  let string_of_origin program loc =
+    let everything = everything (Sis program) in
+    let strs =
+      (everything.vbs          |>@? (Vb.loc         %> (=) loc) |>@ Vb.to_string) @
+      (everything.exps         |>@? (Exp.loc        %> (=) loc) |>@ Exp.to_string) @
+      (everything.pats         |>@? (Pat.loc        %> (=) loc) |>@ Pat.to_string) @
+      (everything.struct_items |>@? (StructItem.loc %> (=) loc) |>@ StructItem.to_string) in
+    match strs with
+    | []    -> to_string loc
+    | [str] -> str
+    | strs  -> "{{" ^ String.concat "|" strs ^ "}}"
+
+  (* Introduction and uses of names, by loc of the name string/longindent. *)
+  (* Incomplete, but this is just for debug anyway *)
+  (* Mirrors binding_preservation *)
+  let name_of_origin program loc =
+    let everything = everything (Sis program) in
+    let strs =
+      (everything.pats |>@& Pat.name_loced      |>@? (Loc_.loc %> (=) loc) |>@ Loc_.txt) @
+      (everything.pats |>@& Pat.ctor_lid_loced  |>@? (Loc_.loc %> (=) loc) |>@ Loc_.txt |>@ Longident.to_string) @
+      (everything.exps |>@& Exp.ident_lid_loced |>@? (Loc_.loc %> (=) loc) |>@ Loc_.txt |>@ Longident.to_string) @
+      (everything.exps |>@& Exp.ctor_lid_loced  |>@? (Loc_.loc %> (=) loc) |>@ Loc_.txt |>@ Longident.to_string)
+    in
+    match strs with
+    | []    -> to_string loc
+    | [str] -> str
+    | strs  -> "{{" ^ String.concat "|" strs ^ "}}"
 end
