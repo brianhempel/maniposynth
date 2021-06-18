@@ -7,6 +7,18 @@ open Envir
 
 exception Match_fail
 
+module Option = struct
+  (* Selections from https://ocaml.org/api/Option.html *)
+  let map f = function Some x -> Some (f x) | None -> None
+  let join = function Some (Some x) -> Some x | _ -> None
+  let to_list = function Some x -> [x] | None -> []
+
+  let rec project = function
+    | []             -> Some []
+    | None   :: _    -> None
+    | Some x :: rest -> project rest |> map (List.cons x)
+end
+
 let rec lident_name = function
   | Longident.Lident s -> s
   | Longident.Ldot (_, s) -> s
@@ -38,18 +50,61 @@ let rec take n li = match n, li with
     | _, [] -> invalid_arg "List.take"
     | n, x::xs -> x :: take (n - 1) xs
 
-let rec apply prims trace_state (vf : value) args =
+
+let lookup_type_opt lookup_exp_typed expr =
+  match lookup_exp_typed expr with
+  | Some typed_exp -> Some (Ctype.instance typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
+  | None           -> None
+
+let lookup_type_env lookup_exp_typed expr =
+  match lookup_exp_typed expr with
+  | Some typed_exp -> typed_exp.Typedtree.exp_env
+  | None           -> Env.empty
+
+let infer_local_type exp = (Typecore.type_exp Env.empty exp).exp_type
+
+(* Based OCaml's Typecore.type_construct *)
+let type_ctor env ctor_lid arg_val_opt =
+  match Typetexp.find_all_constructors env ctor_lid.loc ctor_lid.txt with
+  | [(ctor, _)] ->
+    let (arg_types, ctor_type) = Ctype.instance_constructor ctor in
+    let arg_val_type_opts =
+      match arg_val_opt with
+      | Some arg_val ->
+        begin match arg_val.v_ with
+        | Tuple arg_vals -> List.map (fun v -> v.type_opt) arg_vals
+        | _ -> [arg_val.type_opt]
+        end
+      | None ->
+        []
+    in
+    begin match Option.project arg_val_type_opts with
+    | Some arg_val_types ->
+      begin try
+        (* Not 100% sure, but Env may only be needed for unification in the case of GADTS. *)
+        List.iter2 (Ctype.unify Env.empty) arg_types arg_val_types
+      with
+      | Invalid_argument err -> print_endline @@ "val args not the same length as type ctor args " ^ err
+      | _                    -> print_endline @@ "unification failure"
+      end
+    | None -> ()
+    end;
+    Some ctor_type
+  | _ -> None
+
+
+let rec apply prims lookup_exp_typed trace_state (vf : value) args =
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let vf, extral, extram =
-    match fst vf with
+    match vf.v_ with
     | Fun_with_extra_args (vf, extral, extram) -> (vf, extral, extram)
     | _ -> (vf, [], SMap.empty)
   in
   assert (extral = []);
   (* let ls = fun_label_shape vf in *)
   let apply_labelled vf (lab, arg) =
-    match fst vf with
+    match vf.v_ with
     | Fun (label, default, p, e, fenv_ref) ->
       (match (label, lab, default) with
       | Optional s, Labelled s', None ->
@@ -57,7 +112,8 @@ let rec apply prims trace_state (vf : value) args =
         let v = new_vtrace @@ Constructor ("Some", 0, Some arg) in
         eval_expr
           prims
-          (pattern_bind prims !fenv_ref trace_state frame_no v [] p v)
+          (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no v [] p v)
+          lookup_exp_typed
           trace_state
           frame_no
           e
@@ -65,35 +121,37 @@ let rec apply prims trace_state (vf : value) args =
       | Optional s, Optional s', None
       | Labelled s, Labelled s', None ->
         assert (s = s');
-        eval_expr prims (pattern_bind prims !fenv_ref trace_state frame_no arg [] p arg) trace_state frame_no e
+        eval_expr prims (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no arg [] p arg) lookup_exp_typed trace_state frame_no e
       | Optional s, Optional s', Some def ->
         assert (s = s');
         let arg =
-          match fst arg with
-          | Constructor ("None", 0, None) -> eval_expr prims !fenv_ref trace_state frame_no def
+          match arg.v_ with
+          | Constructor ("None", 0, None) -> eval_expr prims !fenv_ref lookup_exp_typed trace_state frame_no def
           | Constructor ("Some", 0, Some arg) -> arg
           | _ -> assert false
         in
-        eval_expr prims (pattern_bind prims !fenv_ref trace_state frame_no arg [] p arg) trace_state frame_no e
+        eval_expr prims (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no arg [] p arg) lookup_exp_typed trace_state frame_no e
       | _ -> assert false)
     | _ -> assert false
   in
   let apply_optional_noarg vf =
-    match fst vf with
+    match vf.v_ with
     | Fun (Optional _, None, p, e, fenv_ref) ->
       let v = new_vtrace @@ Constructor ("None", 0, None) in
       eval_expr
         prims
-        (pattern_bind prims !fenv_ref trace_state frame_no v [] p v)
+        (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no v [] p v)
+        lookup_exp_typed
         trace_state
         frame_no
         e
     | Fun (Optional _, Some def, p, e, fenv_ref) ->
       let fenv = !fenv_ref in
-      let v = eval_expr prims fenv trace_state frame_no def in
+      let v = eval_expr prims fenv lookup_exp_typed trace_state frame_no def in
       eval_expr
         prims
-        (pattern_bind prims fenv trace_state frame_no v [] p v)
+        (pattern_bind prims fenv lookup_exp_typed trace_state frame_no v [] p v)
+        lookup_exp_typed
         trace_state
         frame_no
         e
@@ -114,9 +172,9 @@ let rec apply prims trace_state (vf : value) args =
   in
   let has_labelled = not (SMap.is_empty !with_label) in
   let rec apply_one vf arg =
-    match fst vf with
+    match vf.v_ with
     | Fun (Nolabel, _default, p, e, fenv_ref) ->
-      eval_expr prims (pattern_bind prims !fenv_ref trace_state frame_no arg [] p arg) trace_state frame_no e
+      eval_expr prims (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no arg [] p arg) lookup_exp_typed trace_state frame_no e
     | Fun (((Labelled s | Optional s) as lab), _default, p, e, fenv_ref) ->
       if has_labelled
       then
@@ -130,8 +188,8 @@ let rec apply prims trace_state (vf : value) args =
           apply_one (apply_optional_noarg vf) arg)
       else if lab = Optional s
       then apply_one (apply_optional_noarg vf) arg
-      else eval_expr prims (pattern_bind prims !fenv_ref trace_state frame_no arg [] p arg) trace_state frame_no e
-    | Function (cl, fenv_ref) -> eval_match prims !fenv_ref trace_state frame_no cl (Ok arg)
+      else eval_expr prims (pattern_bind prims !fenv_ref lookup_exp_typed trace_state frame_no arg [] p arg) lookup_exp_typed trace_state frame_no e
+    | Function (cl, fenv_ref) -> eval_match prims !fenv_ref lookup_exp_typed trace_state frame_no cl (Ok arg)
     | Prim prim -> prim arg
     | _ ->
       Format.eprintf "%a@." pp_print_value vf;
@@ -147,7 +205,7 @@ let rec apply prims trace_state (vf : value) args =
       if SMap.is_empty !with_label
       then vf
       else (
-        match fst vf with
+        match vf.v_ with
         | Fun (((Labelled s | Optional s) as lab), _default, _p, _e, _fenv) ->
           if SMap.mem s !with_label
           then (
@@ -161,16 +219,16 @@ let rec apply prims trace_state (vf : value) args =
     in
     apply_loop vf)
 
-and eval_expr prims env trace_state frame_no expr =
+and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
   let attach_trace value =
     let trace_entry = (expr.pexp_loc, frame_no, value) in
     trace_state.Trace.trace <- Trace.add trace_entry trace_state.Trace.trace;
     value
   in
-  let intro                       (v_, vtrace) = (v_, ((frame_no, expr.pexp_loc), Intro)                         :: vtrace) in
-  let use                         (v_, vtrace) = (v_, ((frame_no, expr.pexp_loc), Use)                           :: vtrace) in
-  let ret                         (v_, vtrace) = (v_, ((frame_no, expr.pexp_loc), Ret)                           :: vtrace) in
-  let pat_match root_val val_path (v_, vtrace) = (v_, ((frame_no, expr.pexp_loc), PatMatch (root_val, val_path)) :: vtrace) in
+  let intro                       v = { v with vtrace = ((frame_no, expr.pexp_loc), Intro)                         :: v.vtrace } in
+  let use                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Use)                           :: v.vtrace } in
+  let ret                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Ret)                           :: v.vtrace } in
+  let pat_match root_val val_path v = { v with vtrace = ((frame_no, expr.pexp_loc), PatMatch (root_val, val_path)) :: v.vtrace } in
   attach_trace @@
   match expr.pexp_desc with
   | Pexp_ident { txt = Longident.Lident "??"; _ } -> intro @@ new_vtrace @@ Bomb
@@ -182,23 +240,23 @@ and eval_expr prims env trace_state frame_no expr =
           !var
        with Not_found -> new_vtrace @@ Bomb
      end
-  | Pexp_constant c -> intro @@ value_of_constant c
+  | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ value_of_constant c
   | Pexp_let (recflag, vals, e) ->
     (* Don't bother attaching vtrace to let results for now (the body exp will have an entry) *)
-    eval_expr prims (eval_bindings prims env trace_state frame_no recflag vals) trace_state frame_no e
-  | Pexp_function cl -> intro @@ new_vtrace @@ Function (cl, ref env)
-  | Pexp_fun (label, default, p, e) -> intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
+    eval_expr prims (eval_bindings prims env lookup_exp_typed trace_state frame_no recflag vals) lookup_exp_typed trace_state frame_no e
+  | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ new_vtrace @@ Function (cl, ref env)
+  | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
   | Pexp_apply (f, l) -> ret @@
-    (match eval_expr prims env trace_state frame_no f with
-    | (Fexpr fexpr, _) ->
+    (match eval_expr prims env lookup_exp_typed trace_state frame_no f with
+    | { v_ = Fexpr fexpr; _ } ->
       let loc = expr.pexp_loc in
       (match fexpr loc l with
       | None ->
         Format.eprintf "%a@.F-expr failure.@." Location.print_loc loc;
         assert false
-      | Some expr -> eval_expr prims env trace_state frame_no expr)
+      | Some expr -> eval_expr prims env lookup_exp_typed trace_state frame_no expr)
     | func_value ->
-      let args = List.map (fun (lab, e) -> (lab, eval_expr prims env trace_state frame_no e)) l in
+      let args = List.map (fun (lab, e) -> (lab, eval_expr prims env lookup_exp_typed trace_state frame_no e)) l in
       if log_fun_calls
       then (
         match f.pexp_desc with
@@ -217,63 +275,67 @@ and eval_expr prims env trace_state frame_no expr =
               args;
           Format.eprintf "@."
         | _ -> ());
-      apply prims trace_state func_value args)
+      apply prims lookup_exp_typed trace_state func_value args)
   | Pexp_tuple l ->
-    let args = List.map (eval_expr prims env trace_state frame_no) l in
+    let args = List.map (eval_expr prims env lookup_exp_typed trace_state frame_no) l in
     intro @@ new_vtrace @@ Tuple args
-  | Pexp_match (e, cl) -> ret @@ eval_match prims env trace_state frame_no cl (eval_expr_exn prims env trace_state frame_no e)
-  | Pexp_coerce (e, _, _) -> eval_expr prims env trace_state frame_no e
-  | Pexp_constraint (e, _) -> eval_expr prims env trace_state frame_no e
+  | Pexp_match (e, cl) -> ret @@ eval_match prims env lookup_exp_typed trace_state frame_no cl (eval_expr_exn prims env lookup_exp_typed trace_state frame_no e)
+  | Pexp_coerce (e, _, _) -> eval_expr prims env lookup_exp_typed trace_state frame_no e
+  | Pexp_constraint (e, _) -> eval_expr prims env lookup_exp_typed trace_state frame_no e
   | Pexp_sequence (e1, e2) ->
-    let _ = eval_expr prims env trace_state frame_no e1 in
-    eval_expr prims env trace_state frame_no e2
+    let _ = eval_expr prims env lookup_exp_typed trace_state frame_no e1 in
+    eval_expr prims env lookup_exp_typed trace_state frame_no e2
   | Pexp_while (e1, e2) ->
-    while is_true (eval_expr prims env trace_state frame_no e1) do
-      ignore (eval_expr prims env trace_state frame_no e2)
+    while is_true (eval_expr prims env lookup_exp_typed trace_state frame_no e1) do
+      ignore (eval_expr prims env lookup_exp_typed trace_state frame_no e2)
     done;
     unit
   | Pexp_for (p, e1, e2, flag, e3) ->
-    let v1 = Runtime_base.unwrap_int (eval_expr prims env trace_state frame_no e1) in
-    let v2 = Runtime_base.unwrap_int (eval_expr prims env trace_state frame_no e2) in
+    let v1 = Runtime_base.unwrap_int (eval_expr prims env lookup_exp_typed trace_state frame_no e1) in
+    let v2 = Runtime_base.unwrap_int (eval_expr prims env lookup_exp_typed trace_state frame_no e2) in
     if flag = Upto
     then
       for x = v1 to v2 do
         let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr prims (pattern_bind prims env trace_state frame_no vx [] p vx) trace_state frame_no e3)
+        ignore (eval_expr prims (pattern_bind prims env lookup_exp_typed trace_state frame_no vx [] p vx) lookup_exp_typed trace_state frame_no e3)
       done
     else
       for x = v1 downto v2 do
         let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr prims (pattern_bind prims env trace_state frame_no vx [] p vx) trace_state frame_no e3)
+        ignore (eval_expr prims (pattern_bind prims env lookup_exp_typed trace_state frame_no vx [] p vx) lookup_exp_typed trace_state frame_no e3)
       done;
     unit
   | Pexp_ifthenelse (e1, e2, e3) -> ret @@
-    if is_true (eval_expr prims env trace_state frame_no e1)
-    then eval_expr prims env trace_state frame_no e2
+    if is_true (eval_expr prims env lookup_exp_typed trace_state frame_no e1)
+    then eval_expr prims env lookup_exp_typed trace_state frame_no e2
     else (
       match e3 with
       | None -> unit
-      | Some e3 -> eval_expr prims env trace_state frame_no e3)
+      | Some e3 -> eval_expr prims env lookup_exp_typed trace_state frame_no e3)
   | Pexp_unreachable -> failwith "reached unreachable"
   | Pexp_try (e, cs) -> ret @@
-    (try eval_expr prims env trace_state frame_no e
+    (try eval_expr prims env lookup_exp_typed trace_state frame_no e
      with InternalException v ->
-       (try eval_match prims env trace_state frame_no cs (Ok v)
+       (try eval_match prims env lookup_exp_typed trace_state frame_no cs (Ok v)
         with Match_fail -> raise (InternalException v)))
   | Pexp_construct (c, e) ->
     let cn = lident_name c.txt in
     let d = env_get_constr env c in
-    let ee =
+    let (vv, ctor_type_opt) =
       match e with
-      | None -> None
-      | Some e -> Some (eval_expr prims env trace_state frame_no e)
+      | None -> (None, lookup_type_opt lookup_exp_typed expr)
+      | Some e ->
+        let arg_val = eval_expr prims env lookup_exp_typed trace_state frame_no e in
+        ( Some arg_val
+        , type_ctor (lookup_type_env lookup_exp_typed expr) c (Some arg_val)
+        )
     in
-    intro @@ new_vtrace @@ Constructor (cn, d, ee)
+    add_type_opt ctor_type_opt @@ intro @@ new_vtrace @@ Constructor (cn, d, vv)
   | Pexp_variant (cn, e) ->
     let ee =
       match e with
       | None -> None
-      | Some e -> Some (eval_expr prims env trace_state frame_no e)
+      | Some e -> Some (eval_expr prims env lookup_exp_typed trace_state frame_no e)
     in
     intro @@ new_vtrace @@ Constructor (cn, Hashtbl.hash cn, ee)
   | Pexp_record (r, e) ->
@@ -281,41 +343,41 @@ and eval_expr prims env trace_state frame_no expr =
       match e with
       | None -> SMap.empty
       | Some e ->
-        (match eval_expr prims env trace_state frame_no e with
-        | (Record r, _) -> r
+        (match eval_expr prims env lookup_exp_typed trace_state frame_no e with
+        | { v_ = Record r; _ } -> r
         | _ -> mismatch expr.pexp_loc; assert false)
     in
     intro @@ new_vtrace @@ Record
       (List.fold_left
          (fun rc ({ txt = lident; _ }, ee) ->
-           SMap.add (lident_name lident) (ref (eval_expr prims env trace_state frame_no ee)) rc)
+           SMap.add (lident_name lident) (ref (eval_expr prims env lookup_exp_typed trace_state frame_no ee)) rc)
          base
          r)
   | Pexp_field (e, { txt = lident; _ }) ->
-    (match eval_expr prims env trace_state frame_no e with
-    | (Record r, _) as v ->
+    (match eval_expr prims env lookup_exp_typed trace_state frame_no e with
+    | { v_ = Record r; _ } as v ->
       pat_match v [Field (lident_name lident)] @@
       !(SMap.find (lident_name lident) r)
     | _ -> mismatch expr.pexp_loc; assert false)
   | Pexp_setfield (e1, { txt = lident; _ }, e2) ->
-    let v1 = eval_expr prims env trace_state frame_no e1 in
-    let v2 = eval_expr prims env trace_state frame_no e2 in
-    (match fst v1 with
+    let v1 = eval_expr prims env lookup_exp_typed trace_state frame_no e1 in
+    let v2 = eval_expr prims env lookup_exp_typed trace_state frame_no e2 in
+    (match v1.v_ with
     | Record r ->
       SMap.find (lident_name lident) r := v2;
       unit
     | _ -> mismatch expr.pexp_loc; assert false)
-  | Pexp_array l -> intro @@ new_vtrace @@ Array (Array.of_list (List.map (eval_expr prims env trace_state frame_no) l))
+  | Pexp_array l -> intro @@ new_vtrace @@ Array (Array.of_list (List.map (eval_expr prims env lookup_exp_typed trace_state frame_no) l))
   | Pexp_send (obj_expr, meth) -> ret @@
-     let obj = eval_expr prims env trace_state frame_no obj_expr in
-     (match fst obj with
-      | Object obj -> eval_obj_send expr.pexp_loc prims trace_state frame_no obj meth
+     let obj = eval_expr prims env lookup_exp_typed trace_state frame_no obj_expr in
+     (match obj.v_ with
+      | Object obj -> eval_obj_send expr.pexp_loc prims lookup_exp_typed trace_state frame_no obj meth
       | _ -> mismatch expr.pexp_loc; assert false)
   | Pexp_new lid -> intro @@
      let (class_expr, class_env) = env_get_class env lid in
-     eval_obj_new prims !class_env trace_state frame_no class_expr
+     eval_obj_new prims !class_env lookup_exp_typed trace_state frame_no class_expr
   | Pexp_setinstvar (x, e) ->
-     let v = eval_expr prims env trace_state frame_no e in
+     let v = eval_expr prims env lookup_exp_typed trace_state frame_no e in
      let x = { x with Location.txt = Longident.Lident x.txt } in
      begin match env_get_value_or_lvar env x with
        | Value _ -> mismatch expr.pexp_loc; assert false
@@ -328,7 +390,7 @@ and eval_expr prims env trace_state frame_no expr =
      begin match env.current_object with
        | None -> mismatch expr.pexp_loc; assert false
        | Some obj ->
-          let new_obj = eval_obj_override prims env trace_state frame_no obj fields in
+          let new_obj = eval_obj_override prims env lookup_exp_typed trace_state frame_no obj fields in
           intro @@ new_vtrace @@ Object new_obj
      end
   | Pexp_letexception ({ pext_name = name; pext_kind = k; _ }, e) ->
@@ -340,12 +402,12 @@ and eval_expr prims env trace_state frame_no expr =
       | Pext_rebind path ->
         env_set_constr name.txt (env_get_constr env path) env
     in
-    eval_expr prims nenv trace_state frame_no e
+    eval_expr prims nenv lookup_exp_typed trace_state frame_no e
   | Pexp_letmodule (name, me, e) ->
-    let m = eval_module_expr prims env trace_state frame_no me in
-    eval_expr prims (env_set_module name.txt m env) trace_state frame_no e
+    let m = eval_module_expr prims env lookup_exp_typed trace_state frame_no me in
+    eval_expr prims (env_set_module name.txt m env) lookup_exp_typed trace_state frame_no e
   | Pexp_assert e ->
-    if is_true (eval_expr prims env trace_state frame_no e)
+    if is_true (eval_expr prims env lookup_exp_typed trace_state frame_no e)
     then unit
     else (
       (*failwith "assert failure"*)
@@ -356,9 +418,9 @@ and eval_expr prims env trace_state frame_no expr =
       raise
         (InternalException
            (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
-  | Pexp_lazy e -> intro @@ new_vtrace @@ Lz (ref (fun () -> eval_expr prims env trace_state frame_no e))
-  | Pexp_poly (e, _ty) -> eval_expr prims env trace_state frame_no e
-  | Pexp_newtype (_, e) -> eval_expr prims env trace_state frame_no e
+  | Pexp_lazy e -> intro @@ new_vtrace @@ Lz (ref (fun () -> eval_expr prims env lookup_exp_typed trace_state frame_no e))
+  | Pexp_poly (e, _ty) -> eval_expr prims env lookup_exp_typed trace_state frame_no e
+  | Pexp_newtype (_, e) -> eval_expr prims env lookup_exp_typed trace_state frame_no e
   | Pexp_open (_, lident, e) ->
     let nenv =
       match env_get_module_data env lident with
@@ -367,22 +429,22 @@ and eval_expr prims env trace_state frame_no expr =
         env
       | module_data -> env_extend false env module_data
     in
-    eval_expr prims nenv trace_state frame_no e
+    eval_expr prims nenv lookup_exp_typed trace_state frame_no e
   | Pexp_object _ -> unsupported expr.pexp_loc; assert false
-  | Pexp_pack me -> intro @@ new_vtrace @@ ModVal (eval_module_expr prims env trace_state frame_no me)
+  | Pexp_pack me -> intro @@ new_vtrace @@ ModVal (eval_module_expr prims env lookup_exp_typed trace_state frame_no me)
   | Pexp_extension _ -> unsupported expr.pexp_loc; assert false
 
-and eval_expr_exn prims env trace_state frame_no expr =
-  try Ok (eval_expr prims env trace_state frame_no expr) with InternalException v -> Error v
+and eval_expr_exn prims env lookup_exp_typed trace_state frame_no expr =
+  try Ok (eval_expr prims env lookup_exp_typed trace_state frame_no expr) with InternalException v -> Error v
 
-and bind_value prims env trace_state frame_no vb =
-  let v = eval_expr prims env trace_state frame_no vb.pvb_expr in
-  pattern_bind prims env trace_state frame_no v [] vb.pvb_pat v
+and bind_value prims env lookup_exp_typed trace_state frame_no vb =
+  let v = eval_expr prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
+  pattern_bind prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v
 
-and eval_bindings prims env trace_state frame_no recflag defs =
+and eval_bindings prims env lookup_exp_typed trace_state frame_no recflag defs =
   match recflag with
     | Nonrecursive ->
-      List.fold_left (fun env vb -> bind_value prims env trace_state frame_no vb) env defs
+      List.fold_left (fun env vb -> bind_value prims env lookup_exp_typed trace_state frame_no vb) env defs
     | Recursive ->
       (* LHS of let rec is always a single variable *)
       (* What's allowed on the RHS is rather complicated (see classify_expression in typecore.ml) *)
@@ -390,7 +452,7 @@ and eval_bindings prims env trace_state frame_no recflag defs =
       (* As are functions. That should cover everything practical, right? *)
       (* The following is allowed but odd:
         let rec ff =
-          ( (fun () -> (fst ff) ())
+          ( (fun () -> (ff.v_) ())
           , (fun () -> (snd ff) ())
           )
         in
@@ -398,14 +460,14 @@ and eval_bindings prims env trace_state frame_no recflag defs =
       *)
       (* let dummies = List.map (fun _ -> Ptr.dummy ()) defs in
       let declare env vb dummy =
-        pattern_bind prims env trace_state frame_no vb.pvb_pat dummy in
+        pattern_bind prims env lookup_exp_typed trace_state frame_no vb.pvb_pat dummy in
       let define env vb dummy =
-        let v = eval_expr prims env trace_state frame_no vb.pvb_expr in
+        let v = eval_expr prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
         Ptr.backpatch dummy v in
       let nenv = List.fold_left2 declare env defs dummies in
       List.iter2 (define nenv) defs dummies; *)
       (* let declare env vb =
-        pattern_bind prims env trace_state frame_no vb.pvb_pat Bomb in *)
+        pattern_bind prims env lookup_exp_typed trace_state frame_no vb.pvb_pat Bomb in *)
       let rec single_name p =
         match p.ppat_desc with
         | Ppat_var s             -> s.txt
@@ -415,12 +477,12 @@ and eval_bindings prims env trace_state frame_no recflag defs =
           raise (InternalException (Runtime_base.failure_exn "Only single vars are allowed on the LHS of a let rec"))
       in
       let dummy_env = List.fold_left (fun env vb -> env_set_value (single_name vb.pvb_pat) (new_vtrace Bomb) env) env defs in
-      let vals = List.map (fun vb -> eval_expr prims dummy_env trace_state frame_no vb.pvb_expr) defs in
+      let vals = List.map (fun vb -> eval_expr prims dummy_env lookup_exp_typed trace_state frame_no vb.pvb_expr) defs in
       let nenv = List.fold_left2
         (* (fun env vb v -> env_set_value (single_name vb.pvb_pat) (pat_match vb.pvb_pat [] v v) env) *)
-        (fun env vb v -> pattern_bind prims env trace_state frame_no v [] vb.pvb_pat v)
+        (fun env vb v -> pattern_bind prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v)
         env defs vals in
-      let rec packpatch_env (v_, _) =
+      let rec packpatch_env { v_; _ } =
         match v_ with
         | Fun (_, _, _, _, env_ref)  -> env_ref := nenv
         | Function (_, env_ref)      -> env_ref := nenv
@@ -435,20 +497,16 @@ and eval_bindings prims env trace_state frame_no recflag defs =
       List.iter packpatch_env vals;
       nenv
 
-and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v : value) =
-  (* frame_no is passed in here because pattern matches can execute code, which will change the trace_state frame_no for later calls to pattern_bind *)
+and pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path pat ({ v_; _ } as v : value) =
+  (* frame_no is passed in here because pattern matches can execute code, which will change the lookup_exp_typed trace_state frame_no for later calls to pattern_bind *)
   (* (namely the str = "Format" case) *)
   let attach_trace value env =
     let trace_entry = (pat.ppat_loc, frame_no, value) in
     trace_state.trace <- Trace.add trace_entry trace_state.trace;
     env
   in
-  let intro (v_, vtrace) =
-    (v_, ((frame_no, pat.ppat_loc), Intro) :: vtrace)
-  in
-  let pat_match path (v_, vtrace) =
-    (v_, ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: vtrace)
-  in
+  let intro          v = { v with vtrace = ((frame_no, pat.ppat_loc), Intro)                     :: v.vtrace } in
+  let pat_match path v = { v with vtrace = ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: v.vtrace } in
   attach_trace v @@
   match pat.ppat_desc with
   | Ppat_any -> env
@@ -456,7 +514,7 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
   | Ppat_alias (p, s) ->
     env_set_value s.txt
       (pat_match path v)
-      (pattern_bind prims env trace_state frame_no root_val path p v)
+      (pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p v)
   | Ppat_constant c ->
     if value_equal (value_of_constant c) v then env else raise Match_fail
   | Ppat_interval (c1, c2) ->
@@ -468,7 +526,7 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
     | Tuple vl ->
       assert (List.length l = List.length vl);
       List.fold_left2
-        (fun env i (p, v) -> pattern_bind prims env trace_state frame_no root_val (path @ [Child i]) p v)
+        (fun env i (p, v) -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child i]) p v)
         env
         (List.init (List.length l) (fun i -> i))
         (List.combine l vl)
@@ -482,7 +540,7 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
       if dn <> ddn then raise Match_fail;
       (match (p, e) with
       | None, None -> env
-      | Some p, Some e -> pattern_bind prims env trace_state frame_no root_val (path @ [Child 0]) p e
+      | Some p, Some e -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child 0]) p e
       | _ -> mismatch pat.ppat_loc; assert false)
     | String _ ->
       assert (lident_name c.txt = "Format");
@@ -499,15 +557,15 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
           | Instance_variable _ -> assert false
           | Value v -> v
       in
-      let fmt = apply prims trace_state fmt_ebb_of_string [ (Nolabel, v) ] in
+      let fmt = apply prims lookup_exp_typed trace_state fmt_ebb_of_string [ (Nolabel, v) ] in
       let fmt =
-        match fst fmt with
+        match fmt.v_ with
         | Constructor ("Fmt_EBB", _, Some fmt) -> fmt
         | _ -> mismatch pat.ppat_loc; assert false
       in
       (* What the heck is this *)
       let tupv = intro @@ new_vtrace @@ Tuple [ fmt; v ] in
-      pattern_bind prims env trace_state frame_no tupv [] p tupv
+      pattern_bind prims env lookup_exp_typed trace_state frame_no tupv [] p tupv
     | _ ->
       Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v;
       assert false)
@@ -517,7 +575,7 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
       if cn <> name then raise Match_fail;
       (match (p, e) with
       | None, None -> env
-      | Some p, Some e -> pattern_bind prims env trace_state frame_no root_val (path @ [Child 0]) p e
+      | Some p, Some e -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child 0]) p e
       | _ -> mismatch pat.ppat_loc; assert false)
     | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_record (rp, _) ->
@@ -526,7 +584,7 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
       List.fold_left
         (fun env (lident, p) ->
           let name = lident_name lident.txt in
-          pattern_bind prims env trace_state frame_no root_val (path @ [Field name]) p !(SMap.find name r))
+          pattern_bind prims env lookup_exp_typed trace_state frame_no root_val (path @ [Field name]) p !(SMap.find name r))
         env
         rp
     | _ -> mismatch pat.ppat_loc; assert false)
@@ -536,15 +594,15 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
           let vs = Array.to_list vs in
           if List.length ps <> List.length vs then raise Match_fail;
           List.fold_left2
-            (fun env i (p, v) -> pattern_bind prims env trace_state frame_no root_val (path @ [Child i]) p v)
+            (fun env i (p, v) -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child i]) p v)
             env
             (List.init (List.length ps) (fun i -> i))
             (List.combine ps vs)
         | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_or (p1, p2) ->
-    (try pattern_bind prims env trace_state frame_no root_val path p1 v
-     with Match_fail -> pattern_bind prims env trace_state frame_no root_val path p2 v)
-  | Ppat_constraint (p, _) -> pattern_bind prims env trace_state frame_no root_val path p v
+    (try pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p1 v
+     with Match_fail -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p2 v)
+  | Ppat_constraint (p, _) -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p v
   | Ppat_type _ -> unsupported pat.ppat_loc; assert false
   | Ppat_lazy _ -> unsupported pat.ppat_loc; assert false
   | Ppat_unpack name ->
@@ -555,34 +613,34 @@ and pattern_bind prims env trace_state frame_no root_val path pat ((v_, _) as v 
   | Ppat_extension _ -> unsupported pat.ppat_loc; assert false
   | Ppat_open _ -> unsupported pat.ppat_loc; assert false
 
-and pattern_bind_exn prims env trace_state frame_no root_val path pat v =
+and pattern_bind_exn prims env lookup_exp_typed trace_state frame_no root_val path pat v =
   match pat.ppat_desc with
-  | Ppat_exception p -> pattern_bind prims env trace_state frame_no root_val path p v
+  | Ppat_exception p -> pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p v
   | _ -> raise Match_fail
 
-and pattern_bind_checkexn prims env trace_state frame_no pat v =
+and pattern_bind_checkexn prims env lookup_exp_typed trace_state frame_no pat v =
   match v with
-  | Ok    v -> pattern_bind     prims env trace_state frame_no v [] pat v
-  | Error v -> pattern_bind_exn prims env trace_state frame_no v [] pat v
+  | Ok    v -> pattern_bind     prims env lookup_exp_typed trace_state frame_no v [] pat v
+  | Error v -> pattern_bind_exn prims env lookup_exp_typed trace_state frame_no v [] pat v
 
-and eval_match prims env trace_state frame_no cl arg =
+and eval_match prims env lookup_exp_typed trace_state frame_no cl arg =
   match cl with
   | [] ->
     (match arg with
     | Ok _ -> raise Match_fail
     | Error v -> raise (InternalException v))
   | c :: cl ->
-    (match pattern_bind_checkexn prims env trace_state frame_no c.pc_lhs arg with
-    | exception Match_fail -> eval_match prims env trace_state frame_no cl arg
+    (match pattern_bind_checkexn prims env lookup_exp_typed trace_state frame_no c.pc_lhs arg with
+    | exception Match_fail -> eval_match prims env lookup_exp_typed trace_state frame_no cl arg
     | nenv ->
       let guard_ok =
         match c.pc_guard with
         | None -> true
-        | Some guard -> is_true (eval_expr prims nenv trace_state frame_no guard)
+        | Some guard -> is_true (eval_expr prims nenv lookup_exp_typed trace_state frame_no guard)
       in
       if guard_ok
-      then eval_expr prims nenv trace_state frame_no c.pc_rhs
-      else eval_match prims env trace_state frame_no cl arg)
+      then eval_expr prims nenv lookup_exp_typed trace_state frame_no c.pc_rhs
+      else eval_match prims env lookup_exp_typed trace_state frame_no cl arg)
 
 and lookup_viewed_object obj =
   let rec lookup obj = function
@@ -592,7 +650,7 @@ and lookup_viewed_object obj =
   in lookup obj obj.parent_view
 
 (* OO vtracing is ill-defined right now *)
-and eval_expr_in_object prims trace_state frame_no obj expr_in_object =
+and eval_expr_in_object prims lookup_exp_typed trace_state frame_no obj expr_in_object =
   let expr_env = match expr_in_object.source with
       | Parent parent -> parent.env
       | Current_object -> (lookup_viewed_object obj).env
@@ -603,7 +661,7 @@ and eval_expr_in_object prims trace_state frame_no obj expr_in_object =
       | Parent parent -> parent.self
       | Current_object -> (lookup_viewed_object obj).self in
     let self_v = new_vtrace @@ Object self_view in
-    pattern_bind prims env trace_state frame_no self_v [] self_pattern self_v in
+    pattern_bind prims env lookup_exp_typed trace_state frame_no self_v [] self_pattern self_v in
   let add_parent obj name env =
     let parent_view =
       { obj with parent_view = name :: obj.parent_view } in
@@ -619,23 +677,23 @@ and eval_expr_in_object prims trace_state frame_no obj expr_in_object =
     |> SSet.fold add_variable expr_in_object.instance_variable_scope
     |> activate_object obj
   in
-  eval_expr prims env trace_state frame_no expr_in_object.expr
+  eval_expr prims env lookup_exp_typed trace_state frame_no expr_in_object.expr
 
-and eval_obj_send loc prims trace_state frame_no obj meth =
+and eval_obj_send loc prims lookup_exp_typed trace_state frame_no obj meth =
   match SMap.find meth.txt (lookup_viewed_object obj).methods with
     | exception Not_found ->
        mismatch loc; assert false
     | expr_in_object ->
-       eval_expr_in_object prims trace_state frame_no obj expr_in_object
+       eval_expr_in_object prims lookup_exp_typed trace_state frame_no obj expr_in_object
 
-and eval_obj_override prims env trace_state frame_no obj fields =
+and eval_obj_override prims env lookup_exp_typed trace_state frame_no obj fields =
   let override_field (x, e) obj =
-    let v = eval_expr prims env trace_state frame_no e in
+    let v = eval_expr prims env lookup_exp_typed trace_state frame_no e in
     { obj with variables = SMap.add x.txt (ref v) obj.variables } in
   let obj = List.fold_right override_field fields obj in
   obj
 
-and eval_class_expr prims env trace_state frame_no class_expr =
+and eval_class_expr prims env lookup_exp_typed trace_state frame_no class_expr =
   (* To avoid redundancy we express evaluation of class expressions by
      rewriting the non-base cases into usual expressions (fun => fun,
      etc.).  For example
@@ -645,7 +703,7 @@ and eval_class_expr prims env trace_state frame_no class_expr =
     fun x -> new <clexp>
   *)
   let eval_as_exp exp_desc =
-    eval_expr prims env trace_state frame_no {
+    eval_expr prims env lookup_exp_typed trace_state frame_no {
         pexp_desc = exp_desc;
         pexp_loc = class_expr.pcl_loc;
         pexp_attributes = class_expr.pcl_attributes;
@@ -683,16 +741,16 @@ and eval_class_expr prims env trace_state frame_no class_expr =
   | Pcl_let (rec_flag, bindings, cle) ->
      eval_as_exp (Pexp_let (rec_flag, bindings, new_ cle))
   | Pcl_constraint (cle, _cty) ->
-     eval_obj_new prims env trace_state frame_no cle
+     eval_obj_new prims env lookup_exp_typed trace_state frame_no cle
   | Pcl_open (ov_flag, open_, cle) ->
      eval_as_exp (Pexp_open (ov_flag, open_, new_ cle))
   | Pcl_extension _ ->
      unsupported class_expr.pcl_loc; assert false
   | Pcl_structure class_structure ->
-     let obj = eval_class_structure prims env trace_state frame_no class_expr.pcl_loc class_structure in
+     let obj = eval_class_structure prims env lookup_exp_typed trace_state frame_no class_expr.pcl_loc class_structure in
      new_vtrace @@ Object obj
 
-and eval_class_structure prims env trace_state frame_no loc class_structure =
+and eval_class_structure prims env lookup_exp_typed trace_state frame_no loc class_structure =
   let eval_obj_field ((rev_inits,
                        parents, parents_in_scope,
                        variables, variables_in_scope,
@@ -715,7 +773,7 @@ and eval_class_structure prims env trace_state frame_no loc class_structure =
         variables_in_scope,
         methods)
     | Pcf_val (lab, _mut_flag, Cfk_concrete (_ov_flag, expr)) ->
-       let v = eval_expr prims env trace_state frame_no expr in
+       let v = eval_expr prims env lookup_exp_typed trace_state frame_no expr in
        (rev_inits,
         parents,
         SSet.remove lab.txt parents_in_scope,
@@ -739,8 +797,8 @@ and eval_class_structure prims env trace_state frame_no loc class_structure =
          match expr_in_object.source with
            | Parent _ -> expr_in_object
            | Current_object -> { expr_in_object with source = Parent parent } in
-       begin match eval_class_expr prims env trace_state frame_no class_expr with
-         | (Object parent, _) ->
+       begin match eval_class_expr prims env lookup_exp_typed trace_state frame_no class_expr with
+         | { v_ = Object parent; _ } ->
             let rev_inits =
               let parent_initializers =
                 List.map (in_parent parent) parent.initializers in
@@ -808,15 +866,15 @@ and eval_class_structure prims env trace_state frame_no loc class_structure =
     parent_view = [];
   }
 
-and eval_obj_initializers prims _env trace_state frame_no obj =
+and eval_obj_initializers prims _env lookup_exp_typed trace_state frame_no obj =
   let eval_init expr =
-    Runtime_base.unwrap_unit (eval_expr_in_object prims trace_state frame_no obj expr) in
+    Runtime_base.unwrap_unit (eval_expr_in_object prims lookup_exp_typed trace_state frame_no obj expr) in
   List.iter eval_init obj.initializers
 
-and eval_obj_new prims env trace_state frame_no class_expr =
-  match eval_class_expr prims env trace_state frame_no class_expr with
-    | (Object obj, _) as v ->
-       eval_obj_initializers prims env trace_state frame_no obj;
+and eval_obj_new prims env lookup_exp_typed trace_state frame_no class_expr =
+  match eval_class_expr prims env lookup_exp_typed trace_state frame_no class_expr with
+    | { v_ = Object obj; _ } as v ->
+       eval_obj_initializers prims env lookup_exp_typed trace_state frame_no obj;
        v
     | other ->
        (* Class expressions may validly return non-Obj values,
@@ -828,20 +886,20 @@ and eval_obj_new prims env trace_state frame_no class_expr =
         *)
        other
 
-and eval_module_expr prims env trace_state frame_no me =
+and eval_module_expr prims env lookup_exp_typed trace_state frame_no me =
   match me.pmod_desc with
   | Pmod_ident lident -> env_get_module env lident
-  | Pmod_structure str -> Module (make_module_data (eval_structure prims env trace_state frame_no str))
+  | Pmod_structure str -> Module (make_module_data (eval_structure prims env lookup_exp_typed trace_state frame_no str))
   | Pmod_functor ({ txt = arg_name; _ }, _, e) -> Functor (arg_name, e, env)
-  | Pmod_constraint (me, _) -> eval_module_expr prims env trace_state frame_no me
+  | Pmod_constraint (me, _) -> eval_module_expr prims env lookup_exp_typed trace_state frame_no me
   | Pmod_apply (me1, me2) ->
-    let m1 = eval_module_expr prims env trace_state frame_no me1 in
-    let m2 = eval_module_expr prims env trace_state frame_no me2 in
+    let m1 = eval_module_expr prims env lookup_exp_typed trace_state frame_no me1 in
+    let m2 = eval_module_expr prims env lookup_exp_typed trace_state frame_no me2 in
     let arg_name, body, env = eval_functor_data env me.pmod_loc m1 in
-    eval_module_expr prims (env_set_module arg_name m2 env) trace_state frame_no body
+    eval_module_expr prims (env_set_module arg_name m2 env) lookup_exp_typed trace_state frame_no body
   | Pmod_unpack e ->
-    (match eval_expr prims env trace_state frame_no e with
-    | (ModVal m, _) -> m
+    (match eval_expr prims env lookup_exp_typed trace_state frame_no e with
+    | { v_ = ModVal m; _ } -> m
     | _ -> mismatch me.pmod_loc; assert false)
   | Pmod_extension _ -> unsupported me.pmod_loc; assert false
 
@@ -850,13 +908,13 @@ and eval_functor_data _env _loc = function
   | Unit _ -> failwith "tried to apply a simple module unit"
   | Functor (arg_name, body, env) -> (arg_name, body, env)
 
-and eval_structitem prims env trace_state frame_no it =
+and eval_structitem prims env lookup_exp_typed trace_state frame_no it =
   match it.pstr_desc with
   | Pstr_eval (e, _) ->
-    let v = eval_expr prims env trace_state frame_no e in
+    let v = eval_expr prims env lookup_exp_typed trace_state frame_no e in
     Format.printf "%a@." pp_print_value v;
     env
-  | Pstr_value (recflag, defs) -> eval_bindings prims env trace_state frame_no recflag defs
+  | Pstr_value (recflag, defs) -> eval_bindings prims env lookup_exp_typed trace_state frame_no recflag defs
   | Pstr_primitive { pval_name = { txt = name; loc }; pval_prim = l; _ } ->
     let prim_name = List.hd l in
     let prim =
@@ -895,7 +953,7 @@ and eval_structitem prims env trace_state frame_no it =
       env_set_constr name.txt d env
     | Pext_rebind path -> env_set_constr name.txt (env_get_constr env path) env)
   | Pstr_module { pmb_name = name; pmb_expr = me; _ } ->
-     env_set_module name.txt (eval_module_expr prims env trace_state frame_no me) env
+     env_set_module name.txt (eval_module_expr prims env lookup_exp_typed trace_state frame_no me) env
   | Pstr_recmodule _ -> unsupported it.pstr_loc; assert false
   | Pstr_modtype _ -> env
   | Pstr_open { popen_lid = lident; _ } ->
@@ -911,21 +969,22 @@ and eval_structitem prims env trace_state frame_no it =
      env
   | Pstr_class_type _ -> env
   | Pstr_include { pincl_mod = me; pincl_loc = loc; _ } ->
-    let m = eval_module_expr prims env trace_state frame_no me in
+    let m = eval_module_expr prims env lookup_exp_typed trace_state frame_no me in
     env_extend true env (get_module_data loc m)
   | Pstr_attribute _ -> env
   | Pstr_extension _ -> unsupported it.pstr_loc; assert false
 
-and eval_structure_ prims env trace_state frame_no str =
+and eval_structure_ prims env lookup_exp_typed trace_state frame_no str =
   match str with
   | [] -> env
   | it :: str ->
     eval_structure_
       prims
-      (eval_structitem prims env trace_state frame_no it)
+      (eval_structitem prims env lookup_exp_typed trace_state frame_no it)
+      lookup_exp_typed
       trace_state
       frame_no
       str
 
-and eval_structure prims env trace_state frame_no str =
-  eval_structure_ prims (prevent_export env) trace_state frame_no str
+and eval_structure prims env lookup_exp_typed trace_state frame_no str =
+  eval_structure_ prims (prevent_export env) lookup_exp_typed trace_state frame_no str

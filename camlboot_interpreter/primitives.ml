@@ -115,7 +115,7 @@ let prims =
       prim1 caml_sys_system_command unwrap_string wrap_int  );
     ( "caml_ml_set_channel_name",
       prim2
-        (fun (v_, _) s ->
+        (fun { v_; _ } s ->
           match v_ with
           | InChannel ic -> set_in_channel_name ic s
           | OutChannel oc -> set_out_channel_name oc s
@@ -125,7 +125,7 @@ let prims =
         wrap_unit );
     ( "caml_ml_close_channel",
       prim1
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
           | InChannel ic -> close_in ic
           | OutChannel oc -> close_out oc
           | _ -> assert false)
@@ -174,18 +174,18 @@ let prims =
       new_vtrace @@ Prim (fun v -> new_vtrace @@ Record (SMap.singleton "contents" (ref v))));
     ( "%field0",
       new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Record r -> !(SMap.find "contents" r)
         | Tuple l -> List.hd l
         | _ -> assert false) );
     ( "%field1",
       new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Tuple l -> List.hd (List.tl l)
         | _ -> assert false) );
     ( "%setfield0",
       new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Record r ->
           new_vtrace @@ Prim
             (fun v ->
@@ -194,7 +194,7 @@ let prims =
         | _ -> assert false) );
     ( "%incr",
       new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Record r ->
           let z = SMap.find "contents" r in
           z := wrap_int (unwrap_int !z + 1);
@@ -202,7 +202,7 @@ let prims =
         | _ -> assert false) );
     ( "%decr",
       new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Record r ->
           let z = SMap.find "contents" r in
           z := wrap_int (unwrap_int !z - 1);
@@ -317,7 +317,7 @@ let prims =
     (* Lazy *)
     ( "%lazy_force",
     new_vtrace @@ Prim
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
         | Lz f ->
           let v = !f () in
           (f := fun () -> v);
@@ -408,7 +408,7 @@ let prims =
     );
     ( "caml_weak_check",
       prim2
-        (fun a n -> fst a.(n) <> Constructor ("None", 0, None))
+        (fun a n -> a.(n).v_ <> Constructor ("None", 0, None))
         unwrap_array_id
         unwrap_int
         wrap_bool );
@@ -464,7 +464,7 @@ let prims =
     (* Ugly *)
     ( "%obj_size",
       prim1
-        (fun (v_, _) -> match v_ with
+        (fun { v_; _ } -> match v_ with
           | Array a -> Array.length a + 2
           | _ -> 4)
         id
@@ -484,9 +484,9 @@ let prims =
               pp_print_value data
               idx
               pp_print_value v in
-          match fst data with
+          match data.v_ with
             | Array arr -> arr.(idx) <- v
-            | Constructor(_, _, Some (arg_, _)) ->
+            | Constructor(_, _, Some { v_ = arg_; _ }) ->
                begin match arg_ with
                  | Array arr -> arr.(idx) <- v
                  | _ -> err (); assert false
@@ -502,4 +502,4 @@ let prims =
 let prims =
   List.fold_left (fun env (name, v) -> SMap.add name v env) SMap.empty prims
 
-let () = Runtime_compiler.apply_ref := Eval.apply prims Trace.new_trace_state
+let () = Runtime_compiler.apply_ref := Eval.apply prims (fun _ -> None) Trace.new_trace_state

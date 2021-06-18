@@ -3,14 +3,14 @@ open Runtime_lib
 
 let wrap_in_channel ic = new_vtrace @@ InChannel ic
 
-let unwrap_in_channel (v_, _ ) =
+let unwrap_in_channel { v_; _ } =
   match v_ with
   | InChannel ic -> ic
   | _ -> assert false
 
 let wrap_out_channel oc = new_vtrace @@ OutChannel oc
 
-let unwrap_out_channel (v_, _ ) =
+let unwrap_out_channel { v_; _ } =
   match v_ with
   | OutChannel oc -> oc
   | _ -> assert false
@@ -26,7 +26,7 @@ let wrap_open_flag = function
   | Open_text -> cc "Open_text" 7
   | Open_nonblock -> cc "Open_nonblock" 8
 
-let unwrap_open_flag (v_, _ ) =
+let unwrap_open_flag { v_; _ } =
   match v_ with
   | Constructor ("Open_rdonly", _, None) -> Open_rdonly
   | Constructor ("Open_wronly", _, None) -> Open_wronly
@@ -45,18 +45,18 @@ let rec wrap_list wrapf = function
     new_vtrace @@ Constructor ("::", 0,
                          Some (new_vtrace @@ Tuple [ wrapf x; wrap_list wrapf l ]))
 
-let rec unwrap_list unwrapf (v_, _) =
+let rec unwrap_list unwrapf { v_; _ } =
   match v_ with
   | Constructor ("[]", _, None) -> []
-  | Constructor ("::", _, Some (arg_, _)) ->
-    begin match arg_ with
+  | Constructor ("::", _, Some arg) ->
+    begin match arg.v_ with
       | Tuple [ x; l ] ->
          unwrapf x :: unwrap_list unwrapf l
       | _ -> assert false
     end
   | _ -> assert false
 
-let unwrap_marshal_flag (v_, _ ) =
+let unwrap_marshal_flag { v_; _ } =
   match v_ with
   | Constructor ("No_sharing", _, None) -> Marshal.No_sharing
   | Constructor ("Closures", _, None) -> Marshal.Closures
@@ -117,7 +117,7 @@ external format_int : string -> int -> string = "caml_format_int"
 external format_float : string -> float -> string = "caml_format_float"
 external random_seed : unit -> int array = "caml_sys_random_seed"
 
-let seeded_hash_param meaningful total seed (v_, _) =
+let seeded_hash_param meaningful total seed { v_; _ } =
   match v_ with
   | Bomb -> failwith "tried to hash 💣"
   | Int n -> Hashtbl.seeded_hash_param meaningful total seed n

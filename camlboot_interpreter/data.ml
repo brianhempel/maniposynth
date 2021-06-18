@@ -12,7 +12,7 @@ module UStore = Map.Make(struct
   let compare (Path a) (Path b) = String.compare a b
 end)
 
-type value = value_ * vtrace
+type value = { v_ : value_; vtrace : vtrace; type_opt : Types.type_expr option }
 and value_ =
   | Bomb
   | Int of int
@@ -165,17 +165,18 @@ and expr_in_object = {
 
 exception InternalException of value
 
-let new_vtrace v_ = (v_, [])
+let new_vtrace v_ = { v_ = v_; vtrace = []; type_opt = None }
+let add_type_opt type_opt v = { v with type_opt = type_opt }
 
 let unit = new_vtrace @@ Constructor ("()", 0, None)
 
-let is_true (v_, _) =
+let is_true { v_; _ } =
   match v_ with
   | Constructor ("true", _, None) -> true
   | Constructor ("false", _, None) -> false
   | _ -> assert false
 
-let rec pp_print_value ff (v_, _) =
+let rec pp_print_value ff { v_; _ } =
   match v_ with
   | Bomb -> Format.fprintf ff "💣"
   | Int n -> Format.fprintf ff "%d" n
@@ -253,7 +254,10 @@ let read_caml_int s =
   done;
   Int64.mul sign !c
 
-let value_of_constant const = new_vtrace @@ match const with
+(* Untyped here. *)
+let value_of_constant const =
+  new_vtrace @@
+  match const with
   | Pconst_integer (s, (None | Some 'l')) ->
     Int (Int64.to_int (read_caml_int s))
   | Pconst_integer (s, Some 'L') -> Int64 (read_caml_int s)
@@ -265,7 +269,7 @@ let value_of_constant const = new_vtrace @@ match const with
   | Pconst_float (f, _) -> Float (float_of_string f)
   | Pconst_string (s, _) -> String (Bytes.of_string s)
 
-let rec value_compare (v_1, _) (v_2, _) =
+let rec value_compare { v_ = v_1; _ } { v_ = v_2; _ } =
   match v_1, v_2 with
   | Bomb, _ -> failwith "tried to compare 💣"
   | _, Bomb -> failwith "tried to compare 💣"

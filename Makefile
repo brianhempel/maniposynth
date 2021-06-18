@@ -1,10 +1,3 @@
-# ./_build/default/scratch.exe: scratch.ml dune simple.ml
-# 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
-# 	touch ./_build/default/scratch.exe; dune build --auto-promote scratch.exe
-
-# run: ./_build/default/scratch.exe
-# 	./_build/default/scratch.exe
-
 ./_build/default/server.exe: *.ml dune **/dune **/*.ml # lib/*.ml lib/*.mli dune **/dune
 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
 	touch ./_build/default/server.exe; dune build --auto-promote server.exe
@@ -14,6 +7,13 @@ run: ./_build/default/server.exe
 
 # build_and_run: ./_build/default/interpreter.exe
 # 	OCAMLINTERP_DEBUG=true ./_build/default/interpreter.exe
+
+./_build/default/scratch.exe: scratch.ml dune simple.ml
+	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
+	touch ./_build/default/scratch.exe; dune build --auto-promote scratch.exe
+
+scratch: ./_build/default/scratch.exe
+	./_build/default/scratch.exe
 
 ./_build/default/interpret_simple_ml.exe: *.ml dune **/dune **/*.ml # lib/*.ml lib/*.mli dune **/dune
 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.

@@ -122,11 +122,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // Make appropriate items draggable.
 
   document.querySelectorAll('[data-value]').forEach(elem => {
-    elem["draggable"] = true;
+    elem.draggable = true;
   });
 
   document.querySelectorAll('[draggable=true]').forEach(elem => {
-    console.log(elem);
+    // console.log(elem);
     elem.addEventListener("dragstart", dragstart);
     elem.addEventListener("dragend", dragend);
     elem.addEventListener("mouseover", draggableHover);
@@ -143,7 +143,76 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
+//////////////// Selection /////////////////////////////////
 
+function select(elem) {
+  elem.classList.add("selected");
+  updateInspector();
+}
+
+function deselect(elem) {
+  elem.classList.remove("selected");
+  updateInspector();
+}
+
+function deselectAll() {
+  document.querySelectorAll('.selected').forEach(deselect);
+}
+
+// Selectable element clicked...
+function toggleSelect(event) {
+  const elem = event.target;
+  event.stopPropagation();
+  if (elem.classList.contains("selected")) {
+    deselectAll();
+  } else {
+    deselectAll();
+    select(elem);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+
+  // Make appropriate items selectable.
+
+  document.querySelectorAll('[data-value]').forEach(elem => {
+    elem.classList.add("selectable");
+  });
+
+  document.querySelectorAll('.selectable').forEach(elem => {
+    elem.addEventListener("click", toggleSelect);
+  });
+});
+
+
+/////////////////// Inspector ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.inspector = document.getElementById("inspector");
+});
+
+function updateInspector() {
+  // START HERE
+  // const elems = document.querySelectorAll('.selected');
+
+  // Ideally, offer functions whose type is T -> a where T unifies with the selected item.
+  // For now, just allow any expression of type T -> non-function?
+
+  // Easiest way to track types may be to tag the value with its type when introduced...?
+  // But values can be introduced in polymorphic context... e.g. (\x -> [x]) 0
+  // :/
+  // Actually, runtime value to concrete type should be..."fairly" easy.
+  // Unification is harder.
+
+  const elem = document.querySelector('.selected');
+
+  if (elem) {
+    const type_str = elem.dataset.type || "Unknown";
+    window.inspector.innerHTML = type_str;
+  } else {
+    window.inspector.innerHTML = "";
+  }
+}
 
 /////////////////// Example Management ///////////////////
 

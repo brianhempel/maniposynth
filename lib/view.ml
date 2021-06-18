@@ -52,9 +52,10 @@ let html_box label content =
     ; tr [td ~attrs:[("class", "values")] [content]]
     ]
 
-let rec html_of_value ((value_, _) as value : Data.value) =
+let rec html_of_value ({ v_ = value_; _} as value : Data.value) =
   let open Data in
-  let wrap_value str = span ~attrs:[("class", "value"); ("data-value", Serialize.string_of_value value)] [str] in
+  let add_type_attr attrs = match value.type_opt with Some typ -> ("data-type", Ast.Type.to_string typ)::attrs | _ -> attrs in
+  let wrap_value str = span ~attrs:(add_type_attr [("class", "value"); ("data-value", Serialize.string_of_value value)]) [str] in
   wrap_value @@
   match value_ with
   | Bomb                                     -> "💣"
@@ -184,5 +185,8 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) =
         ; script ~src:"/assets/maniposynth.js" ""
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
-    ; body (List.map (html_of_structure_item trace) structure_items)
+    ; body begin
+        [ div ~attrs:[("id", "inspector")] [] ]
+        @ List.map (html_of_structure_item trace) structure_items
+      end
     ]

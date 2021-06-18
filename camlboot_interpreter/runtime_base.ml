@@ -1,25 +1,25 @@
 open Data
 
 let wrap_int n = new_vtrace @@ Int n
-let unwrap_int (v_, _) =
+let unwrap_int { v_; _ } =
   match v_ with
   | Int n -> n
   | _ -> assert false
 
 let wrap_int32 n = new_vtrace @@ Int32 n
-let unwrap_int32 (v_, _) =
+let unwrap_int32 { v_; _ } =
   match v_ with
   | Int32 n -> n
   | _ -> assert false
 
 let wrap_int64 n = new_vtrace @@ Int64 n
-let unwrap_int64 (v_, _) =
+let unwrap_int64 { v_; _ } =
   match v_ with
   | Int64 n -> n
   | _ -> assert false
 
 let wrap_nativeint n = new_vtrace @@ Nativeint n
-let unwrap_nativeint ((v_, _) as v) =
+let unwrap_nativeint ({ v_; _ } as v) =
   match v_ with
   | Nativeint n -> n
   | _ ->
@@ -28,7 +28,7 @@ let unwrap_nativeint ((v_, _) as v) =
      assert false
 
 let wrap_float f = new_vtrace @@ Float f
-let unwrap_float (v_, _) =
+let unwrap_float { v_; _ } =
   match v_ with
   | Float f -> f
   | _ -> assert false
@@ -41,42 +41,42 @@ let wrap_bool b =
 
 let wrap_unit () = unit
 
-let unwrap_unit (v_, _) =
+let unwrap_unit { v_; _ } =
   match v_ with
   | Constructor ("()", 0, None) -> ()
   | _ -> assert false
 
 let wrap_bytes s = new_vtrace @@ String s
 
-let unwrap_bytes (v_, _) =
+let unwrap_bytes { v_; _ } =
   match v_ with
   | String s -> s
   | _ -> assert false
 
 let wrap_string s = new_vtrace @@ String (Bytes.of_string s)
 
-let unwrap_string (v_, _) =
+let unwrap_string { v_; _ } =
   match v_ with
   | String s -> Bytes.to_string s
   | _ -> assert false
 
 let wrap_string_unsafe s = new_vtrace @@ String (Bytes.unsafe_of_string s)
 
-let unwrap_string_unsafe (v_, _) =
+let unwrap_string_unsafe { v_; _ } =
   match v_ with
   | String s -> Bytes.unsafe_to_string s
   | _ -> assert false
 
 let wrap_char c = new_vtrace @@ Int (int_of_char c)
 
-let unwrap_char (v_, _) =
+let unwrap_char { v_; _ } =
   match v_ with
   | Int n -> char_of_int (n land 255)
   | _ -> assert false
 
 let wrap_array wrapf a = new_vtrace @@ Array (Array.map wrapf a)
 
-let unwrap_array unwrapf (v_, _) =
+let unwrap_array unwrapf { v_; _ } =
   match v_ with
   | Array a -> Array.map unwrapf a
   | _ -> assert false

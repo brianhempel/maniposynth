@@ -5,6 +5,7 @@
 
 open Parsetree
 open Ast
+open Camlboot_interpreter.Data
 
 type t =
   | DropValueBeforeVb of string * string (* vd id str, value str *)
@@ -14,9 +15,6 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   match action_yojson with
   | `List [`String "DropValueBeforeVb"; `String vb_id_str; `String value_str] -> DropValueBeforeVb (vb_id_str, value_str)
   | _                                                                         -> failwith "bad action json"
-
-type value = Camlboot_interpreter.Data.value
-type vtrace = Camlboot_interpreter.Data.vtrace
 
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -97,7 +95,7 @@ let move_vb_before_vb before_vb_loc vb_loc old =
   1. Search the value trace for locations where the value is bound to a name.
   2. See if any of those bindings can be moved up/down to the location indicated by the user.
 *)
-let move_value_before_vb vb_loc (_, (vtrace : vtrace)) old : Ast.program list =
+let move_value_before_vb vb_loc { vtrace; _ } old : Ast.program list =
   (* 1. Search the value trace for locations where the value is let-bound to a name. *)
   let all_vbs = Vb.all old in
   vtrace
@@ -111,7 +109,7 @@ let move_value_before_vb vb_loc (_, (vtrace : vtrace)) old : Ast.program list =
   1. Search the value trace for locations where the value flows through an expression.
   2. Replace that expression with a variable and plop a new binding before the indicated vb.
 *)
-let insert_value_before vb_loc (_, (vtrace : vtrace)) old =
+let insert_value_before vb_loc { vtrace; _ } old =
   let all_exps = Exp.all old in
   vtrace
   |>@@ (fun ((_, loc), _) -> all_exps |>@? (Exp.loc %> (=) loc))

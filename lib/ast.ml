@@ -24,7 +24,7 @@ let everything node =
   let exps         = ref [] in
   let pats         = ref [] in
   let struct_items = ref [] in
-  let                               iter =
+  let iter =
     { dflt_iter
     with value_binding  = (fun iter vb  -> vbs          := vb ::!vbs;          dflt_iter.value_binding  iter vb)
     ;    expr           = (fun iter exp -> exps         := exp::!exps;         dflt_iter.expr           iter exp)
@@ -51,14 +51,24 @@ let (||&) opt default = match opt with Some x -> x | _ -> default
 (* Rightward compose default for Option *)
 let (%||&) f default = fun x -> match f x with Some x -> x | _ -> default
 
-let join_opt x_opt_opt = match x_opt_opt with Some (Some x) -> Some x | _ -> None
-let list_of_opt = function Some x -> [x] | None -> []
+module Option = struct
+  (* Selections from https://ocaml.org/api/Option.html *)
+  let map f = function Some x -> Some (f x) | None -> None
+  let join = function Some (Some x) -> Some x | _ -> None
+  let to_list = function Some x -> [x] | None -> []
+
+  let rec project = function
+    | []             -> Some []
+    | None   :: _    -> None
+    | Some x :: rest -> project rest |> map (List.cons x)
+end
+
 
 (* Rightward fmap/filter on Option *)
 let (|>&)  x_opt f = match x_opt with Some x -> Some (f x) | None -> None
 let (|>&?) x_opt f = match x_opt with Some x -> (if f x then x_opt else None) | None -> None
 (* Rightward join on Option (equiv to filter_map) *)
-let (|>&&) x_opt f = x_opt |>& f |> join_opt
+let (|>&&) x_opt f = x_opt |>& f |> Option.join
 
 (* Rightward map/filter on List *)
 let (|>@)  list f = List.map f list
@@ -66,7 +76,7 @@ let (|>@?) list f = List.filter f list
 (* Rightward concat_map on list *)
 let (|>@@) list f = concat_map f list
 (* Rightward filter_map on list *)
-let (|>@&) list f = list |>@ f |>@@ list_of_opt
+let (|>@&) list f = list |>@ f |>@@ Option.to_list
 
 (* Rightward composition *)
 let (%>)   f g = fun x -> f x |> g
@@ -126,12 +136,18 @@ module Loc_ = struct
     "; loc_end = " ^ Pos.to_string loc_end ^
     "; loc_ghost = " ^ string_of_bool loc_ghost ^ " " ^
     "}"
+
+  let compare = compare
 end
 
 module Longident = struct
   include Longident
 
   let to_string = flatten %> String.concat "."
+end
+
+module Type = struct
+  let to_string typ = Formatter_to_stringifier.f Printtyp.type_expr typ
 end
 
 
@@ -193,6 +209,7 @@ module Exp = struct
   let all prog = (everything (Sis prog)).exps
 
   let to_string = Pprintast.string_of_expression
+  let from_string = Lexing.from_string %> Parse.expression
 
   let ident_lid_loced (exp : expression) =
     match exp.pexp_desc with

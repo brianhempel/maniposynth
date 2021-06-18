@@ -15,7 +15,7 @@
 (executable
  (name scratch)
  (modules scratch)
- (libraries camlboot_interpreter compiler-libs.common)
+ (libraries camlboot_interpreter compiler-libs.common maniposynth_lib)
  )
 
 ; (executable

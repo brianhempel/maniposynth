@@ -4,12 +4,12 @@ open Runtime_base
 
 let wrap_array_id a = new_vtrace @@ Array a
 
-let unwrap_array_id (v_, _) =
+let unwrap_array_id { v_; _ } =
   match v_ with
   | Array a -> a
   | _ -> assert false
 
-let unwrap_position (v_, _) =
+let unwrap_position { v_; _ } =
   match v_ with
   | Record r ->
     Lexing.
@@ -134,7 +134,7 @@ type parser_input =
   | Semantic_action_computed
   | Error_detected
 
-let unwrap_parser_input (v_, _) =
+let unwrap_parser_input { v_; _ } =
   match v_ with
   | Constructor ("Start", _, None) -> Start
   | Constructor ("Token_read", _, None) -> Token_read
@@ -161,7 +161,7 @@ let wrap_parser_output = function
   | Compute_semantic_action -> cc "Compute_semantic_action" 4
   | Call_error_function -> cc "Call_error_function" 5
 
-let unwrap_parser_env (v_, _) =
+let unwrap_parser_env { v_; _ } =
   match v_ with
   | Record r ->
     { s_stack = unwrap_array unwrap_int !(SMap.find "s_stack" r);
@@ -185,7 +185,7 @@ let unwrap_parser_env (v_, _) =
     }
   | _ -> assert false
 
-let sync_parser_env pe (v_, _) =
+let sync_parser_env pe { v_; _ } =
   match v_ with
   | Record r ->
     SMap.find "s_stack" r := wrap_array wrap_int pe.s_stack;
@@ -212,7 +212,7 @@ let apply_ref =
     (fun _ _ -> assert false
       : value -> (Asttypes.arg_label * value) list -> value)
 
-let unwrap_parse_tables syncenv (v_, _) =
+let unwrap_parse_tables syncenv { v_; _ } =
   match v_ with
   | Record r ->
     let actions =
@@ -275,7 +275,7 @@ let parse_engine_wrapper tables env input token =
     if input = Semantic_action_computed
     then Obj.repr token
     else (
-      match fst token with
+      match token.v_ with
       | Constructor (_c, d, None) -> Obj.repr d
       | Constructor (_c, d, Some arg) ->
         let w = Obj.repr (Some arg) in
@@ -287,7 +287,7 @@ let parse_engine_wrapper tables env input token =
   sync_parser_env nenv env;
   res
 
-let unwrap_lexbuf (v_, _) =
+let unwrap_lexbuf { v_; _ } =
   match v_ with
   | Record r ->
     let open Lexing in
@@ -306,7 +306,7 @@ let unwrap_lexbuf (v_, _) =
     }
   | _ -> assert false
 
-let sync_lexbuf (v_, _) lb =
+let sync_lexbuf { v_; _ } lb =
   match v_ with
   | Record r ->
     let open Lexing in
@@ -323,7 +323,7 @@ let sync_lexbuf (v_, _) lb =
     SMap.find "lex_curr_p" r := wrap_position lb.lex_curr_p
   | _ -> assert false
 
-let unwrap_lex_tables (v_, _) =
+let unwrap_lex_tables { v_; _ } =
   match v_ with
   | Record r ->
     let gs f = unwrap_string_unsafe !(SMap.find f r) in
