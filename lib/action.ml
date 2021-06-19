@@ -18,9 +18,9 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
 
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
-1. assign unique names
+1. assign unique names (not done yet)
 2. move binding
-3. resolve
+3. resolve (not done yet)
 *)
 
 let remove_vb vb_loc old =

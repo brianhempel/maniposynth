@@ -97,6 +97,9 @@ let html_box_of_vb (vb : Parsetree.value_binding) =
 
 
 let html_box_of_exp trace (exp : Parsetree.expression) =
+  (* START HERE trying to visualize 'a list => length *)
+  (* run in the interpreter, rather than after-the-fact? *)
+  (* or capture environments in interpreter and then run here...? *)
   html_box
     (string_of_exp exp)
     (html_of_values_for_loc trace exp.pexp_loc)
