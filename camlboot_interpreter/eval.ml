@@ -221,7 +221,7 @@ let rec apply prims lookup_exp_typed trace_state (vf : value) args =
 
 and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
   let attach_trace value =
-    let trace_entry = (expr.pexp_loc, frame_no, value) in
+    let trace_entry = (expr.pexp_loc, frame_no, value, env) in
     trace_state.Trace.trace <- Trace.add trace_entry trace_state.Trace.trace;
     value
   in
@@ -501,7 +501,7 @@ and pattern_bind prims env lookup_exp_typed trace_state frame_no root_val path p
   (* frame_no is passed in here because pattern matches can execute code, which will change the lookup_exp_typed trace_state frame_no for later calls to pattern_bind *)
   (* (namely the str = "Format" case) *)
   let attach_trace value env =
-    let trace_entry = (pat.ppat_loc, frame_no, value) in
+    let trace_entry = (pat.ppat_loc, frame_no, value, env) in
     trace_state.trace <- Trace.add trace_entry trace_state.trace;
     env
   in

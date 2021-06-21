@@ -4,11 +4,12 @@ module IMap = Map.Make (struct type t = int let compare : int -> int -> int = co
 type trace_place = Location.t * int (* (ast id, frame_no) *)
 
 module Entry = struct
-  type t = Location.t * int * Data.value (* (ast id, frame_no, value) *)
+  type t = Location.t * int * Data.value * Data.env (* (ast id, frame_no, value, env) *)
 
-  let loc (loc, _, _)           = loc
-  let frame_no (_, frame_no, _) = frame_no
-  let value (_, _, value)       = value
+  let loc (loc, _, _, _)           = loc
+  let frame_no (_, frame_no, _, _) = frame_no
+  let value (_, _, value, _)       = value
+  let env (_, _, _, env)           = env
 end
 
 type t = Entry.t IMap.t

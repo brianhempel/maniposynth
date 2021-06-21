@@ -17,7 +17,8 @@ body {
   /* border: solid 1px black; */
 }
 
-.label {
+.label,
+.derived-vis-values {
   font-size: 0.7em;
 }
 
@@ -47,6 +48,19 @@ td {
 
 .selected {
   box-shadow: 0px 0px 5px rgb(0, 150, 255);
+}
+
+.derived-vis-values {
+  position: relative;
+  top: -1em;
+  left: -2px;
+  margin-right: -1px;
+}
+
+.derived-vis-value {
+  background-color: white;
+  border: solid 1px gray;
+  padding: 1px;
 }
 
 #inspector {

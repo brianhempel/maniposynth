@@ -55,7 +55,7 @@ let render_maniposynth out_chan url =
   let html_str = View.html_str callables trace bindings_skels in *)
   let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
   let trace = Camlboot_interpreter.Interp.run_files lookup_exp_typed [path] in
-  let html_str = View.html_str parsed trace in
+  let html_str = View.html_str parsed trace lookup_exp_typed in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

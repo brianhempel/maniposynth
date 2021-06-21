@@ -1,4 +1,45 @@
 open Camlboot_interpreter
+open Ast
+
+type visualizer =
+  { typ : Types.type_expr
+  ; exp : Parsetree.expression
+  }
+
+let visualizers_from_attrs type_env (attrs : Parsetree.attribute list) =
+  let open Parsetree in
+  (* string_of_cst and string_of_payload are copied from OCaml's builtin_attributes.ml *)
+  (* (they aren't exposed) *)
+  let string_of_const = function
+    | Pconst_string(str, _) -> Some str
+    | _ -> None in
+  let string_of_payload = function
+    | PStr [{ pstr_desc = Pstr_eval ({pexp_desc = Pexp_constant cst; _}, _); _}] -> string_of_const cst
+    | _ -> None in
+  attrs
+  |>@@ begin function
+    | ({ txt = "vis"; _}, payload) ->
+      begin match string_of_payload payload with
+      | Some str ->
+        (* e.g. "'a list => length" *)
+        begin match String.split ~limit:2 "=>" str with
+        | [type_str; f_str] ->
+          begin try
+            [{ typ = Type.from_string ~env:type_env type_str; exp = Exp.from_string f_str }]
+          with
+          | Typetexp.Error (_, type_env, error) -> Typetexp.report_error type_env Format.std_formatter error; []
+          end
+        | _ ->
+          print_endline "[@vis] string should look like e.g. \"'a list => length\"";
+          []
+        end
+      | None ->
+        print_endline "[@vis] attribute payload should be a quoted string";
+        []
+      end
+    | _ -> []
+  end
+
 
 let sprintf = Printf.sprintf
 
@@ -52,11 +93,37 @@ let html_box label content =
     ; tr [td ~attrs:[("class", "values")] [content]]
     ]
 
-let rec html_of_value ({ v_ = value_; _} as value : Data.value) =
+let rec apply_visualizers visualizers env (value : Data.value) =
+  if visualizers = [] then "" else
+  let does_unify t1 t2 = try Ctype.unify Env.empty (Ctype.instance t1) (Ctype.instance t2); true with _ -> false in
+  let result_htmls =
+    visualizers
+    |>@@ begin fun { typ; exp } ->
+      match value.type_opt with
+      | Some vtype ->
+        if does_unify typ vtype then
+          let exp_to_run = Exp.apply exp [(Nolabel, Exp.var "teeeeeeeeeeeeeeemp")] in
+          let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
+          let result_value = Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run in
+          [result_value]
+        else
+          []
+      | None -> []
+    end
+    (* START HERE: make this pretty *)
+    |>@ html_of_value [] Envir.empty_env
+  in
+  span ~attrs:[("class", "derived-vis-values")]
+    (result_htmls |>@ begin fun result_html -> span ~attrs:[("class", "derived-vis-value")] [result_html] end)
+
+
+and html_of_value visualizers env ({ v_ = value_; _} as value : Data.value) =
+  let recurse = html_of_value visualizers env in
   let open Data in
   let add_type_attr attrs = match value.type_opt with Some typ -> ("data-type", Ast.Type.to_string typ)::attrs | _ -> attrs in
   let wrap_value str = span ~attrs:(add_type_attr [("class", "value"); ("data-value", Serialize.string_of_value value)]) [str] in
   wrap_value @@
+  apply_visualizers visualizers env value ^
   match value_ with
   | Bomb                                     -> "💣"
   | Int int                                  -> string_of_int int
@@ -67,45 +134,44 @@ let rec html_of_value ({ v_ = value_; _} as value : Data.value) =
   | Function (_, _)                          -> "func"
   | String bytes                             -> Bytes.to_string bytes
   | Float float                              -> string_of_float float
-  | Tuple values                             -> "(" ^ String.concat ", " (List.map html_of_value values) ^ ")"
+  | Tuple values                             -> "(" ^ String.concat ", " (List.map recurse values) ^ ")"
   | Constructor (ctor_name, _, None)         -> ctor_name
-  | Constructor (ctor_name, _, Some arg_val) -> ctor_name ^ " " ^ html_of_value arg_val
+  | Constructor (ctor_name, _, Some arg_val) -> ctor_name ^ " " ^ recurse arg_val
   | Prim _                                   -> "prim"
   | Fexpr _                                  -> "fexpr"
   | ModVal _                                 -> "modval"
   | InChannel _                              -> "inchannel"
   | OutChannel _                             -> "outchannel"
-  | Record entry_map                         -> entry_map |> SMap.bindings |> List.map (fun (field_name, value_ref) -> field_name ^ " = " ^ html_of_value !value_ref) |> String.concat "; " |> (fun entries_str -> "{ " ^ entries_str ^ " }")
+  | Record entry_map                         -> entry_map |> SMap.bindings |> List.map (fun (field_name, value_ref) -> field_name ^ " = " ^ recurse !value_ref) |> String.concat "; " |> (fun entries_str -> "{ " ^ entries_str ^ " }")
   | Lz _                                     -> "lazy"
-  | Array values_arr                         -> "[! " ^ (values_arr |> Array.to_list |> List.map html_of_value |> String.concat "; ") ^ " !]"
+  | Array values_arr                         -> "[! " ^ (values_arr |> Array.to_list |> List.map recurse |> String.concat "; ") ^ " !]"
   | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
   | Object _                                 -> "object"
 
 
-let html_of_values_for_loc trace loc =
+let html_of_values_for_loc trace visualizers loc =
   trace
   |> Trace.entries_for_loc loc
-  |> List.map Trace.Entry.value
-  |> List.map html_of_value
+  |> List.map begin fun (_, _, value, env) -> html_of_value visualizers env value end
   |> String.concat "\n"
 
 
-let html_box_of_vb (vb : Parsetree.value_binding) =
+(* let html_box_of_vb (vb : Parsetree.value_binding) =
   html_box
     (string_of_pat vb.pvb_pat ^ " = " ^ string_of_exp vb.pvb_expr)
-    ""
+    "" *)
 
 
-let html_box_of_exp trace (exp : Parsetree.expression) =
-  (* START HERE trying to visualize 'a list => length *)
-  (* run in the interpreter, rather than after-the-fact? *)
-  (* or capture environments in interpreter and then run here...? *)
+let html_box_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
+  let type_env =
+    lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
+  let visualizers = visualizers_from_attrs type_env exp.pexp_attributes in
   html_box
     (string_of_exp exp)
-    (html_of_values_for_loc trace exp.pexp_loc)
+    (html_of_values_for_loc trace visualizers exp.pexp_loc)
 
 
-let rec fun_rows trace (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
+let rec fun_rows trace lookup_exp_typed (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
   let default_exp_str =
     match param_exp_opt with
     | None             -> ""
@@ -113,14 +179,14 @@ let rec fun_rows trace (param_label : Asttypes.arg_label) param_exp_opt param_pa
   in
   ( tr
     [ td [string_of_arg_label param_label ^ string_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-    ; td [html_of_values_for_loc trace param_pat.ppat_loc]
+    ; td [html_of_values_for_loc trace [] param_pat.ppat_loc]
     ]
-  ) :: rows_ensure_vbs_canvas_of_exp trace body_exp
+  ) :: rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed body_exp
 
-and rows_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
+and rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
   let single_exp () =
     [ tr [td ~attrs:[("colspan", "2")] [""]]
-    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace exp]]
+    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace lookup_exp_typed exp]]
     ]
   in
   let unhandled node_kind_str =
@@ -138,15 +204,15 @@ and rows_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
   | Pexp_fun ( param_label
              , param_exp_opt
              , param_pat
-             , body_exp)      -> fun_rows trace param_label param_exp_opt param_pat body_exp
+             , body_exp)      -> fun_rows trace lookup_exp_typed param_label param_exp_opt param_pat body_exp
   | Pexp_match (_, _)         -> unhandled "match"
   | Pexp_ifthenelse (_, _, _) -> unhandled "if then else"
   | _                         -> single_exp ()
 
-let html_ensure_vbs_canvas_of_exp trace (exp : Parsetree.expression) =
-  table (rows_ensure_vbs_canvas_of_exp trace exp)
+let html_ensure_vbs_canvas_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
+  table (rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed exp)
 
-let htmls_of_top_level_value_binding trace (vb : Parsetree.value_binding) =
+let htmls_of_top_level_value_binding trace lookup_exp_typed (vb : Parsetree.value_binding) =
   let drop_target_before_vb (vb : Parsetree.value_binding) =
     div ~attrs:
       [ ("data-before-vb-id", Serialize.string_of_loc vb.pvb_loc)
@@ -156,14 +222,14 @@ let htmls_of_top_level_value_binding trace (vb : Parsetree.value_binding) =
   [ drop_target_before_vb vb
   ; box "value_binding"
       @@ [ string_of_pat vb.pvb_pat ^ " =" ]
-      @  [ html_ensure_vbs_canvas_of_exp trace vb.pvb_expr ]
+      @  [ html_ensure_vbs_canvas_of_exp trace lookup_exp_typed vb.pvb_expr ]
   ]
 
-let html_of_structure_item trace (item : Parsetree.structure_item) =
+let html_of_structure_item trace lookup_exp_typed (item : Parsetree.structure_item) =
   let open Parsetree in
   match item.pstr_desc with
   | Pstr_eval (_, _)            -> failwith "can't handle Pstr_eval"
-  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace) vbs)
+  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace lookup_exp_typed) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
   | Pstr_typext _               -> failwith "can't handle Pstr_typext"
@@ -179,7 +245,7 @@ let html_of_structure_item trace (item : Parsetree.structure_item) =
   | Pstr_extension (_, _)       -> failwith "can't handle Pstr_extension"
 
 
-let html_str (structure_items : Parsetree.structure) (trace : Trace.t) =
+let html_str (structure_items : Parsetree.structure) (trace : Trace.t) lookup_exp_typed =
   html
     [ head
         [ title "Maniposynth"
@@ -190,6 +256,6 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) =
         ]
     ; body begin
         [ div ~attrs:[("id", "inspector")] [] ]
-        @ List.map (html_of_structure_item trace) structure_items
+        @ List.map (html_of_structure_item trace lookup_exp_typed) structure_items
       end
     ]
