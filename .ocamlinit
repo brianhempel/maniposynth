@@ -1,0 +1,6 @@
+(* For "make repl" / "dune utop" *)
+
+#require "compiler-libs.common"
+
+open Maniposynth_lib
+open Ast
