@@ -183,11 +183,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function select(elem) {
   elem.classList.add("selected");
+  saveSelection();
   updateInspector();
 }
 
 function deselect(elem) {
   elem.classList.remove("selected");
+  saveSelection();
   updateInspector();
 }
 
@@ -207,17 +209,47 @@ function toggleSelect(event) {
   }
 }
 
+// Attempt to preserve selections over page reloads.
+//
+// Referencing by item number on page.
+function saveSelection() {
+  const selectedIndices = [];
+
+  var i = 0
+  document.querySelectorAll('.selectable').forEach(elem => {
+    if (elem.classList.contains("selected")) {
+      selectedIndices.push(i);
+    }
+    i++;
+  });
+
+  window.sessionStorage.setItem("selectedIndices", JSON.stringify(selectedIndices));
+}
+
+function restoreSelection() {
+  // document.querySelectorAll('.selectable').length
+  const selectedIndices = JSON.parse(window.sessionStorage.getItem("selectedIndices") || "[]");
+
+  deselectAll();
+  var i = 0
+  document.querySelectorAll('.selectable').forEach(elem => {
+    if (selectedIndices.includes(i)) {
+      select(elem);
+    }
+    i++;
+  });
+}
+
+
 window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items selectable.
-
   document.querySelectorAll('[data-value]').forEach(elem => {
     elem.classList.add("selectable");
-  });
-
-  document.querySelectorAll('.selectable').forEach(elem => {
     elem.addEventListener("click", toggleSelect);
   });
+
+  restoreSelection();
 });
 
 
