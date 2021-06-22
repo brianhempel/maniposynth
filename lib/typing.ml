@@ -1,4 +1,5 @@
 open Ast
+open Util
 
 
 module LocMap = struct

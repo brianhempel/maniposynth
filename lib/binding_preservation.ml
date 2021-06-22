@@ -1,8 +1,9 @@
 
-open Ast
 (* let (restore_names, old) = assign_unique_names old in *)
 open Asttypes
 open Parsetree
+open Ast
+open Util
 
 (* Functors, first-class modules, and recursive modules not supported. *)
 (* Also not tracking named types or polymorphic variants. *)

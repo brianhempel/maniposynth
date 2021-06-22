@@ -1,3 +1,23 @@
+Array.prototype.addAsSet = function(elem) { // pretend array is a set and add something to it
+  if (!this.includes(elem)) {
+    this.push(elem);
+  }
+  // console.log(this);
+  return this;
+};
+
+Array.prototype.removeAsSet = function(elem) {
+  // https://love2dev.com/blog/javascript-remove-from-array/#remove-from-array-splice-value
+  for (var i = 0; i < this.length; i += 1) {
+    if (this[i] === elem) {
+      this.splice(i, 1);
+      i -= 1;
+    }
+  }
+  // console.log(this);
+  return this;
+};
+
 function doAction(action) {
   let request = new XMLHttpRequest();
   request.open("PATCH", document.location.href);
@@ -11,6 +31,22 @@ function dropValueBeforeVb(beforeVbId, value) {
     "DropValueBeforeVb",
     beforeVbId,
     value
+  ]);
+}
+
+function addVis(loc, vis) {
+  doAction([
+    "AddVis",
+    loc,
+    vis
+  ]);
+}
+
+function removeVis(loc, vis) {
+  doAction([
+    "RemoveVis",
+    loc,
+    vis
   ]);
 }
 
@@ -193,41 +229,51 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function updateInspector() {
   const inspector = window.inspector;
+  const typeOfSelected = document.getElementById("type-of-selected");
+  const visesForSelected = document.getElementById("vises-for-selected");
+
   // START HERE
   // const elems = document.querySelectorAll('.selected');
 
-  // Ideally, offer functions whose type is T -> a where T unifies with the selected item.
-  // For now, just allow any expression of type T -> non-function?
-
-  // Easiest way to track types may be to tag the value with its type when introduced...?
-  // But values can be introduced in polymorphic context... e.g. (\x -> [x]) 0
-  // :/
-  // Actually, runtime value to concrete type should be..."fairly" easy.
-  // Unification is harder.
-
   const elem = document.querySelector('.selected');
 
-  const makeCheck = (labelText, isChecked) => {
+  const makeCheck = (vis, isChecked) => {
     const label = document.createElement("label");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = isChecked;
     label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(labelText));
+    label.appendChild(document.createTextNode(vis));
+
+    checkbox.addEventListener("change", ev => {
+      const checkbox = ev.target;
+      const loc = elem.closest("[data-loc]").dataset.loc;
+      if (checkbox.checked) {
+        addVis(loc, vis);
+      } else {
+        removeVis(loc, vis);
+      }
+    });
     return label;
   }
 
   if (elem) {
     const typeStr = elem.dataset.type || "Unknown";
-    inspector.innerHTML = "";
-    inspector.appendChild(document.createTextNode(typeStr));
-    const activeVises   = (elem.dataset.activeVises || "").split("  ");
-    const possibleVises = (elem.dataset.possibleVises || "").split("  ");
+    typeOfSelected.innerHTML = "";
+    visesForSelected.innerHTML = "";
+    typeOfSelected.appendChild(document.createTextNode(typeStr));
+    const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
+    const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
     // START HERE make this pretty, then make it do something
-    activeVises.forEach(vis => inspector.appendChild(makeCheck(vis, true)));
-    possibleVises.forEach(vis => inspector.appendChild(makeCheck(vis, false)));
+    activeVises.forEach(vis => visesForSelected.appendChild(makeCheck(vis, true)));
+    possibleVises.forEach(vis => {
+      if (!activeVises.includes(vis)) {
+        visesForSelected.appendChild(makeCheck(vis, false));
+      }
+    });
   } else {
-    inspector.innerHTML = "";
+    typeOfSelected.innerHTML = "";
+    visesForSelected.innerHTML = "";
   }
 }
 

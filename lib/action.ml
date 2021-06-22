@@ -6,14 +6,19 @@
 open Parsetree
 open Ast
 open Camlboot_interpreter.Data
+open Util
 
 type t =
-  | DropValueBeforeVb of string * string (* vd id str, value str *)
+  | DropValueBeforeVb of string * string (* vb id str, value str *)
+  | AddVis            of string * string (* loc str, vis str *)
+  | RemoveVis         of string * string (* loc str, vis str *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
   match action_yojson with
   | `List [`String "DropValueBeforeVb"; `String vb_id_str; `String value_str] -> DropValueBeforeVb (vb_id_str, value_str)
+  | `List [`String "AddVis"; `String loc_str; `String vis_str]                -> AddVis (loc_str, vis_str)
+  | `List [`String "RemoveVis"; `String loc_str; `String vis_str]             -> RemoveVis (loc_str, vis_str)
   | _                                                                         -> failwith "bad action json"
 
 
@@ -158,8 +163,27 @@ let drop_value_before vb_loc (value : value) old =
   print_locs new_free new_prog;
   new_prog
 
+
+let add_vis_to_loc loc vis_str old =
+  old
+  |> Exp.map_by_loc loc begin fun exp ->
+    { exp with pexp_attributes = Vis.add_vis_str_to_attrs vis_str exp.pexp_attributes }
+  end
+
+let remove_vis_from_loc loc vis_str old =
+  old
+  |> Exp.map_by_loc loc begin fun exp ->
+    { exp with pexp_attributes = Vis.remove_vis_str_from_attrs vis_str exp.pexp_attributes }
+  end
+
 let f : t -> Ast.program -> Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
     let value = Serialize.value_of_string value_str in
     drop_value_before vb_loc value
+  | AddVis (loc_str, vis_str) ->
+    let loc = Serialize.loc_of_string loc_str in
+    add_vis_to_loc loc vis_str
+  | RemoveVis (loc_str, vis_str) ->
+    let loc = Serialize.loc_of_string loc_str in
+    remove_vis_from_loc loc vis_str

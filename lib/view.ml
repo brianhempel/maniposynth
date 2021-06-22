@@ -1,47 +1,7 @@
 open Camlboot_interpreter
 open Ast
-
-type visualizer =
-  { typ : Types.type_expr
-  ; exp : Parsetree.expression
-  }
-
-let visualizer_to_string { typ; exp } = Type.to_string typ ^ " => " ^ Exp.to_string exp
-
-let visualizers_from_attrs type_env (attrs : Parsetree.attribute list) =
-  let open Parsetree in
-  (* string_of_cst and string_of_payload are copied from OCaml's builtin_attributes.ml *)
-  (* (they aren't exposed) *)
-  let string_of_const = function
-    | Pconst_string(str, _) -> Some str
-    | _ -> None in
-  let string_of_payload = function
-    | PStr [{ pstr_desc = Pstr_eval ({pexp_desc = Pexp_constant cst; _}, _); _}] -> string_of_const cst
-    | _ -> None in
-  attrs
-  |>@@ begin function
-    | ({ txt = "vis"; _}, payload) ->
-      begin match string_of_payload payload with
-      | Some str ->
-        (* e.g. "'a list => length" *)
-        begin match String.split ~limit:2 "=>" str with
-        | [type_str; f_str] ->
-          begin try
-            [{ typ = Type.from_string ~env:type_env type_str; exp = Exp.from_string f_str }]
-          with
-          | Typetexp.Error (_, type_env, error) -> Typetexp.report_error type_env Format.std_formatter error; []
-          end
-        | _ ->
-          print_endline "[@vis] string should look like e.g. \"'a list => length\"";
-          []
-        end
-      | None ->
-        print_endline "[@vis] attribute payload should be a quoted string";
-        []
-      end
-    | _ -> []
-  end
-
+open Vis
+open Util
 
 let sprintf = Printf.sprintf
 
@@ -89,8 +49,9 @@ let string_of_arg_label =
   | Optional label -> "?" ^ label ^ ":"
 
 
-let html_box label content =
+let html_box ?(attrs = []) label content =
   table
+    ~attrs
     [ tr [td ~attrs:[("class", "label")] [label]]
     ; tr [td ~attrs:[("class", "values")] [content]]
     ]
@@ -120,8 +81,9 @@ let rec apply_visualizers visualizers env (value : Data.value) =
 and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
   let recurse = html_of_value visualizers env type_env in
   let open Data in
-  let active_vises = visualizers |>@ visualizer_to_string in
+  let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
+    (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the runtime type of the value, and 'a is non-trivial. *)
     let f _name path value_desc out =
       (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
       (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *)
@@ -129,7 +91,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
       | (Some val_type, [arg_type; _]) ->
         begin try
           if Type.does_unify val_type arg_type && Type.to_string arg_type <> "'a" (* ignore trivial functions *)
-          then visualizer_to_string { typ = arg_type; exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
+          then Vis.to_string { typ = arg_type; exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
           else out
         with _exn ->
           (* Parse.expression fails to parse certain operators like Stdlib.~- *)
@@ -165,7 +127,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
   | Nativeint nativeint                      -> Nativeint.to_string nativeint
   | Fun (_, _, _, _, _)                      -> "func"
   | Function (_, _)                          -> "func"
-  | String bytes                             -> Bytes.to_string bytes
+  | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
   | Tuple values                             -> "(" ^ String.concat ", " (List.map recurse values) ^ ")"
   | Constructor (ctor_name, _, None)         -> ctor_name
@@ -198,8 +160,9 @@ let html_of_values_for_loc trace type_env visualizers loc =
 let html_box_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
   let type_env =
     lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
-  let visualizers = visualizers_from_attrs type_env exp.pexp_attributes in
+  let visualizers = Vis.all_from_attrs type_env exp.pexp_attributes in
   html_box
+    ~attrs:[ ("data-loc", Serialize.string_of_loc exp.pexp_loc) ]
     (string_of_exp exp)
     (html_of_values_for_loc trace type_env visualizers exp.pexp_loc)
 
@@ -288,7 +251,7 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) lookup_ex
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
     ; body begin
-        [ div ~attrs:[("id", "inspector")] [] ]
+        [ div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []] ]
         @ List.map (html_of_structure_item trace lookup_exp_typed) structure_items
       end
     ]

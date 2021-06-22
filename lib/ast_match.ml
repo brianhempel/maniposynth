@@ -23,7 +23,7 @@ let merge_matches m1 m2 = (* m1 prefered on duplicates, but who would make a mat
   ; struct_items = SMap.union (fun _ v _ -> Some v) m1.struct_items m2.struct_items
   }
 
-let list_of_opt = Ast.Option.to_list
+let list_of_opt = Util.Option.to_list
 
 let match_all match_f mlist list =
   try List.fold_right2 (fun mitem item m -> merge_matches (match_f mitem item) m) mlist list empty_match
