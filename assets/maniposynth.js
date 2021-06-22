@@ -192,6 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function updateInspector() {
+  const inspector = window.inspector;
   // START HERE
   // const elems = document.querySelectorAll('.selected');
 
@@ -206,11 +207,27 @@ function updateInspector() {
 
   const elem = document.querySelector('.selected');
 
+  const makeCheck = (labelText, isChecked) => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = isChecked;
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(labelText));
+    return label;
+  }
+
   if (elem) {
-    const type_str = elem.dataset.type || "Unknown";
-    window.inspector.innerHTML = type_str;
+    const typeStr = elem.dataset.type || "Unknown";
+    inspector.innerHTML = "";
+    inspector.appendChild(document.createTextNode(typeStr));
+    const activeVises   = (elem.dataset.activeVises || "").split("  ");
+    const possibleVises = (elem.dataset.possibleVises || "").split("  ");
+    // START HERE make this pretty, then make it do something
+    activeVises.forEach(vis => inspector.appendChild(makeCheck(vis, true)));
+    possibleVises.forEach(vis => inspector.appendChild(makeCheck(vis, false)));
   } else {
-    window.inspector.innerHTML = "";
+    inspector.innerHTML = "";
   }
 }
 

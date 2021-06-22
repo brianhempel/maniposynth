@@ -6,6 +6,8 @@ type visualizer =
   ; exp : Parsetree.expression
   }
 
+let visualizer_to_string { typ; exp } = Type.to_string typ ^ " => " ^ Exp.to_string exp
+
 let visualizers_from_attrs type_env (attrs : Parsetree.attribute list) =
   let open Parsetree in
   (* string_of_cst and string_of_payload are copied from OCaml's builtin_attributes.ml *)
@@ -95,13 +97,12 @@ let html_box label content =
 
 let rec apply_visualizers visualizers env (value : Data.value) =
   if visualizers = [] then "" else
-  let does_unify t1 t2 = try Ctype.unify Env.empty (Ctype.instance t1) (Ctype.instance t2); true with _ -> false in
   let result_htmls =
     visualizers
     |>@@ begin fun { typ; exp } ->
       match value.type_opt with
       | Some vtype ->
-        if does_unify typ vtype then
+        if Type.does_unify typ vtype then
           let exp_to_run = Exp.apply exp [(Nolabel, Exp.var "teeeeeeeeeeeeeeemp")] in
           let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
           let result_value = Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run in
@@ -110,18 +111,50 @@ let rec apply_visualizers visualizers env (value : Data.value) =
           []
       | None -> []
     end
-    (* START HERE: make this pretty *)
-    |>@ html_of_value [] Envir.empty_env
+    |>@ html_of_value [] Envir.empty_env Env.empty
   in
   span ~attrs:[("class", "derived-vis-values")]
     (result_htmls |>@ begin fun result_html -> span ~attrs:[("class", "derived-vis-value")] [result_html] end)
 
 
-and html_of_value visualizers env ({ v_ = value_; _} as value : Data.value) =
-  let recurse = html_of_value visualizers env in
+and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
+  let recurse = html_of_value visualizers env type_env in
   let open Data in
-  let add_type_attr attrs = match value.type_opt with Some typ -> ("data-type", Ast.Type.to_string typ)::attrs | _ -> attrs in
-  let wrap_value str = span ~attrs:(add_type_attr [("class", "value"); ("data-value", Serialize.string_of_value value)]) [str] in
+  let active_vises = visualizers |>@ visualizer_to_string in
+  let possible_vises =
+    let f _name path value_desc out =
+      (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
+      (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *)
+      match (value.type_opt, Type.flatten_arrows value_desc.Types.val_type) with
+      | (Some val_type, [arg_type; _]) ->
+        begin try
+          if Type.does_unify val_type arg_type && Type.to_string arg_type <> "'a" (* ignore trivial functions *)
+          then visualizer_to_string { typ = arg_type; exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
+          else out
+        with _exn ->
+          (* Parse.expression fails to parse certain operators like Stdlib.~- *)
+          out
+          (* begin match Location.error_of_exn exn with
+          | Some (`Ok err) -> print_endline (Path.name path); Location.report_error Format.std_formatter err; out
+          | _              -> out
+          end *)
+        end
+      | _ -> out in
+    let modules = [None; Some (Longident.parse "Stdlib.List")] in
+    modules
+    |>@@ fun module_lid_opt -> Env.fold_values f module_lid_opt type_env []
+    (* |>@@ begin fun (fname, (_, value_or_lvar)) -> match value_or_lvar with Value v -> [(fname, v)] | _ -> [] end *)
+    (* |>@ begin fun (fname, fval) -> fval.type_opt |>& Type.to_string |>& (^) (fname ^ " : ") ||& "" |> print_endline end *) in
+  let perhaps_type_attr = match value.type_opt with Some typ -> [("data-type", Ast.Type.to_string typ)] | _ -> [] in
+  let wrap_value str =
+    span
+      ~attrs:(
+        [("data-active-vises", String.concat "  " active_vises)] @
+        [("data-possible-vises", String.concat "  " possible_vises)] @
+        perhaps_type_attr @
+        [("class", "value"); ("data-value", Serialize.string_of_value value)]
+      )
+      [str] in
   wrap_value @@
   apply_visualizers visualizers env value ^
   match value_ with
@@ -149,10 +182,10 @@ and html_of_value visualizers env ({ v_ = value_; _} as value : Data.value) =
   | Object _                                 -> "object"
 
 
-let html_of_values_for_loc trace visualizers loc =
+let html_of_values_for_loc trace type_env visualizers loc =
   trace
   |> Trace.entries_for_loc loc
-  |> List.map begin fun (_, _, value, env) -> html_of_value visualizers env value end
+  |> List.map begin fun (_, _, value, env) -> html_of_value visualizers env type_env value end
   |> String.concat "\n"
 
 
@@ -168,7 +201,7 @@ let html_box_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
   let visualizers = visualizers_from_attrs type_env exp.pexp_attributes in
   html_box
     (string_of_exp exp)
-    (html_of_values_for_loc trace visualizers exp.pexp_loc)
+    (html_of_values_for_loc trace type_env visualizers exp.pexp_loc)
 
 
 let rec fun_rows trace lookup_exp_typed (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
@@ -179,7 +212,7 @@ let rec fun_rows trace lookup_exp_typed (param_label : Asttypes.arg_label) param
   in
   ( tr
     [ td [string_of_arg_label param_label ^ string_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-    ; td [html_of_values_for_loc trace [] param_pat.ppat_loc]
+    ; td [html_of_values_for_loc trace Env.empty [] param_pat.ppat_loc]
     ]
   ) :: rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed body_exp
 

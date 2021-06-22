@@ -63,48 +63,54 @@ module Option = struct
     | Some x :: rest -> project rest |> map (List.cons x)
 end
 
+let clamp lo hi x =
+  if x < lo then lo
+  else if x > hi then hi
+  else x
+
 module String = struct
   include String
 
   (* Like String.sub but does not error for ranges outside the string. *)
-  (* let safe_sub str i len =
-    let safe_i = Utils.clamp 0 (String.length str) i in
-    let safe_j = Utils.clamp 0 (String.length str) (i + len) in
+  let safe_sub i len str =
+    let safe_i = clamp 0 (String.length str) i in
+    let safe_j = clamp 0 (String.length str) (i + len) in
     sub str safe_i (safe_j - safe_i)
 
-  let prefix str len =
-    safe_sub str 0 len
+  let prefix len str = safe_sub 0 len str
+  let suffix len str = safe_sub (length str - len) len str
 
-  let suffix str len =
-    safe_sub str (length str - len) len
-
-  let drop str len =
-    suffix str (length str - len) *)
+  let drop len str = suffix (length str - len) str
 
   (* Tail recursive string matcher to see if target containts str at the given indices. *)
-  let rec matches_at_indices_ str str_i target target_i target_len =
+  let rec matches_at_indices_ str_i target target_i target_len str =
     if target_i >= target_len then
       true
     else if unsafe_get str str_i = unsafe_get target target_i then
-      matches_at_indices_ str (str_i + 1) target (target_i + 1) target_len
+      matches_at_indices_ (str_i + 1) target (target_i + 1) target_len str
     else
       false
 
-  (* let matches_at_index str str_i target =
+  let matches_at_index str_i target str  =
     let str_len    = length str in
     let target_len = length target in
     if str_i < 0 || str_i > str_len - target_len then
       false
     else
-      matches_at_indices_ str str_i target 0 target_len *)
+      matches_at_indices_ str_i target 0 target_len str
 
-  (* let starts_with str target =
-    matches_at_index str 0 target
+  let starts_with prefix str =
+    matches_at_index 0 prefix str
 
-  let ends_with str target =
+  let ends_with suffix str =
     let str_len    = length str in
-    let target_len = length target in
-    matches_at_index str  (str_len - target_len) target *)
+    let suffix_len = length suffix in
+    matches_at_index (str_len - suffix_len) suffix str
+
+  let drop_prefix prefix str =
+    if starts_with prefix str
+    then drop (length prefix) str
+    else str
 
   let find_index ?(start_index = 0) target str : int option =
     let target_len = length target in
@@ -112,7 +118,7 @@ module String = struct
     let rec loop i =
       if i > last_i then
         None
-      else if matches_at_indices_ str i target 0 target_len then
+      else if matches_at_indices_ i target 0 target_len str then
         Some i
       else
         loop (i + 1)
@@ -221,13 +227,29 @@ module Longident = struct
 end
 
 module Type = struct
-  let to_string typ = Formatter_to_stringifier.f Printtyp.type_expr typ
+  let to_string typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.type_expr typ
   let from_string ?(env = Env.empty) str =
     begin
       Lexing.from_string str
       |> Parse.core_type
       |> Typetexp.transl_simple_type env false
     end.ctyp_type
+
+  (* May only need type env in case of GADTs, which we don't care about. *)
+  let does_unify t1 t2 =
+    try
+      Ctype.unify Env.empty (Ctype.instance t1) (Ctype.instance t2);
+      true
+    with _ -> false
+
+  (* Stops flattening if a labeled argument is encountered. *)
+  (* e.g. 'a -> 'b -> 'c to ['a, 'b, 'c] *)
+  let rec flatten_arrows typ =
+    let open Types in
+    match typ.desc with
+    | Tarrow (Nolabel, ltype, rtype, Cok) -> ltype :: flatten_arrows rtype
+    | Types.Tlink typ                     -> flatten_arrows typ
+    | _                                   -> [typ]
 end
 
 
