@@ -50,10 +50,14 @@ let rec take n li = match n, li with
     | _, [] -> invalid_arg "List.take"
     | n, x::xs -> x :: take (n - 1) xs
 
+let copy_type (t : Types.type_expr) : Types.type_expr =
+  Marshal.from_string (Marshal.to_string t [Closures]) 0
+  (* t |> Serialize.to_string |> Serialize.of_string *)
+  (* Ctype.correct_levels (Ctype.instance t) *)
 
 let lookup_type_opt lookup_exp_typed expr =
   match lookup_exp_typed expr with
-  | Some typed_exp -> Some (Ctype.instance typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
+  | Some typed_exp -> Some (copy_type typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
   | None           -> None
 
 let lookup_type_env lookup_exp_typed expr =

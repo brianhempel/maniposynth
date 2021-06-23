@@ -92,6 +92,8 @@ module Longident = struct
 end
 
 module Type = struct
+  type t = Types.type_expr
+
   let to_string typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.type_expr typ
   let from_string ?(env = Env.empty) str =
     begin
@@ -100,12 +102,36 @@ module Type = struct
       |> Typetexp.transl_simple_type env false
     end.ctyp_type
 
+  let copy (t : t) : t = t |> Serialize.to_string |> Serialize.of_string
+
+  (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
+  (* These all don't work. *)
+
+    (* Ctype.generic_instance (Ctype.correct_levels t) *)
+    (* Ctype.instance t *)
+    (* Ctype.instance ~partial:false t *)
+    (* Ctype.instance ~partial:true t *)
+    (* let t' = Ctype.correct_levels t in
+    Ctype.generalize t';
+    t' *)
+  (* let is_more_general more_general target =
+    Ctype.moregeneral Env.empty true more_general target *)
+
   (* May only need type env in case of GADTs, which we don't care about. *)
   let does_unify t1 t2 =
+    (* Ctype.matches Env.empty t1 t2 *)
+    (* is_more_general t1 t2 *)
     try
-      Ctype.unify Env.empty (Ctype.instance t1) (Ctype.instance t2);
+      (* Ctype.unify Env.empty (Ctype.generic_instance t1) (Ctype.generic_instance t2); *)
+      Ctype.unify Env.empty (copy t1) (copy t2);
       true
-    with _ -> false
+    with
+    (* | Typetexp.Error (_loc, type_env, err) ->
+      Typetexp.report_error type_env Format.std_formatter err;
+      false *)
+    | _ ->
+      (* print_endline @@ to_string t1 ^ " !~ " ^ to_string t2; *)
+      false
 
   (* Stops flattening if a labeled argument is encountered. *)
   (* e.g. 'a -> 'b -> 'c to ['a, 'b, 'c] *)

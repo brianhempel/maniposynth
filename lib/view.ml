@@ -63,7 +63,10 @@ let rec apply_visualizers visualizers env (value : Data.value) =
     |>@@ begin fun { typ; exp } ->
       match value.type_opt with
       | Some vtype ->
-        if Type.does_unify typ vtype then
+        (* print_endline @@ "1 " ^ Type.to_string typ; *)
+        (* if (let r = Type.does_unify typ vtype in print_endline @@ "2 " ^ Type.to_string vtype; r) then begin *)
+        if Type.does_unify typ vtype then begin
+          (* print_endline @@ "3 " ^ Type.to_string typ ^ " ~ " ^ Type.to_string vtype; *)
           let exp_to_run =
             Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") teeeeeeeeeeeeeeemp with _ -> (??)"
           in
@@ -71,7 +74,7 @@ let rec apply_visualizers visualizers env (value : Data.value) =
           let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
           let result_value = Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run in
           [result_value]
-        else
+        end else
           []
       | None -> []
     end
