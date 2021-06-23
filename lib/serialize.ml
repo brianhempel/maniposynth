@@ -1,7 +1,11 @@
 
 
 let to_string a =
-  Marshal.to_string a [Closures]
+  begin try Marshal.to_string a [Closures]
+  with Invalid_argument msg ->
+    print_endline @@ "Serialization failure: " ^ msg;
+    ""
+  end
   |> Base64.(encode_exn ~alphabet:uri_safe_alphabet)
   (* Marshal.to_bytes a [Closures]
   |> LZ4.Bytes.compress

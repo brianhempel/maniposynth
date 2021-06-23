@@ -93,7 +93,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
       match (value.type_opt, Type.flatten_arrows value_desc.Types.val_type) with
       | (Some val_type, [arg_type; _]) ->
         begin try
-          if Type.does_unify val_type arg_type && Type.to_string arg_type <> "'a" (* ignore trivial functions *)
+          if Type.does_unify val_type arg_type (* && Type.to_string arg_type <> "'a" (* ignore trivial functions *) *)
           then Vis.to_string { typ = arg_type; exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
           else out
         with _exn ->
