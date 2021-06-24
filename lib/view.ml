@@ -93,30 +93,9 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
-    (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the runtime type of the value, and 'a is non-trivial. *)
-    let f _name path value_desc out =
-      (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
-      (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *)
-      match (value.type_opt, Type.flatten_arrows value_desc.Types.val_type) with
-      | (Some val_type, [arg_type; _]) ->
-        begin try
-          if Type.does_unify val_type arg_type (* && Type.to_string arg_type <> "'a" (* ignore trivial functions *) *)
-          then Vis.to_string { exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
-          else out
-        with _exn ->
-          (* Parse.expression fails to parse certain operators like Stdlib.~- *)
-          out
-          (* begin match Location.error_of_exn exn with
-          | Some (`Ok err) -> print_endline (Path.name path); Location.report_error Format.std_formatter err; out
-          | _              -> out
-          end *)
-        end
-      | _ -> out in
-    let modules = [None; Some (Longident.parse "Stdlib.List")] in
-    modules
-    |>@@ fun module_lid_opt -> Env.fold_values f module_lid_opt type_env []
-    (* |>@@ begin fun (fname, (_, value_or_lvar)) -> match value_or_lvar with Value v -> [(fname, v)] | _ -> [] end *)
-    (* |>@ begin fun (fname, fval) -> fval.type_opt |>& Type.to_string |>& (^) (fname ^ " : ") ||& "" |> print_endline end *) in
+    match value.type_opt with
+    | Some val_typ -> Vis.possible_vises_for_type val_typ type_env |>@ Vis.to_string
+    | None -> [] in
   let perhaps_type_attr = match value.type_opt with Some typ -> [("data-type", Ast.Type.to_string typ)] | _ -> [] in
   let wrap_value str =
     span
