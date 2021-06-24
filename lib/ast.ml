@@ -102,6 +102,13 @@ module Type = struct
       |> Typetexp.transl_simple_type env false
     end.ctyp_type
 
+  let of_exp ?(type_env = Env.empty) exp = (Typecore.type_exp type_env exp).exp_type
+  let of_exp_opt ?(type_env = Env.empty) exp =
+    try Some (of_exp ~type_env exp)
+    with Typetexp.Error (_loc, type_env, err) ->
+      Typetexp.report_error type_env Format.std_formatter err;
+      None
+
   let copy (t : t) : t = t |> Serialize.to_string |> Serialize.of_string
 
   (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)

@@ -56,17 +56,21 @@ let html_box ?(attrs = []) label content =
     ; tr [td ~attrs:[("class", "values")] [content]]
     ]
 
-let rec apply_visualizers visualizers env (value : Data.value) =
+let rec apply_visualizers visualizers env type_env (value : Data.value) =
   if visualizers = [] then "" else
   let result_htmls =
     visualizers
-    |>@@ begin fun { typ; exp } ->
+    |>@@ begin fun { exp } ->
       match value.type_opt with
       | Some vtype ->
         (* print_endline @@ "1 " ^ Type.to_string typ; *)
         (* if (let r = Type.does_unify typ vtype in print_endline @@ "2 " ^ Type.to_string vtype; r) then begin *)
-        if Type.does_unify typ vtype then begin
-          (* print_endline @@ "3 " ^ Type.to_string typ ^ " ~ " ^ Type.to_string vtype; *)
+        let vis_type = Type.of_exp ~type_env exp in
+        (* Does the first argument of the vis function unify with the runtime value's type? *)
+        let vis_type_parts = Type.flatten_arrows vis_type in
+        (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
+        if List.length vis_type_parts = 2 && Type.does_unify (List.hd vis_type_parts) vtype then begin
+          (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
           let exp_to_run =
             Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") teeeeeeeeeeeeeeemp with _ -> (??)"
           in
@@ -97,7 +101,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
       | (Some val_type, [arg_type; _]) ->
         begin try
           if Type.does_unify val_type arg_type (* && Type.to_string arg_type <> "'a" (* ignore trivial functions *) *)
-          then Vis.to_string { typ = arg_type; exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
+          then Vis.to_string { exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
           else out
         with _exn ->
           (* Parse.expression fails to parse certain operators like Stdlib.~- *)
@@ -124,7 +128,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
       )
       [str] in
   wrap_value @@
-  apply_visualizers visualizers env value ^
+  apply_visualizers visualizers env type_env value ^
   match value_ with
   | Bomb                                     -> "💣"
   | Int int                                  -> string_of_int int
@@ -166,7 +170,7 @@ let html_of_values_for_loc trace type_env visualizers loc =
 let html_box_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
   let type_env =
     lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
-  let visualizers = Vis.all_from_attrs type_env exp.pexp_attributes in
+  let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   html_box
     ~attrs:[ ("data-loc", Serialize.string_of_loc exp.pexp_loc) ]
     (string_of_exp exp)
