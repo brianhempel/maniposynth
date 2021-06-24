@@ -33,6 +33,8 @@ let all_from_attrs (attrs : attribute list) =
     | _ -> []
   end
 
+let exclude_from_suggestions = ["Stdlib.__POS_OF__"; "Stdlib.__LOC_OF__"; "Stdlib.__LINE_OF__"]
+
 (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the type given. *)
 let possible_vises_for_type typ type_env =
   let f _name path value_desc out =
@@ -40,7 +42,7 @@ let possible_vises_for_type typ type_env =
     match Type.flatten_arrows value_desc.Types.val_type with
     | [arg_type; _] ->
       begin try
-        if Type.does_unify typ arg_type
+        if Type.does_unify typ arg_type && not (List.mem (Path.name path) exclude_from_suggestions)
         then { exp = Exp.from_string @@ String.drop_prefix "Stdlib." (Path.name path) } :: out
         else out
       with _exn ->
