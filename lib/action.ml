@@ -4,9 +4,9 @@
 *)
 
 open Parsetree
-open Ast
 open Camlboot_interpreter.Data
-open Util
+open Shared.Ast
+open Shared.Util
 
 type t =
   | DropValueBeforeVb of string * string (* vb id str, value str *)
@@ -100,7 +100,7 @@ let move_vb_before_vb before_vb_loc vb_loc old =
   1. Search the value trace for locations where the value is bound to a name.
   2. See if any of those bindings can be moved up/down to the location indicated by the user.
 *)
-let move_value_before_vb vb_loc { vtrace; _ } old : Ast.program list =
+let move_value_before_vb vb_loc { vtrace; _ } old : Shared.Ast.program list =
   (* 1. Search the value trace for locations where the value is let-bound to a name. *)
   let all_vbs = Vb.all old in
   vtrace
@@ -176,7 +176,7 @@ let remove_vis_from_loc loc vis_str old =
     { exp with pexp_attributes = Vis.remove_vis_str_from_attrs vis_str exp.pexp_attributes }
   end
 
-let f : t -> Ast.program -> Ast.program = function
+let f : t -> Shared.Ast.program -> Shared.Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
     let value = Serialize.value_of_string value_str in

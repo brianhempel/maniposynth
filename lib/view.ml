@@ -1,7 +1,7 @@
 open Camlboot_interpreter
-open Ast
 open Vis
-open Util
+open Shared.Ast
+open Shared.Util
 
 let sprintf = Printf.sprintf
 
@@ -40,7 +40,7 @@ let box   ?(attrs = []) klass inners =
   let attrs = ("class", ("box " ^ klass))::attrs in
   div ~attrs inners
 
-let string_of_pat = Formatter_to_stringifier.f Pprintast.pattern
+let string_of_pat = Shared.Formatter_to_stringifier.f Pprintast.pattern
 let string_of_exp = Pprintast.string_of_expression
 let string_of_arg_label =
   let open Asttypes in function
@@ -56,7 +56,200 @@ let html_box ?(attrs = []) label content =
     ; tr [td ~attrs:[("class", "values")] [content]]
     ]
 
-let rec apply_visualizers visualizers env type_env (value : Data.value) =
+exception Not_equal
+
+let rec seen_before a b = function
+  | []             -> false
+  | (x, y) :: rest -> (a == x && b == y) || seen_before a b rest
+
+(* Based on Camlboot_interpreter.Data.value_compare *)
+(* May be called on arguments of incompatible type *)
+(* Needs to be able to compare closures *)
+(* Turn on "loose" for comparing closure environments. There are certain values captured in environments that we don't elsewhere support, so those are compared loosely. *)
+(* The graph can have cycles, so keep track of the items compared down the callstack *)
+let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) ?(loose = false) Data.{ v_ = v_1; _ } Data.{ v_ = v_2; _ } =
+  v_1 == v_2 || seen_before v_1 v_2 seen_v_s || (* Cycle. They're equal as far as this branch of execution is concerned. *)
+  let seen_v_s = (v_1, v_2)::seen_v_s in
+  let recurse = values_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods in
+  let open Data in
+  match v_1, v_2 with
+  | Bomb, Bomb -> loose
+  | Bomb, _ -> false
+  | _, Bomb -> false
+
+  | Fun (arg_label1, exp_opt1, pat1, exp1, env_ref1)
+  , Fun (arg_label2, exp_opt2, pat2, exp2, env_ref2) ->
+    arg_label1 = arg_label2 && exp_opt1 = exp_opt2 && pat1 = pat2 && exp1 = exp2 && envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods !env_ref1 !env_ref2
+  | Fun _, _ -> false
+
+  | Function (cases1, env_ref1)
+  , Function (cases2, env_ref2) ->
+    cases1 = cases2 && envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods !env_ref1 !env_ref2
+  | Function _, _ -> false
+
+  | ModVal mod1
+  , ModVal mod2 -> mods_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods mod1 mod2
+  | ModVal _, _ -> false
+
+  | Lz _, Lz _ -> loose
+  | Lz _, _ -> false
+
+  | Fun_with_extra_args (v1, vs1, named_args1)
+  , Fun_with_extra_args (v2, vs2, named_args2) ->
+    (* These are only produced during the application of functions with labeled arguments *)
+    SMap.cardinal named_args1 = SMap.cardinal named_args2 &&
+    List.for_all2 recurse (v1::vs1) (v2::vs2) &&
+    List.for_all2
+      (fun (name1, (label1, v1)) (name2, (label2, v2)) -> name1 = name2 && label1 = label2 && recurse v1 v2)
+      (SMap.bindings named_args1)
+      (SMap.bindings named_args2)
+  | Fun_with_extra_args _, _ -> false
+
+  | Fexpr _, Fexpr _ -> loose (* there's only a few of these *)
+  | Fexpr _, _ -> false
+
+  | Prim _, Prim _ -> loose
+  | Prim _, _ -> false
+
+  | InChannel chan1, InChannel chan2 -> chan1 = chan2
+  | InChannel _, _ -> false
+
+  | OutChannel chan1, OutChannel chan2 -> chan1 = chan2
+  | OutChannel _, _ -> false
+
+  (* Woefully incomplete, but we don't support objects so it doesn't matter. *)
+  | Object obj1, Object obj2 -> obj1.self = obj2.self && envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods obj1.env obj2.env
+  | Object _, _ -> false
+
+  | Int n1, Int n2 -> n1 = n2
+  | Int _, _ -> false
+
+  | Int32 n1, Int32 n2 -> n1 = n2
+  | Int32 _, _ -> false
+
+  | Int64 n1, Int64 n2 -> n1 = n2
+  | Int64 _, _ -> false
+
+  | Nativeint n1, Nativeint n2 -> n1 = n2
+  | Nativeint _, _ -> false
+
+  | Float f1, Float f2 -> f1 = f2 || f1 == f2 (* nan :D *)
+  | Float _, _ -> false
+
+  | String s1, String s2 -> s1 = s2
+  | String _, _ -> false
+
+  | Constructor (c1, d1, None),    Constructor (c2, d2, None)    -> (c1, d1) = (c2, d2)
+  | Constructor (c1, d1, Some v1), Constructor (c2, d2, Some v2) -> (c1, d1) = (c2, d2) && recurse v1 v2
+  | Constructor _, _ -> false
+
+  | Tuple l1, Tuple l2 ->
+    List.length l1 = List.length l2 && List.for_all2 recurse l1 l2
+  | Tuple _, _ -> false
+
+  | Record r1, Record r2 ->
+    SMap.cardinal r1 = SMap.cardinal r2 &&
+    SMap.for_all begin fun label vref1 ->
+      match SMap.find_opt label r2 with
+      | Some vref2 -> recurse !vref1 !vref2
+      | None       -> false
+    end r1
+  | Record _, _ -> false
+
+  | Array a1, Array a2 ->
+    Array.length a1 = Array.length a2 &&
+    begin
+      let i      = ref 0 in
+      let result = ref true in
+      while !result && !i < Array.length a1 do
+        result := recurse a1.(!i) a2.(!i);
+        incr i
+      done;
+      !result
+    end
+  | Array _, _ -> false
+
+and envs_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) env1 env2 =
+  env1 == env2 || seen_before env1 env2 seen_envs || (* Cycle. They're equal as far as this branch of execution is concerned. *)
+  let seen_envs = (env1, env2)::seen_envs in
+  let open Data in
+  try
+    ignore @@ SMap.merge begin fun _name v1_opt v2_opt ->
+      match v1_opt, v2_opt with
+      | None, None -> None
+      | Some (_, Value v1), Some (_, Value v2) ->
+        ignore (values_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods ~loose:true v1 v2 || raise Not_equal); None
+      | Some (_, Instance_variable _), Some (_, Instance_variable _) ->
+        None (* ignore instance variables *)
+      | _ -> raise Not_equal
+    end env1.values env2.values;
+    ignore @@ SMap.merge begin fun _name mod1_opt mod2_opt ->
+      match mod1_opt, mod2_opt with
+      | None, None -> None
+      | Some (_, mod1), Some (_, mod2) ->
+        ignore (mods_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods mod1 mod2 || raise Not_equal); None
+      | _ -> raise Not_equal
+    end env1.modules env2.modules;
+    ignore @@ SMap.merge begin fun _name ctor_opt1 ctor_opt2 ->
+      match ctor_opt1, ctor_opt2 with
+      | None, None -> None
+      | Some (_, int1), Some (_, int2) ->
+        ignore (int1 = int2 || raise Not_equal); None
+      | _ -> raise Not_equal
+    end env1.constructors env2.constructors;
+    (* Ignore classes *)
+    (* Ignore current_object *)
+    true
+  with Not_equal -> false
+
+and mods_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) mod1 mod2 =
+  mod1 == mod2 || seen_before mod1 mod2 seen_mods || (* Cycle. They're equal as far as this branch of execution is concerned. *)
+  let seen_mods = (mod1, mod2)::seen_mods in
+  let open Data in
+  match mod1, mod2 with
+  | Unit (_, { contents = Initialized mod_val1 })
+  , Unit (_, { contents = Initialized mod_val2 })
+  | Unit (_, { contents = Initialized mod_val1 })
+  , Module mod_val2
+  | Module mod_val1
+  , Unit (_, { contents = Initialized mod_val2 })
+  | Module mod_val1
+  , Module mod_val2 ->
+    begin try
+      ignore @@ SMap.merge begin fun _name v1_opt v2_opt ->
+        match v1_opt, v2_opt with
+        | None, None -> None
+        | Some v1, Some v2 ->
+          ignore (values_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods ~loose:true v1 v2 || raise Not_equal); None
+        | _ -> raise Not_equal
+      end mod_val1.mod_values mod_val2.mod_values;
+      ignore @@ SMap.merge begin fun _name mod1_opt mod2_opt ->
+        match mod1_opt, mod2_opt with
+        | None, None -> None
+        | Some mod1, Some mod2 ->
+          ignore (mods_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods mod1 mod2 || raise Not_equal); None
+        | _ -> raise Not_equal
+      end mod_val1.mod_modules mod_val2.mod_modules;
+      SMap.bindings mod_val1.mod_constructors = SMap.bindings mod_val2.mod_constructors
+      (* Ignore classes *)
+    with Not_equal -> false end
+
+  | Unit (_, { contents = Not_initialized_yet })
+  , Unit (_, { contents = Not_initialized_yet }) ->
+    true
+
+  | Functor (name1, mod_exp1, env1)
+  , Functor (name2, mod_exp2, env2) ->
+    name1    = name2    &&
+    mod_exp1 = mod_exp2 &&
+    envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods env1 env2
+
+  | _ ->
+    false
+
+
+
+let rec apply_visualizers assert_results visualizers env type_env (value : Data.value) =
   if visualizers = [] then "" else
   let result_htmls =
     visualizers
@@ -71,32 +264,69 @@ let rec apply_visualizers visualizers env type_env (value : Data.value) =
         (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
         if List.length vis_type_parts = 2 && Type.does_unify (List.hd vis_type_parts) vtype then begin
           (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
+          let (fval, _) =
+            Eval.with_gather_asserts begin fun () ->
+              let exp_to_run = Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") with _ -> (??)" in
+              Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+            end in
+          let matching_asserts =
+            assert_results
+            |>@? begin fun Data.{ f; arg; _ } ->
+              (* print_endline @@ string_of_bool @@ values_equal_for_assert value arg; *)
+              (* Data.pp_print_value Format.std_formatter fval; *)
+              (* Data.pp_print_value Format.std_formatter f; *)
+              (* Format.pp_print_bool Format.std_formatter (values_equal_for_assert fval f); *)
+              (* Format.pp_print_bool Format.std_formatter (values_equal_for_assert value arg); *)
+              (* Format.pp_force_newline Format.std_formatter (); *)
+              (* print_endline @@ string_of_bool @@ values_equal_for_assert fval f; *)
+              values_equal_for_assert value arg && values_equal_for_assert fval f
+            end in
+          (* print_endline @@ string_of_int (List.length assert_results); *)
+          let all_passed = List.for_all (fun Data.{ passed; _ } -> passed) matching_asserts in
+          let any_failures = List.exists (fun Data.{ passed; _ } -> not passed) matching_asserts in
+          (* START HERE *)
           let exp_to_run =
-            Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") teeeeeeeeeeeeeeemp with _ -> (??)"
-          in
-          (* let exp_to_run = Exp.apply exp [(Nolabel, Exp.var "teeeeeeeeeeeeeeemp")] in *)
+            Exp.from_string @@ "try teeeeeeeeeeeeeeempf teeeeeeeeeeeeeeemp with _ -> (??)" in
+          let env = Envir.env_set_value "teeeeeeeeeeeeeeempf" fval env in
           let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
-          let result_value = Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run in
-          [result_value]
+          let (result_value, _) =
+            Eval.with_gather_asserts begin fun () ->
+              Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+            end in
+          let wrap html =
+            if any_failures then
+              span ~attrs:[("class", "failing")] [html]
+            else if all_passed && matching_asserts <> [] then
+              span ~attrs:[("class", "passing")] [html]
+            else
+              html in
+          let assert_results =
+            if all_passed then [] else
+            matching_asserts
+            |>@ begin fun Data.{ expected; _} ->
+              html_of_value [] [] Envir.empty_env Env.empty expected
+            end in
+          [ span ~attrs:[("class", "derived-vis-value")] @@
+              assert_results @
+              [wrap @@ html_of_value [] [] Envir.empty_env Env.empty result_value]
+          ]
         end else
           []
       | None -> []
     end
-    |>@ html_of_value [] Envir.empty_env Env.empty
   in
-  span ~attrs:[("class", "derived-vis-values")]
-    (result_htmls |>@ begin fun result_html -> span ~attrs:[("class", "derived-vis-value")] [result_html] end)
+  span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
-  let recurse = html_of_value visualizers env type_env in
+and html_of_value assert_results visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
+  let recurse = html_of_value assert_results visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
     match value.type_opt with
     | Some val_typ -> Vis.possible_vises_for_type val_typ type_env |>@ Vis.to_string
     | None -> [] in
-  let perhaps_type_attr = match value.type_opt with Some typ -> [("data-type", Ast.Type.to_string typ)] | _ -> [] in
+  let perhaps_type_attr = match value.type_opt with Some typ -> [("data-type", Shared.Ast.Type.to_string typ)] | _ -> [] in
   let wrap_value str =
     span
       ~attrs:(
@@ -107,7 +337,7 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
       )
       [str] in
   wrap_value @@
-  apply_visualizers visualizers env type_env value ^
+  apply_visualizers assert_results visualizers env type_env value ^
   match value_ with
   | Bomb                                     -> "💣"
   | Int int                                  -> string_of_int int
@@ -133,10 +363,10 @@ and html_of_value visualizers env type_env ({ v_ = value_; _} as value : Data.va
   | Object _                                 -> "object"
 
 
-let html_of_values_for_loc trace type_env visualizers loc =
+let html_of_values_for_loc trace assert_results type_env visualizers loc =
   trace
   |> Trace.entries_for_loc loc
-  |> List.map begin fun (_, _, value, env) -> html_of_value visualizers env type_env value end
+  |> List.map begin fun (_, _, value, env) -> html_of_value assert_results visualizers env type_env value end
   |> String.concat "\n"
 
 
@@ -146,17 +376,17 @@ let html_of_values_for_loc trace type_env visualizers loc =
     "" *)
 
 
-let html_box_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
+let html_box_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   let type_env =
     lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   html_box
     ~attrs:[ ("data-loc", Serialize.string_of_loc exp.pexp_loc) ]
     (string_of_exp exp)
-    (html_of_values_for_loc trace type_env visualizers exp.pexp_loc)
+    (html_of_values_for_loc trace assert_results type_env visualizers exp.pexp_loc)
 
 
-let rec fun_rows trace lookup_exp_typed (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
+let rec fun_rows trace assert_results lookup_exp_typed (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
   let default_exp_str =
     match param_exp_opt with
     | None             -> ""
@@ -164,14 +394,14 @@ let rec fun_rows trace lookup_exp_typed (param_label : Asttypes.arg_label) param
   in
   ( tr
     [ td [string_of_arg_label param_label ^ string_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-    ; td [html_of_values_for_loc trace Env.empty [] param_pat.ppat_loc]
+    ; td [html_of_values_for_loc trace assert_results Env.empty [] param_pat.ppat_loc]
     ]
-  ) :: rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed body_exp
+  ) :: rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed body_exp
 
-and rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
+and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   let single_exp () =
     [ tr [td ~attrs:[("colspan", "2")] [""]]
-    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace lookup_exp_typed exp]]
+    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace assert_results lookup_exp_typed exp]]
     ]
   in
   let unhandled node_kind_str =
@@ -189,15 +419,15 @@ and rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed (exp : Parsetree.expres
   | Pexp_fun ( param_label
              , param_exp_opt
              , param_pat
-             , body_exp)      -> fun_rows trace lookup_exp_typed param_label param_exp_opt param_pat body_exp
+             , body_exp)      -> fun_rows trace assert_results lookup_exp_typed param_label param_exp_opt param_pat body_exp
   | Pexp_match (_, _)         -> unhandled "match"
   | Pexp_ifthenelse (_, _, _) -> unhandled "if then else"
   | _                         -> single_exp ()
 
-let html_ensure_vbs_canvas_of_exp trace lookup_exp_typed (exp : Parsetree.expression) =
-  table (rows_ensure_vbs_canvas_of_exp trace lookup_exp_typed exp)
+let html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+  table (rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp)
 
-let htmls_of_top_level_value_binding trace lookup_exp_typed (vb : Parsetree.value_binding) =
+let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb : Parsetree.value_binding) =
   let drop_target_before_vb (vb : Parsetree.value_binding) =
     div ~attrs:
       [ ("data-before-vb-id", Serialize.string_of_loc vb.pvb_loc)
@@ -207,14 +437,14 @@ let htmls_of_top_level_value_binding trace lookup_exp_typed (vb : Parsetree.valu
   [ drop_target_before_vb vb
   ; box "value_binding"
       @@ [ string_of_pat vb.pvb_pat ^ " =" ]
-      @  [ html_ensure_vbs_canvas_of_exp trace lookup_exp_typed vb.pvb_expr ]
+      @  [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
   ]
 
-let html_of_structure_item trace lookup_exp_typed (item : Parsetree.structure_item) =
+let html_of_structure_item trace assert_results lookup_exp_typed (item : Parsetree.structure_item) =
   let open Parsetree in
   match item.pstr_desc with
   | Pstr_eval (_, _)            -> failwith "can't handle Pstr_eval"
-  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace lookup_exp_typed) vbs)
+  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace assert_results lookup_exp_typed) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
   | Pstr_typext _               -> failwith "can't handle Pstr_typext"
@@ -230,7 +460,7 @@ let html_of_structure_item trace lookup_exp_typed (item : Parsetree.structure_it
   | Pstr_extension (_, _)       -> failwith "can't handle Pstr_extension"
 
 
-let html_str (structure_items : Parsetree.structure) (trace : Trace.t) lookup_exp_typed =
+let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_results : Data.assert_result list) lookup_exp_typed =
   html
     [ head
         [ title "Maniposynth"
@@ -241,6 +471,6 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) lookup_ex
         ]
     ; body begin
         [ div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []] ]
-        @ List.map (html_of_structure_item trace lookup_exp_typed) structure_items
+        @ List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
       end
     ]

@@ -1,5 +1,5 @@
-open Ast
-open Util
+open Shared.Ast
+open Shared.Util
 
 
 module LocMap = struct

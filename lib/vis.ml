@@ -1,6 +1,6 @@
 open Parsetree
-open Ast
-open Util
+open Shared.Ast
+open Shared.Util
 
 type visualizer =
 { exp : Parsetree.expression

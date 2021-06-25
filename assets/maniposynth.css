@@ -63,6 +63,14 @@ td {
   padding: 1px;
 }
 
+.failing {
+  background-color: pink;
+}
+
+.passing {
+  background-color: cyan;
+}
+
 #inspector {
   border: solid 1px black;
   position: fixed;

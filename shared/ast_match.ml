@@ -4,6 +4,39 @@ module SMap = Map.Make(String)
 
 exception Match_fail
 
+
+
+(* let main () =
+  let matcher_str = "
+     let[@vb1] y = e1 in
+    (let[@vb2] x = e in e2)[@body1]" in
+  let subbed_str = "
+    (let[@vb2] x = e in
+    (let[@vb1] y = e1 in e2)[@root])[@body1]" in
+  let parsed = Camlboot_interpreter.Interp.parse "matchee" in
+  (* Printast.structure 0 Format.std_formatter parsed; *)
+  (* print_endline @@ Pprintast.string_of_structure parsed; *)
+  let e' = Parse.expression (Lexing.from_string subbed_str) in
+  let rewrite match_ =
+
+    fill_subbed e' match_
+  in
+  rewrites matcher_str rewrite parsed
+  |> Pprintast.string_of_structure |> print_endline
+  (* all_matches matcher_str parsed
+  |> List.iter (fun match_ ->
+    parsed
+    |> subst_exp match_ "root" e'
+  ) *)
+;;
+
+main () *)
+
+
+(* Vars in the match pattern exp are bound to whatever pattern/expression in the search exp. *)
+(* To bind a value binding/struct item/other expression, add an attribute with the binding name e.g. let[@my_vb] x = e in *)
+(* To match a literal variable name, use [%VAR x] *)
+
 type t =
   { exps         : expression     SMap.t
   ; pats         : pattern        SMap.t
@@ -57,13 +90,15 @@ let rec match_exp_ mexp exp =
   add_exp "root" exp @@
   name_self add_exp exp mexp.pexp_attributes @@
   match mexp.pexp_desc with
+  | Pexp_ident {txt = Lident name; _}             -> add_exp name exp empty_match
+  | Pexp_ident {txt = _; _}                       -> failwith "if you want to match a literal var name, use [%VAR x]"
+  | Pexp_extension ({txt = "VAR"; _}, PStr [{ pstr_desc = Pstr_eval ({ pexp_desc = Pexp_ident { txt = mlid; _ }; _}, _); _}]) -> (* Match [@VAR mlid] *)
+    (match exp.pexp_desc with Pexp_ident {txt = lid; _} when mlid  = lid -> empty_match | _ -> raise Match_fail)
   (* | Pexp_extension ({txt = name; _}, PStr [])     -> add_exp name exp empty_match *)
   (* | Pexp_extension ({txt = _; _}, _)              -> failwith "Why does your matcher pattern have a Pexp_extension with a payload?" *)
-  | Pexp_extension ({txt = _; _}, _)              -> failwith "Matcher's aren't using Pexp_extension right now"
+  | Pexp_extension ({txt = _; _}, _)              -> failwith "The only Pexp_extension allowed in expression position in matchers is [%VAR x]"
   (* | Pexp_extension ({txt = _; _}, _)              -> failwith "Why does your matcher pattern have a Pexp_extension with a payload?" *)
   (* | Pexp_ident {txt = mlid; _}                    -> (match exp.pexp_desc with Pexp_ident {txt = lid; _} when mlid   = lid   -> empty_match | _ -> raise Match_fail) *)
-  | Pexp_ident {txt = Lident name; _}             -> add_exp name exp empty_match
-  | Pexp_ident {txt = _; _}                       -> failwith "if you want to match a literal var, well, you can't yet"
   | Pexp_constant mconst                          -> (match exp.pexp_desc with Pexp_constant const       when mconst = const -> empty_match | _ -> raise Match_fail)
   | Pexp_let (mrec_flag, mvbs, me)                ->
     begin match exp.pexp_desc with
@@ -249,28 +284,3 @@ let rewrites matcher_str f struct_items =
   mapper.structure mapper struct_items
 
 
-(* let main () =
-  let matcher_str = "
-     let[@vb1] y = e1 in
-    (let[@vb2] x = e in e2)[@body1]" in
-  let subbed_str = "
-    (let[@vb2] x = e in
-    (let[@vb1] y = e1 in e2)[@root])[@body1]" in
-  let parsed = Camlboot_interpreter.Interp.parse "matchee" in
-  (* Printast.structure 0 Format.std_formatter parsed; *)
-  (* print_endline @@ Pprintast.string_of_structure parsed; *)
-  let e' = Parse.expression (Lexing.from_string subbed_str) in
-  let rewrite match_ =
-
-    fill_subbed e' match_
-  in
-  rewrites matcher_str rewrite parsed
-  |> Pprintast.string_of_structure |> print_endline
-  (* all_matches matcher_str parsed
-  |> List.iter (fun match_ ->
-    parsed
-    |> subst_exp match_ "root" e'
-  ) *)
-;;
-
-main () *)

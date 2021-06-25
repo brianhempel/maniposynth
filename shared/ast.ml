@@ -109,7 +109,7 @@ module Type = struct
       Typetexp.report_error type_env Format.std_formatter err;
       None
 
-  let copy (t : t) : t = Marshal.from_string (Marshal.to_string t [Closures]) 0
+  let copy (t : t) : t = Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
 
   (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
   (* These all don't work. *)

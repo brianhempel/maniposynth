@@ -165,6 +165,15 @@ and expr_in_object = {
 
 exception InternalException of value
 
+(* We only remember asserts of form "assert (f x = y)" *)
+type assert_result =
+  { f        : value
+  ; arg      : value
+  ; expected : value
+  ; actual   : value
+  ; passed   : bool
+  }
+
 let new_vtrace v_ = { v_ = v_; vtrace = []; type_opt = None }
 let add_type_opt type_opt v = { v with type_opt = type_opt }
 
@@ -184,8 +193,9 @@ let rec pp_print_value ff { v_; _ } =
   | Int64 n -> Format.fprintf ff "%LdL" n
   | Nativeint n -> Format.fprintf ff "%ndn" n
   | Fexpr _ -> Format.fprintf ff "<fexpr>"
-  | Fun _ | Function _ | Prim _ | Lz _ | Fun_with_extra_args _ ->
-    Format.fprintf ff "<function>"
+  | Fun _ -> Format.fprintf ff "<fun>"
+  | Function _ -> Format.fprintf ff "<function>"
+  | Prim _ | Lz _ | Fun_with_extra_args _ -> Format.fprintf ff "<function_other>"
   | String s -> Format.fprintf ff "%S" (Bytes.to_string s)
   | Float f -> Format.fprintf ff "%f" f
   | Tuple l ->

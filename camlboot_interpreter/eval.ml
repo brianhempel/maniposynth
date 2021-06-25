@@ -7,6 +7,27 @@ open Envir
 
 exception Match_fail
 
+type asserts_mode =
+  | Throw_exception
+  | Gather of assert_result list ref
+
+let asserts_mode = ref Throw_exception
+
+(* Use Gather mode when you want to gather the assert results OR you don't want failed asserts to crash execution. *)
+let with_gather_asserts f =
+  let old_mode = !asserts_mode in
+  let assert_results = ref [] in
+  asserts_mode := Gather assert_results;
+  let out = f () in
+  asserts_mode := old_mode;
+  (out, !assert_results)
+
+let add_assert_result assert_result assert_results =
+  assert_results := assert_result :: !assert_results
+
+let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] (f x) y"
+
+
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
   let map f = function Some x -> Some (f x) | None -> None
@@ -50,14 +71,9 @@ let rec take n li = match n, li with
     | _, [] -> invalid_arg "List.take"
     | n, x::xs -> x :: take (n - 1) xs
 
-let copy_type (t : Types.type_expr) : Types.type_expr =
-  Marshal.from_string (Marshal.to_string t [Closures]) 0
-  (* t |> Serialize.to_string |> Serialize.of_string *)
-  (* Ctype.correct_levels (Ctype.instance t) *)
-
 let lookup_type_opt lookup_exp_typed expr =
   match lookup_exp_typed expr with
-  | Some typed_exp -> Some (copy_type typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
+  | Some typed_exp -> Some (Shared.Ast.Type.copy typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
   | None           -> None
 
 let lookup_type_env lookup_exp_typed expr =
@@ -223,6 +239,13 @@ let rec apply prims lookup_exp_typed trace_state (vf : value) args =
     in
     apply_loop vf)
 
+and handle_fexpr_apply prims env lookup_exp_typed trace_state frame_no loc fexpr l =
+  match fexpr loc l with
+  | None ->
+    Format.eprintf "%a@.F-expr failure.@." Location.print_loc loc;
+    assert false
+  | Some expr -> eval_expr prims env lookup_exp_typed trace_state frame_no expr
+
 and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
   let attach_trace value =
     let trace_entry = (expr.pexp_loc, frame_no, value, env) in
@@ -233,9 +256,10 @@ and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
   let use                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Use)                           :: v.vtrace } in
   let ret                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Ret)                           :: v.vtrace } in
   let pat_match root_val val_path v = { v with vtrace = ((frame_no, expr.pexp_loc), PatMatch (root_val, val_path)) :: v.vtrace } in
+  let intro_bomb () = intro @@ new_vtrace @@ Bomb in
   attach_trace @@
   match expr.pexp_desc with
-  | Pexp_ident { txt = Longident.Lident "??"; _ } -> intro @@ new_vtrace @@ Bomb
+  | Pexp_ident { txt = Longident.Lident "??"; _ } -> intro_bomb ()
   | Pexp_ident id -> use @@
      begin try match env_get_value_or_lvar env id with
        | Value v -> v
@@ -253,12 +277,7 @@ and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_apply (f, l) -> ret @@
     (match eval_expr prims env lookup_exp_typed trace_state frame_no f with
     | { v_ = Fexpr fexpr; _ } ->
-      let loc = expr.pexp_loc in
-      (match fexpr loc l with
-      | None ->
-        Format.eprintf "%a@.F-expr failure.@." Location.print_loc loc;
-        assert false
-      | Some expr -> eval_expr prims env lookup_exp_typed trace_state frame_no expr)
+      handle_fexpr_apply prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr l
     | func_value ->
       let args = List.map (fun (lab, e) -> (lab, eval_expr prims env lookup_exp_typed trace_state frame_no e)) l in
       if log_fun_calls
@@ -411,17 +430,52 @@ and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
     let m = eval_module_expr prims env lookup_exp_typed trace_state frame_no me in
     eval_expr prims (env_set_module name.txt m env) lookup_exp_typed trace_state frame_no e
   | Pexp_assert e ->
-    if is_true (eval_expr prims env lookup_exp_typed trace_state frame_no e)
-    then unit
-    else (
-      (*failwith "assert failure"*)
-      let loc = expr.pexp_loc in
-      let Lexing.{ pos_fname; pos_lnum; pos_cnum; _ } =
-        loc.Location.loc_start
-      in
-      raise
-        (InternalException
-           (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
+    begin match !asserts_mode with
+    | Throw_exception ->
+      if is_true (eval_expr prims env lookup_exp_typed trace_state frame_no e)
+      then unit
+      else (
+        (*failwith "assert failure"*)
+        let loc = expr.pexp_loc in
+        let Lexing.{ pos_fname; pos_lnum; pos_cnum; _ } =
+          loc.Location.loc_start
+        in
+        raise
+          (InternalException
+            (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
+    | Gather assert_results ->
+      let open Shared.Ast_match in
+      begin try
+        let match_       = match_exp_ f_x_equals_y_pattern e in
+        let fexp         = SMap.find "f" match_.exps in
+        let argexp       = SMap.find "x" match_.exps in
+        let expected_exp = SMap.find "y" match_.exps in
+        begin match eval_expr prims env lookup_exp_typed trace_state frame_no fexp with
+        | { v_ = Fexpr fexpr; _ } ->
+          handle_fexpr_apply prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr [(Nolabel, argexp)]
+        | fval ->
+          let argval = (try eval_expr prims env lookup_exp_typed trace_state frame_no argexp with _ -> intro_bomb ()) in
+          let actual = (try apply prims lookup_exp_typed trace_state fval [(Nolabel, argval)] with _ -> intro_bomb ()) in
+          let expected = (try eval_expr prims env lookup_exp_typed trace_state frame_no expected_exp with _ -> intro_bomb ()) in
+          let passed =
+            begin match (try Some (value_compare actual expected) with _ -> None) with
+            | Some 0 -> true
+            | _      -> false
+            end in
+          assert_results :=
+            { f        = fval
+            ; arg      = argval
+            ; expected = expected
+            ; actual   = actual
+            ; passed   = passed
+            } :: !assert_results;
+          unit
+        end
+      with Match_fail ->
+        print_endline "TODO: handle asserts that are not f x = y";
+        unit
+      end
+    end
   | Pexp_lazy e -> intro @@ new_vtrace @@ Lz (ref (fun () -> eval_expr prims env lookup_exp_typed trace_state frame_no e))
   | Pexp_poly (e, _ty) -> eval_expr prims env lookup_exp_typed trace_state frame_no e
   | Pexp_newtype (_, e) -> eval_expr prims env lookup_exp_typed trace_state frame_no e

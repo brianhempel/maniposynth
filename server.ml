@@ -54,8 +54,12 @@ let render_maniposynth out_chan url =
   let trace = Tracing.run_with_tracing path in
   let html_str = View.html_str callables trace bindings_skels in *)
   let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
-  let trace = Camlboot_interpreter.Interp.run_files lookup_exp_typed [path] in
-  let html_str = View.html_str parsed trace lookup_exp_typed in
+  let (trace, assert_results) =
+    Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
+      Camlboot_interpreter.Interp.run_files lookup_exp_typed [path]
+    end in
+  (* print_endline @@ string_of_int (List.length assert_results); *)
+  let html_str = View.html_str parsed trace assert_results lookup_exp_typed in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
@@ -120,7 +124,7 @@ let handle_connection in_chan out_chan =
         let parsed' = Action.f action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
         Out_channel.with_file path ~f:begin fun out ->
-          Formatter_to_stringifier.f Pprintast.structure parsed'
+          Shared.Formatter_to_stringifier.f Pprintast.structure parsed'
           |> Out_channel.output_string out
         end;
         respond ~content_type:"text/plain" out_chan "Done."

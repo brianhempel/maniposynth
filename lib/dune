@@ -1,5 +1,5 @@
 (library
  (name maniposynth_lib)
- (libraries compiler-libs.common core camlboot_interpreter base64 yojson)
+ (libraries compiler-libs.common core shared camlboot_interpreter base64 yojson)
  ; (preprocess (pps ppx_yojson_conv))
  )
