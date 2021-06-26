@@ -40,8 +40,17 @@ let box   ?(attrs = []) klass inners =
   let attrs = ("class", ("box " ^ klass))::attrs in
   div ~attrs inners
 
-let string_of_pat = Shared.Formatter_to_stringifier.f Pprintast.pattern
-let string_of_exp = Pprintast.string_of_expression
+let string_of_pat ?(editable = true) pat =
+  let code = Pat.to_string pat in
+  if editable
+  then span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc)] [code]
+  else code
+let string_of_exp ?(editable = true) exp =
+  let code = Exp.to_string exp in
+  if editable
+  then span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)] [code]
+  else code
+
 let string_of_arg_label =
   let open Asttypes in function
   | Nolabel        -> ""
@@ -303,8 +312,9 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
           let assert_results =
             if all_passed then [] else
             matching_asserts
-            |>@ begin fun Data.{ expected; _} ->
-              html_of_value [] [] Envir.empty_env Env.empty expected
+            |>@ begin fun Data.{ expected; expected_exp; _} ->
+              span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
+                [html_of_value [] [] Envir.empty_env Env.empty expected]
             end in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @

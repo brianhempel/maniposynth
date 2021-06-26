@@ -12,6 +12,7 @@ type t =
   | DropValueBeforeVb of string * string (* vb id str, value str *)
   | AddVis            of string * string (* loc str, vis str *)
   | RemoveVis         of string * string (* loc str, vis str *)
+  | EditLoc           of string * string (* loc str, code str *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -19,7 +20,8 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "DropValueBeforeVb"; `String vb_id_str; `String value_str] -> DropValueBeforeVb (vb_id_str, value_str)
   | `List [`String "AddVis"; `String loc_str; `String vis_str]                -> AddVis (loc_str, vis_str)
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]             -> RemoveVis (loc_str, vis_str)
-  | _                                                                         -> failwith "bad action json"
+  | `List [`String "EditLoc"; `String loc_str; `String code]                  -> EditLoc (loc_str, code)
+  | _                                                                         -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -176,6 +178,11 @@ let remove_vis_from_loc loc vis_str old =
     { exp with pexp_attributes = Vis.remove_vis_str_from_attrs vis_str exp.pexp_attributes }
   end
 
+let replace_loc_code loc code old =
+  old
+  |> Exp.map_by_loc loc begin fun exp -> { (Exp.from_string code) with pexp_loc = exp.pexp_loc } end
+  |> Pat.map_by_loc loc begin fun pat -> { (Pat.from_string code) with ppat_loc = pat.ppat_loc } end
+
 let f : t -> Shared.Ast.program -> Shared.Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
@@ -187,3 +194,6 @@ let f : t -> Shared.Ast.program -> Shared.Ast.program = function
   | RemoveVis (loc_str, vis_str) ->
     let loc = Serialize.loc_of_string loc_str in
     remove_vis_from_loc loc vis_str
+  | EditLoc (loc_str, code) ->
+    let loc = Serialize.loc_of_string loc_str in
+    replace_loc_code loc code

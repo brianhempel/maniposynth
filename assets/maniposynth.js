@@ -50,6 +50,14 @@ function removeVis(loc, vis) {
   ]);
 }
 
+function editLoc(loc, code) {
+  doAction([
+    "EditLoc",
+    loc,
+    code
+  ]);
+}
+
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
 //     "AddCodeToScopeBindings",
@@ -308,6 +316,48 @@ function updateInspector() {
     visesForSelected.innerHTML = "";
   }
 }
+
+
+/////////////////// Text Editing ///////////////////
+
+function hide(originalElem) {
+  originalElem.classList.add("hidden");
+}
+
+function show(originalElem) {
+  originalElem.classList.remove("hidden");
+}
+
+function beginInPlaceEdit(event) {
+  const originalElem = event.currentTarget;
+  // const parent = originalElem.parentNode;
+  console.log(originalElem);
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = originalElem.innerText;
+  // originalElem.appendChild(input);
+  originalElem.insertAdjacentElement("afterend", input);
+  hide(originalElem);
+  // input.focus();
+  input.select();
+
+  input.addEventListener('keyup', event => {
+    console.log(event.key);
+    if (event.key === "Enter") {
+      editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+    } else if (event.key === "Esc" || event.key === "Escape") {
+      input.remove();
+      show(originalElem);
+    }
+  });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
+    elem.addEventListener("dblclick", beginInPlaceEdit);
+  });
+});
+
 
 /////////////////// Example Management ///////////////////
 

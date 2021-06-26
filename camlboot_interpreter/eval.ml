@@ -463,11 +463,12 @@ and eval_expr prims env lookup_exp_typed trace_state frame_no expr =
             | _      -> false
             end in
           assert_results :=
-            { f        = fval
-            ; arg      = argval
-            ; expected = expected
-            ; actual   = actual
-            ; passed   = passed
+            { f            = fval
+            ; arg          = argval
+            ; expected     = expected
+            ; actual       = actual
+            ; passed       = passed
+            ; expected_exp = expected_exp
             } :: !assert_results;
           unit
         end

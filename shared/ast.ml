@@ -271,6 +271,7 @@ module Pat = struct
   let flatten pat = (everything (Pat pat)).pats
 
   let to_string = Formatter_to_stringifier.f Pprintast.pattern
+  let from_string = Lexing.from_string %> Parse.pattern
   (* let rec one_var (pat : pattern) =
     match pat.ppat_desc with
     | Ppat_var _               -> Some pat

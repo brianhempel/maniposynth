@@ -167,11 +167,12 @@ exception InternalException of value
 
 (* We only remember asserts of form "assert (f x = y)" *)
 type assert_result =
-  { f        : value
-  ; arg      : value
-  ; expected : value
-  ; actual   : value
-  ; passed   : bool
+  { f            : value
+  ; arg          : value
+  ; expected     : value
+  ; actual       : value
+  ; passed       : bool
+  ; expected_exp : expression
   }
 
 let new_vtrace v_ = { v_ = v_; vtrace = []; type_opt = None }
