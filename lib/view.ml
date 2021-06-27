@@ -316,9 +316,10 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
               span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
                 [html_of_value [] [] Envir.empty_env Env.empty expected]
             end in
+          let code_to_assert_on = Exp.apply exp [(Nolabel, value_to_exp value)] |> Exp.to_string in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
-              [wrap @@ html_of_value [] [] Envir.empty_env Env.empty result_value]
+              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty result_value]
           ]
         end else
           []
@@ -328,7 +329,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value assert_results visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
+and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
   let recurse = html_of_value assert_results visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
@@ -336,13 +337,15 @@ and html_of_value assert_results visualizers env type_env ({ v_ = value_; _} as 
     match value.type_opt with
     | Some val_typ -> Vis.possible_vises_for_type val_typ type_env |>@ Vis.to_string
     | None -> [] in
-  let perhaps_type_attr = match value.type_opt with Some typ -> [("data-type", Shared.Ast.Type.to_string typ)] | _ -> [] in
+  let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Shared.Ast.Type.to_string typ)]  | _ -> [] in
+  let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let wrap_value str =
     span
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
         [("data-possible-vises", String.concat "  " possible_vises)] @
         perhaps_type_attr @
+        perhaps_code_to_assert_on @
         [("class", "value"); ("data-value", Serialize.string_of_value value)]
       )
       [str] in
@@ -374,27 +377,26 @@ and html_of_value assert_results visualizers env type_env ({ v_ = value_; _} as 
 
 
 let html_of_values_for_loc trace assert_results type_env visualizers loc =
-  trace
-  |> Trace.entries_for_loc loc
-  |> List.map begin fun (_, _, value, env) -> html_of_value assert_results visualizers env type_env value end
-  |> String.concat "\n"
+  span
+    ~attrs:[ ("data-loc", Serialize.string_of_loc loc) ] (* View root for visualizers, also for determining where to place new asserts before *)
+    begin
+      trace
+      |> Trace.entries_for_loc loc
+      |> List.map begin fun (_, _, value, env) -> html_of_value assert_results visualizers env type_env value end
+    end
 
-
-(* let html_box_of_vb (vb : Parsetree.value_binding) =
-  html_box
-    (string_of_pat vb.pvb_pat ^ " = " ^ string_of_exp vb.pvb_expr)
-    "" *)
-
-
-let html_box_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+(* Labels and values may be displayed in different ways (standalone box, or as table cells) *)
+let label_and_values trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   let type_env =
     lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
-  html_box
-    ~attrs:[ ("data-loc", Serialize.string_of_loc exp.pexp_loc) ]
-    (string_of_exp exp)
-    (html_of_values_for_loc trace assert_results type_env visualizers exp.pexp_loc)
+  ( string_of_exp exp
+  , html_of_values_for_loc trace assert_results type_env visualizers exp.pexp_loc
+  )
 
+let html_box_of_exp  trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+  let (label, values_html) = label_and_values trace assert_results lookup_exp_typed exp in
+  html_box label values_html
 
 let rec fun_rows trace assert_results lookup_exp_typed (param_label : Asttypes.arg_label) param_exp_opt param_pat body_exp =
   let default_exp_str =
@@ -403,15 +405,41 @@ let rec fun_rows trace assert_results lookup_exp_typed (param_label : Asttypes.a
     | Some default_exp -> " = " ^ string_of_exp default_exp
   in
   ( tr
-    [ td [string_of_arg_label param_label ^ string_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
+    [ td
+        ~attrs:[("class", "label")]
+        [string_of_arg_label param_label ^ string_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
     ; td [html_of_values_for_loc trace assert_results Env.empty [] param_pat.ppat_loc]
     ]
   ) :: rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed body_exp
 
+(* I was thinking of ensuring there's space for bindings before even simple expressions...:/ *)
 and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+  let open Parsetree in
+  let rec gather_vbs exp =
+    match exp.pexp_desc with
+    | Pexp_let (_, vbs, e)   -> vbs @ gather_vbs e
+    | Pexp_sequence (e1, e2) -> [Vb.mk (Pat.any ()) e1] @ gather_vbs e2
+    | _                      -> []
+  in
+  let rec terminal_exp exp = (* Dual of gather_vbs *)
+    match exp.pexp_desc with
+    | Pexp_let (_, _, e)    -> terminal_exp e
+    | Pexp_sequence (_, e2) -> terminal_exp e2
+    | _                     -> exp
+  in
+  let html_of_vb vb =
+    box "value_binding" @@
+      match vb.pvb_pat.ppat_desc with
+      | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
+      | _ ->
+        [ string_of_pat vb.Parsetree.pvb_pat
+        ; html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr
+        ] in
   let single_exp () =
+    let (label, values_html) = label_and_values trace assert_results lookup_exp_typed exp in
     [ tr [td ~attrs:[("colspan", "2")] [""]]
-    ; tr [td ~attrs:[("colspan", "2")] [html_box_of_exp trace assert_results lookup_exp_typed exp]]
+    ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
+    ; tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
     ]
   in
   let unhandled node_kind_str =
@@ -419,9 +447,14 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     ; tr [td ~attrs:[("colspan", "2")] ["don't know how to handle nodes of kind " ^ node_kind_str]]
     ]
   in
-  let open Parsetree in
   match exp.pexp_desc with
-  | Pexp_let (_, _, _)        -> unhandled "let"
+  | Pexp_let (_, _, _)
+  | Pexp_sequence (_, _)      ->
+    let (label, values_html) = label_and_values trace assert_results lookup_exp_typed (terminal_exp exp) in
+    [ tr [td ~attrs:[("colspan", "2")] (gather_vbs exp |>@ html_of_vb)]
+    ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
+    ; tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
+    ]
   | Pexp_letmodule (_, _, _)  -> unhandled "letmodule"
   | Pexp_letexception (_, _)  -> unhandled "letexception"
   | Pexp_open (_, _, _)       -> unhandled "open"
@@ -434,7 +467,7 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
   | Pexp_ifthenelse (_, _, _) -> unhandled "if then else"
   | _                         -> single_exp ()
 
-let html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+and html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   table (rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp)
 
 let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb : Parsetree.value_binding) =
@@ -446,7 +479,7 @@ let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb :
   in
   [ drop_target_before_vb vb
   ; box "value_binding"
-      @@ [ string_of_pat vb.pvb_pat ^ " =" ]
+      @@ [ string_of_pat vb.pvb_pat ]
       @  [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
   ]
 

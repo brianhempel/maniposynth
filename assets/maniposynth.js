@@ -58,6 +58,16 @@ function editLoc(loc, code) {
   ]);
 }
 
+function newAssert(locToAssertBefore, codeToAssertOn, expectedCode) {
+  doAction([
+    "NewAssert",
+    locToAssertBefore,
+    codeToAssertOn,
+    expectedCode
+  ]);
+}
+
+
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
 //     "AddCodeToScopeBindings",
@@ -263,6 +273,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Inspector ///////////////////
 
+// Visualizers root, also for determining where to place new asserts.
+function containingLoc(elem) {
+  return elem.closest("[data-loc]").dataset.loc;
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
 });
@@ -287,7 +302,7 @@ function updateInspector() {
 
     checkbox.addEventListener("change", ev => {
       const checkbox = ev.target;
-      const loc = elem.closest("[data-loc]").dataset.loc;
+      const loc = containingLoc(elem);
       if (checkbox.checked) {
         addVis(loc, vis);
       } else {
@@ -328,33 +343,45 @@ function show(originalElem) {
   originalElem.classList.remove("hidden");
 }
 
-function beginInPlaceEdit(event) {
-  const originalElem = event.currentTarget;
-  // const parent = originalElem.parentNode;
-  console.log(originalElem);
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = originalElem.innerText;
-  // originalElem.appendChild(input);
-  originalElem.insertAdjacentElement("afterend", input);
-  hide(originalElem);
-  // input.focus();
-  input.select();
+function beginEditCallback(editType) {
+  return function (event) {
+    const originalElem = event.currentTarget;
+    // const parent = originalElem.parentNode;
+    console.log(originalElem);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = originalElem.innerText;
+    // originalElem.appendChild(input);
+    originalElem.insertAdjacentElement("afterend", input);
+    hide(originalElem);
+    // input.focus();
+    input.select();
 
-  input.addEventListener('keyup', event => {
-    console.log(event.key);
-    if (event.key === "Enter") {
-      editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
-    } else if (event.key === "Esc" || event.key === "Escape") {
-      input.remove();
-      show(originalElem);
-    }
-  });
+    input.addEventListener('keyup', event => {
+      console.log(event.key);
+      if (event.key === "Enter") {
+        if (editType === "in-place") {
+          editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+        } else if (editType === "new assert") {
+          newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
+        } else {
+          console.warn("Unknown edit type " + editType)
+        }
+      } else if (event.key === "Esc" || event.key === "Escape") {
+        input.remove();
+        show(originalElem);
+      }
+    });
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
-    elem.addEventListener("dblclick", beginInPlaceEdit);
+    elem.addEventListener("dblclick", beginEditCallback("in-place"));
+  });
+
+  document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
+    elem.addEventListener("dblclick", beginEditCallback("new assert"));
   });
 });
 
