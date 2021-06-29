@@ -82,7 +82,7 @@ let eval_env_flag ~loc env flag =
      let module_ident = Location.mkloc module_ident loc in
      env_extend false env (env_get_module_data env module_ident)
 
-let load_rec_units env lookup_exp_typed trace_state flags_and_units =
+let load_rec_units ?(fillings = Shared.Loc_map.empty) env lookup_exp_typed trace_state flags_and_units =
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let unit_paths = List.map snd flags_and_units in
@@ -94,7 +94,7 @@ let load_rec_units env lookup_exp_typed trace_state flags_and_units =
       let module_contents =
         let loc = Location.in_file unit_path in
         let local_env = List.fold_left (eval_env_flag ~loc) global_env flags in
-        eval_structure Primitives.prims local_env lookup_exp_typed trace_state frame_no (parse unit_path)
+        eval_structure fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no (parse unit_path)
       in
       define_unit global_env unit_path (make_module_data module_contents)
     )

@@ -1,5 +1,6 @@
 (* For making a lookup table of the expression types of a program. *)
 
+open Shared
 open Shared.Ast
 
 let formatter = Format.std_formatter

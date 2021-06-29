@@ -1,5 +1,5 @@
-open Shared.Ast
-open Shared.Util
+open Ast
+open Util
 
 include Map.Make(Loc)
 

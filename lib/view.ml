@@ -1,5 +1,6 @@
 open Camlboot_interpreter
 open Vis
+open Shared
 open Shared.Ast
 open Shared.Util
 
@@ -282,7 +283,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
           let (fval, _) =
             Eval.with_gather_asserts begin fun () ->
               let exp_to_run = Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") with _ -> (??)" in
-              Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
           let matching_asserts =
             assert_results
@@ -306,7 +307,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
           let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
           let (result_value, _) =
             Eval.with_gather_asserts begin fun () ->
-              Eval.eval_expr Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
           let wrap html =
             if any_failures then
