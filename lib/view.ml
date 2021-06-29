@@ -178,6 +178,12 @@ let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods =
     end
   | Array _, _ -> false
 
+  (* Surface syntax asserts should not deal with Ex values; so use strict comparison rather than "not caring" *)
+  | ExDontCare, ExDontCare -> true
+  | ExDontCare, _ -> false
+  | ExCall (vl1, vr1), ExCall (vl2, vr2) -> recurse vl1 vl2 && recurse vr1 vr2
+  | ExCall _, _ -> false
+
 and envs_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) env1 env2 =
   env1 == env2 || seen_before env1 env2 seen_envs || (* Cycle. They're equal as far as this branch of execution is concerned. *)
   let seen_envs = (env1, env2)::seen_envs in
@@ -271,7 +277,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
         (* Does the first argument of the vis function unify with the runtime value's type? *)
         let vis_type_parts = Type.flatten_arrows vis_type in
         (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
-        if List.length vis_type_parts = 2 && Type.does_unify (List.hd vis_type_parts) vtype then begin
+        if List.length vis_type_parts >= 1 && Type.does_unify (List.hd vis_type_parts) vtype then begin
           (* print_endline @@ "3 " ^ Type.to_string vis_type ^ " ~ " ^ Type.to_string vtype; *)
           let (fval, _) =
             Eval.with_gather_asserts begin fun () ->
@@ -374,6 +380,8 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
   | Array values_arr                         -> "[! " ^ (values_arr |> Array.to_list |> List.map recurse |> String.concat "; ") ^ " !]"
   | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
   | Object _                                 -> "object"
+  | ExCall _                                 -> "ExCall ShouldntSeeThis"
+  | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
 let html_of_values_for_loc trace assert_results type_env visualizers loc =

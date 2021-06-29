@@ -224,28 +224,13 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_ident lid_loced -> Some lid_loced
     | _                    -> None
-
+  let ident_lid = ident_lid_loced %>& Loc_.txt
   let ctor_lid_loced (exp : expression) =
     match exp.pexp_desc with
     | Pexp_construct (lid_loced, _) -> Some lid_loced
     | _                             -> None
 end
 
-
-module Vb = struct
-  type t = value_binding
-  let all prog = (everything (Sis prog)).vbs
-  let loc { pvb_loc; _ } = pvb_loc
-
-  include Ast_helper.Vb (* Vb builders *)
-
-  let to_string vb =
-    Formatter_to_stringifier.f Pprintast.pattern vb.pvb_pat ^ " = " ^
-    Pprintast.string_of_expression vb.pvb_expr
-
-  let pat { pvb_pat;  _ } = pvb_pat
-  let exp { pvb_expr; _ } = pvb_expr
-end
 
 module Pat = struct
   include Common(struct
@@ -290,7 +275,52 @@ module Pat = struct
     | _                             -> None
 
   let names_loced     = flatten %>@& name_loced
+  let names           = names_loced %>@ Loc_.txt
   let ctor_lids_loced = flatten %>@& ctor_lid_loced
+end
+
+module Vb = struct
+  type t = value_binding
+  let all prog = (everything (Sis prog)).vbs
+  let loc { pvb_loc; _ } = pvb_loc
+
+  include Ast_helper.Vb (* Vb builders *)
+
+  let to_string vb =
+    Formatter_to_stringifier.f Pprintast.pattern vb.pvb_pat ^ " = " ^
+    Pprintast.string_of_expression vb.pvb_expr
+
+  let pat { pvb_pat;  _ } = pvb_pat
+  let exp { pvb_expr; _ } = pvb_expr
+  let names_loced         = pat %> Pat.names_loced
+  let names               = names_loced %>@ Loc_.txt
+
+  (* Resolve as many names to associated expressions as possible. *)
+  (* let static_bindings vb =
+    let rec bind p e =
+      match p.ppat_desc with
+      | Ppat_any -> []
+      | Ppat_var { txt = name; _ } -> [(name, e)]
+      | Ppat_alias (p', { txt = name; _ }) -> (name, e) :: bind p' e
+      | Ppat_constant _ -> []
+      | Ppat_interval (_, _) -> []
+      | Ppat_tuple ps ->
+
+
+      | Ppat_construct (_, _) -> (??)
+      | Ppat_variant (_, _) -> (??)
+      | Ppat_record (_, _) -> (??)
+      | Ppat_array _ -> (??)
+      | Ppat_or (_, _) -> (??)
+      | Ppat_constraint (_, _) -> (??)
+      | Ppat_type _ -> (??)
+      | Ppat_lazy _ -> (??)
+      | Ppat_unpack _ -> (??)
+      | Ppat_exception _ -> (??)
+      | Ppat_extension _ -> (??)
+      | Ppat_open (_, _) -> (??)
+    in
+    bind vb.pvb_pat vb.pvb_expr *)
 end
 
 (* Structure Item (i.e. top-level clauses) *)

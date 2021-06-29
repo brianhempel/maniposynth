@@ -37,6 +37,7 @@ main () *)
 (* To bind a value binding/struct item/other expression, add an attribute with the binding name e.g. let[@my_vb] x = e in *)
 (* To match a literal variable name, use [%VAR x] *)
 
+(* Result type *)
 type t =
   { exps         : expression     SMap.t
   ; pats         : pattern        SMap.t

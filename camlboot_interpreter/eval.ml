@@ -212,8 +212,9 @@ let rec apply prims lookup_exp_typed trace_state (vf : value) args =
     | Function (cl, fenv_ref) -> eval_match prims !fenv_ref lookup_exp_typed trace_state frame_no cl (Ok arg)
     | Prim prim -> prim arg
     | _ ->
-      Format.eprintf "%a@." pp_print_value vf;
-      assert false
+      Format.eprintf "Trying to apply a nonfunction: %a@." pp_print_value vf;
+      new_vtrace Bomb
+      (* assert false *)
   in
   if SMap.is_empty !with_label
   then

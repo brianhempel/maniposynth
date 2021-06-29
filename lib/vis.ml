@@ -88,3 +88,5 @@ let rec value_to_exp Camlboot_interpreter.Data.{ v_; _ } =
   | Array vs                              -> Exp.array (vs |> Array.to_list |>@ value_to_exp)
   | Fun_with_extra_args (_, _, _)         -> Shared.Ast.Exp.var "??"
   | Object _                              -> Shared.Ast.Exp.var "??"
+  | ExCall _                              -> Shared.Ast.Exp.var "??"
+  | ExDontCare                            -> Shared.Ast.Exp.var "??"

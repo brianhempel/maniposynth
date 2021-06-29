@@ -31,6 +31,19 @@ module Option = struct
     | Some x :: rest -> project rest |> map (List.cons x)
 end
 
+module List = struct
+  include List
+
+  let rec findmap_opt f =
+    function
+    | []      -> None
+    | x::rest ->
+      begin match f x with
+      | None   -> findmap_opt f rest
+      | some_y -> some_y
+      end
+end
+
 module String = struct
   include String
 

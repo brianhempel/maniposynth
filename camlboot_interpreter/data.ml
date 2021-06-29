@@ -35,6 +35,10 @@ and value_ =
   | Array of value array
   | Fun_with_extra_args of value * value list * (arg_label * value) SMap.t
   | Object of object_value
+  (* --- Only used in synth examples --- *)
+  | ExCall of value * value (* v1 -> v2 *)
+  | ExDontCare
+  (* ----------------------------------- *)
 
 and fexpr = Location.t -> (arg_label * expression) list -> expression option
 
@@ -226,6 +230,8 @@ let rec pp_print_value ff { v_; _ } =
          pp_print_value)
       (Array.to_list a)
   | Object _ -> Format.fprintf ff "<object>"
+  | ExCall (v1, v2) -> Format.fprintf ff "%a -> %a" pp_print_value v1 pp_print_value v2
+  | ExDontCare -> Format.fprintf ff "<ExDontCare>"
 
 let pp_print_unit_id ppf (Path s) =
   Format.fprintf ppf "%S" s
@@ -370,6 +376,14 @@ let rec value_compare { v_ = v_1; _ } { v_ = v_2; _ } =
       !cmp
     )
   | Array _, _ -> assert false
+
+  | ExCall _, _
+  | _, ExCall _ ->
+    failwith "tried to compare ExCall"
+
+  | ExDontCare, _ ->
+    failwith "tried to compare ExDontCare"
+
 
 let value_equal v1 v2 = value_compare v1 v2 = 0
 

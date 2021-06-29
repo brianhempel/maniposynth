@@ -136,6 +136,8 @@ let seeded_hash_param meaningful total seed { v_; _ } =
   | InChannel _ | OutChannel _ | Prim _ | Lz _
   | ModVal _ | Fun_with_extra_args _ ->
     assert false
+  | ExCall _ -> failwith "tried to hash ExCall"
+  | ExDontCare -> failwith "tried to hash ExDontCare"
 
 external digest_unsafe_string
   :  string ->

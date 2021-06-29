@@ -1,13 +1,6 @@
+(* For making a lookup table of the expression types of a program. *)
+
 open Shared.Ast
-open Shared.Util
-
-
-module LocMap = struct
-  include Map.Make(Loc)
-
-  let all_at_loc loc   map = find_opt loc map ||& []
-  let add_to_loc loc v map = add loc (v :: all_at_loc loc map) map
-end
 
 let formatter = Format.std_formatter
 
@@ -48,16 +41,16 @@ let typedtree_sig_env_of_file path =
 
 let exp_typed_lookup_of_file path =
   let (typed_struct, _, _) = typedtree_sig_env_of_file path in
-  let locmap = ref LocMap.empty in
+  let locmap = ref Loc_map.empty in
   let module Iter = TypedtreeIter.MakeIterator(struct
     include TypedtreeIter.DefaultIteratorArgument
     let enter_expression exp =
-      locmap := LocMap.add_to_loc exp.Typedtree.exp_loc exp !locmap
+      locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
   end) in
   Iter.iter_structure typed_struct;
   let locmap = !locmap in
   begin fun exp ->
-    match LocMap.all_at_loc exp.Parsetree.pexp_loc locmap with
+    match Loc_map.all_at_loc exp.Parsetree.pexp_loc locmap with
     | []       -> None
     | [tt_exp] -> Some tt_exp
     | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string exp.pexp_loc; None
