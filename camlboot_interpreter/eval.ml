@@ -114,8 +114,6 @@ let type_ctor env ctor_lid arg_val_opt =
 
 
 let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
-  (* let (fenv, fexp, trace_state, frame_no) =
-and apply *)
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let vf, extral, extram =
@@ -338,13 +336,16 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
         ignore (eval_expr fillings prims (pattern_bind fillings prims env lookup_exp_typed trace_state frame_no vx [] p vx) lookup_exp_typed trace_state frame_no e3)
       done;
     unit
-  | Pexp_ifthenelse (e1, e2, e3) -> ret @@
-    if is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1)
+  | Pexp_ifthenelse (e1, e2, e3_opt) -> ret @@
+    let guard_val = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in
+    begin try if is_true guard_val
     then eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2
     else (
-      match e3 with
+      match e3_opt with
       | None -> unit
       | Some e3 -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e3)
+    with BombExn -> intro_bomb ()
+    end
   | Pexp_unreachable -> failwith "reached unreachable"
   | Pexp_try (e, cs) -> ret @@
     (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no e

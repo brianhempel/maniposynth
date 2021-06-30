@@ -122,3 +122,11 @@ td {
   padding: 0 4px;
   margin: 3px;
 }
+
+#synth-button {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  font-size: 50px;
+  cursor: pointer;
+}

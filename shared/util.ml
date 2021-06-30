@@ -42,6 +42,15 @@ module List = struct
       | None   -> findmap_opt f rest
       | some_y -> some_y
       end
+
+  let dedup list =
+    let rec dedup_ out = function
+    | [] -> rev out
+    | x::rest ->
+      if List.mem x out
+      then dedup_ out rest
+      else dedup_ (x :: out) rest in
+    dedup_ [] list
 end
 
 module String = struct

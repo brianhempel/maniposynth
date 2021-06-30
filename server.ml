@@ -65,6 +65,32 @@ let render_maniposynth out_chan url =
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
   respond out_chan html_str
 
+let try_synth path =
+  if Unix.fork () = `In_the_child then begin
+    let parsed = Camlboot_interpreter.Interp.parse path in
+    (* let parsed_with_comments = Parse_unparse.parse_file path in
+    let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
+    let callables = Read_execution_env.callables_of_file path in
+    let trace = Tracing.run_with_tracing path in
+    let html_str = View.html_str callables trace bindings_skels in *)
+    let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
+    let (trace, assert_results) =
+      Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
+        Camlboot_interpreter.Interp.run_files lookup_exp_typed [path]
+      end in
+    Synth.results parsed trace assert_results lookup_exp_typed
+    |> List.iteri ~f:begin fun i result ->
+      let out_path = String.substr_replace_all path ~pattern:".ml" ~with_:("-synth" ^ string_of_int i ^ ".ml") in
+      Out_channel.with_file out_path ~f:begin fun out ->
+        let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
+        print_endline out_str;
+        Out_channel.output_string out out_str
+      end
+    end;
+    exit 0
+  end
+
+
 
 let colon_space = String.Search_pattern.create ": "
 
@@ -127,6 +153,7 @@ let handle_connection in_chan out_chan =
           Shared.Formatter_to_stringifier.f Pprintast.structure parsed'
           |> Out_channel.output_string out
         end;
+        try_synth path;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan

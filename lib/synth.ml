@@ -9,14 +9,51 @@ open Shared.Util
 
 type fillings = expression Loc_map.t
 
+(* Does not recursively apply fillings. That might result in an infinite loop. *)
+let apply_fillings fillings prog =
+  Loc_map.bindings fillings
+  |> List.fold_left (fun prog (loc, exp) -> Exp.replace loc exp prog) prog
 
 
-(* Constraints. But "constraint" is an OCaml keyword, so let's call them "req"s *)
-type req      = Data.env * expression * value
-type hole_req = Data.env * Location.t * value
-
+(* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
+type req = Data.env * expression * value
 
 let dont_care = new_vtrace ExDontCare
+
+let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val cases =
+  let open Eval in
+  match cases with (* still not handling cases that mix regular ctors and exception ctors (pattern_bind_checkexn) *)
+  | [] -> None
+  | case:: rest -> begin try
+      let env' = pattern_bind fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val [] case.pc_lhs scrutinee_val in
+      begin match case.pc_guard with
+      | None -> ()
+      | Some guard when is_true (eval_expr fillings prims env' lookup_exp_typed trace_state frame_no guard) -> ()
+      | _ -> raise Match_fail
+      end;
+      Some (env', case.pc_rhs)
+    with Match_fail -> try_cases fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val rest
+    end
+
+(* Fillings might only be used in pat "with" clauses here *)
+let assert_result_to_req fillings assert_result : req option =
+  let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> failwith "why are we looking up types in a pattern bind"), Trace.new_trace_state, -1 in
+  match assert_result.f.v_ with
+  | Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref) ->
+    let arg = assert_result.arg in
+    let env' = Eval.pattern_bind fillings prims !env_ref lookup_exp_typed trace_state frame_no arg [] pat arg in
+    Some (env', body_exp, assert_result.expected)
+  | Function (cases, env_ref) ->
+    let arg = assert_result.arg in
+    begin match try_cases fillings prims !env_ref lookup_exp_typed trace_state frame_no arg cases with
+    | None ->
+      print_endline "Bad assert result; couldn't match arg to a function case";
+      None
+    | Some (env', branch_exp) -> Some (env', branch_exp, assert_result.expected)
+    end
+  | _ ->
+    print_endline "Bad assert result; function should be a simple function";
+    None
 
 (*
   If I know that name should have value, and pat looks
@@ -69,21 +106,10 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let rec push_down_req fillings ((env, exp, value) as req) =
+let rec push_down_req fillings ((env, exp, value) as req) : req list =
   let open Eval in
   let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
-  let rec try_cases scrutinee_val = function
-    | [] -> None
-    | case:: rest -> begin try
-        let env' = pattern_bind fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val [] case.pc_lhs scrutinee_val in
-        begin match case.pc_guard with
-        | None -> ()
-        | Some guard when is_true (eval_expr fillings prims env' lookup_exp_typed trace_state frame_no guard) -> ()
-        | _ -> raise Match_fail
-        end;
-        Some (env', case.pc_rhs)
-      with Match_fail -> try_cases scrutinee_val rest
-      end in
+  let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
   match exp.pexp_desc with
   | Pexp_ident { txt = Longident.Lident "??"; _ } ->
     begin match Loc_map.find_opt exp.pexp_loc fillings with
@@ -119,215 +145,226 @@ let rec push_down_req fillings ((env, exp, value) as req) =
     | _ ->
       [req]
     end
-  | Pexp_fun (Nolabel, None, arg_pat, fun_exp) ->
+  | Pexp_fun (Nolabel, None, arg_pat, body_exp) ->
     begin match value.v_ with
     | ExCall (arg, expected) -> begin try
         let env' = pattern_bind fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
-        push_down_req fillings (env', fun_exp, expected)
+        push_down_req fillings (env', body_exp, expected)
       with Match_fail -> [req]
       end
     | _ -> [req]
     end
   | Pexp_fun (_, _, _, _) -> [req]
-  | Pexp_apply (f, l) ->
-    (* START HERE *)
-    ret @@
-    (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no f with
-    | { v_ = Fexpr fexpr; _ } ->
-      handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr l
-    | func_value ->
-      let args = List.map (fun (lab, e) -> (lab, eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)) l in
-      apply fillings prims lookup_exp_typed trace_state func_value args)
-  | Pexp_tuple l ->
-    let args = List.map (eval_expr fillings prims env lookup_exp_typed trace_state frame_no) l in
-    intro @@ new_vtrace @@ Tuple args
-  | Pexp_match (e, cl) -> ret @@ eval_match fillings prims env lookup_exp_typed trace_state frame_no cl (eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no e)
-  | Pexp_coerce (e, _, _) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
-  | Pexp_constraint (e, _) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
-  | Pexp_sequence (e1, e2) ->
-    let _ = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in
-    eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2
-  | Pexp_while (e1, e2) ->
-    while is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1) do
-      ignore (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2)
-    done;
-    unit
-  | Pexp_for (p, e1, e2, flag, e3) ->
-    let v1 = Runtime_base.unwrap_int (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1) in
-    let v2 = Runtime_base.unwrap_int (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2) in
-    if flag = Upto
-    then
-      for x = v1 to v2 do
-        let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr fillings prims (pattern_bind fillings prims env lookup_exp_typed trace_state frame_no vx [] p vx) lookup_exp_typed trace_state frame_no e3)
-      done
+  | Pexp_apply (fexp, labeled_args) ->
+    if List.for_all (fun (label, _) -> label == Asttypes.Nolabel) labeled_args then
+      let arg_vals = List.map (fun (_, e) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e) labeled_args in
+      (* Expand example to arg1 -> arg2 -> ex *)
+      let expanded_example = List.fold_right (fun arg ex -> new_vtrace @@ ExCall (arg, ex)) arg_vals value in
+      (* Push it down the function expression *)
+      push_down_req fillings (env, fexp, expanded_example)
     else
-      for x = v1 downto v2 do
-        let vx = Runtime_base.wrap_int x in
-        ignore (eval_expr fillings prims (pattern_bind fillings prims env lookup_exp_typed trace_state frame_no vx [] p vx) lookup_exp_typed trace_state frame_no e3)
-      done;
-    unit
-  | Pexp_ifthenelse (e1, e2, e3) -> ret @@
-    if is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1)
-    then eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2
+      [req]
+  | Pexp_tuple exps ->
+    begin match value.v_ with
+    | Tuple vs when List.length vs = List.length exps ->
+      List.map2 (fun e v -> push_down_req fillings (env, e, v)) exps vs
+      |> List.concat
+    | _ -> [req]
+    end
+  | Pexp_match (e, cases) ->
+    let arg = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
+    begin match try_cases arg cases with
+    | None -> [req]
+    | Some (env', branch_exp) -> push_down_req fillings (env', branch_exp, value)
+    end
+  | Pexp_coerce (e, _, _)  -> push_down_req fillings (env, e, value)
+  | Pexp_constraint (e, _) -> push_down_req fillings (env, e, value)
+  | Pexp_sequence (e1, e2) ->
+    let _ = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in (* Do we even need to do this? *)
+    push_down_req fillings (env, e2, value)
+  | Pexp_while (_, _) -> [req]
+  | Pexp_for (_, _, _, _, _) -> [req]
+  | Pexp_ifthenelse (e1, e2, e3_opt) ->
+    let guard_val = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in
+    begin try if is_true guard_val
+    then push_down_req fillings (env, e2, value)
     else (
-      match e3 with
-      | None -> unit
-      | Some e3 -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e3)
+      match e3_opt with
+      | None -> [req]
+      | Some e3 -> push_down_req fillings (env, e3, value))
+    with BombExn -> [req]
+    end
   | Pexp_unreachable -> failwith "reached unreachable"
-  | Pexp_try (e, cs) -> ret @@
-    (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
-     with InternalException v ->
-       (try eval_match fillings prims env lookup_exp_typed trace_state frame_no cs (Ok v)
-        with Match_fail -> raise (InternalException v)))
-  | Pexp_construct (c, e) ->
-    let cn = lident_name c.txt in
-    let d = env_get_constr env c in
-    let (vv, ctor_type_opt) =
-      match e with
-      | None -> (None, lookup_type_opt lookup_exp_typed expr)
-      | Some e ->
-        let arg_val = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
-        ( Some arg_val
-        , type_ctor (lookup_type_env lookup_exp_typed expr) c (Some arg_val)
-        )
-    in
-    add_type_opt ctor_type_opt @@ intro @@ new_vtrace @@ Constructor (cn, d, vv)
-  | Pexp_variant (cn, e) ->
-    let ee =
-      match e with
-      | None -> None
-      | Some e -> Some (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)
-    in
-    intro @@ new_vtrace @@ Constructor (cn, Hashtbl.hash cn, ee)
-  | Pexp_record (r, e) ->
-    let base =
-      match e with
-      | None -> SMap.empty
-      | Some e ->
-        (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no e with
-        | { v_ = Record r; _ } -> r
-        | _ -> mismatch expr.pexp_loc; assert false)
-    in
-    intro @@ new_vtrace @@ Record
-      (List.fold_left
-         (fun rc ({ txt = lident; _ }, ee) ->
-           SMap.add (lident_name lident) (ref (eval_expr fillings prims env lookup_exp_typed trace_state frame_no ee)) rc)
-         base
-         r)
+  | Pexp_try (e, cases) ->
+    begin try push_down_req fillings (env, e, value)
+    with InternalException exn_val ->
+      begin match try_cases exn_val cases with
+      | None -> raise (InternalException exn_val)
+      | Some (env', branch_exp) -> push_down_req fillings (env', branch_exp, value)
+      end
+    end
+  | Pexp_construct (_, None) -> [req]
+  | Pexp_construct (lid_loced, Some e) ->
+    let ctor_name = lident_name lid_loced.txt in
+    let d = Envir.env_get_constr env lid_loced in
+    begin match value.v_ with
+    | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = ctor_name && d_ex = d ->
+      push_down_req fillings (env, e, ex)
+    | _ -> [req]
+    end
+  | Pexp_variant (_, None) -> [req]
+  | Pexp_variant (cn, Some e) ->
+    let hash = Hashtbl.hash cn in
+    begin match value.v_ with
+    | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = cn && d_ex = hash ->
+      push_down_req fillings (env, e, ex)
+    | _ -> [req]
+    end
+  | Pexp_record (fields, e_opt) ->
+    begin match value.v_ with
+    | Record ex_fields ->
+      let literal_field_names = fields |>@ fst |>@ Loc.txt |>@ lident_name in
+      let expected_labels = SMap.bindings ex_fields |>@ fst in
+      let expected_labels_not_in_literal =
+        expected_labels |>@? (fun name -> not (List.mem name literal_field_names)) in
+      begin match e_opt, expected_labels_not_in_literal with
+      | _, [] ->
+        SMap.bindings ex_fields
+        |>@@ begin fun (ex_label, expected_ref) ->
+          let _, field_exp = fields |> List.find (fst %> Loc.txt %> lident_name %> (=) ex_label) in
+          push_down_req fillings (env, field_exp, !expected_ref)
+        end
+      | Some base_rec_exp, _ ->
+        (* Labels not in literal are pushed to base_rec, others to the fields *)
+        let base_ex = new_vtrace @@
+          Record (SMap.filter (fun name _ -> List.mem name expected_labels_not_in_literal) ex_fields) in
+        let lit_push_downs =
+          SMap.bindings ex_fields
+          |>@? (fun (name, _) -> List.mem name literal_field_names)
+          |>@@ begin fun (ex_label, expected_ref) ->
+            let _, field_exp = fields |> List.find (fst %> Loc.txt %> lident_name %> (=) ex_label) in
+            push_down_req fillings (env, field_exp, !expected_ref)
+          end in
+        let base_rec_push_downs =
+          push_down_req fillings (env, base_rec_exp, base_ex) in
+          lit_push_downs @ base_rec_push_downs
+      | _ -> [req]
+      end
+    | _ -> [req]
+    end
   | Pexp_field (e, { txt = lident; _ }) ->
-    (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no e with
-    | { v_ = Record r; _ } as v ->
-      pat_match v [Field (lident_name lident)] @@
-      !(SMap.find (lident_name lident) r)
-    | _ -> mismatch expr.pexp_loc; assert false)
-  | Pexp_setfield (e1, { txt = lident; _ }, e2) ->
-    let v1 = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in
-    let v2 = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e2 in
-    (match v1.v_ with
-    | Record r ->
-      SMap.find (lident_name lident) r := v2;
-      unit
-    | _ -> mismatch expr.pexp_loc; assert false)
-  | Pexp_array l -> intro @@ new_vtrace @@ Array (Array.of_list (List.map (eval_expr fillings prims env lookup_exp_typed trace_state frame_no) l))
-  | Pexp_send (obj_expr, meth) -> ret @@
-     let obj = eval_expr fillings prims env lookup_exp_typed trace_state frame_no obj_expr in
-     (match obj.v_ with
-      | Object obj -> eval_obj_send fillings expr.pexp_loc prims lookup_exp_typed trace_state frame_no obj meth
-      | _ -> mismatch expr.pexp_loc; assert false)
-  | Pexp_new lid -> intro @@
-     let (class_expr, class_env) = env_get_class env lid in
-     eval_obj_new fillings prims !class_env lookup_exp_typed trace_state frame_no class_expr
-  | Pexp_setinstvar (x, e) ->
-     let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
-     let x = { x with Location.txt = Longident.Lident x.txt } in
-     begin match env_get_value_or_lvar env x with
-       | Value _ -> mismatch expr.pexp_loc; assert false
-       | Instance_variable (obj, name) ->
-          let var = SMap.find name obj.variables in
-          var := v;
-     end;
-     Runtime_base.wrap_unit ()
-  | Pexp_override fields ->
-     begin match env.current_object with
-       | None -> mismatch expr.pexp_loc; assert false
-       | Some obj ->
-          let new_obj = eval_obj_override fillings prims env lookup_exp_typed trace_state frame_no obj fields in
-          intro @@ new_vtrace @@ Object new_obj
-     end
+    let label = lident_name lident in
+    let record_ex = new_vtrace @@ Record (SMap.singleton label (ref value)) in
+    push_down_req fillings (env, e, record_ex)
+  | Pexp_setfield (_, _, _) -> [req]
+  | Pexp_array exps ->
+    begin match value.v_ with
+    | Array v_arr when List.length exps = Array.length v_arr ->
+      List.map2 (fun e v -> push_down_req fillings (env, e, v)) exps (Array.to_list v_arr)
+      |> List.concat
+    | _ -> [req]
+    end
+  | Pexp_send (_, _) -> [req]
+  | Pexp_new _ -> [req]
+  | Pexp_setinstvar (_, _) -> [req]
+  | Pexp_override _ -> [req]
   | Pexp_letexception ({ pext_name = name; pext_kind = k; _ }, e) ->
     let nenv =
       match k with
       | Pext_decl _ ->
-        let d = next_exn_id () in
-        env_set_constr name.txt d env
+        let d = next_exn_id () in (* :/ :/ :/ *)
+        Envir.env_set_constr name.txt d env
       | Pext_rebind path ->
-        env_set_constr name.txt (env_get_constr env path) env
+        Envir.env_set_constr name.txt (Envir.env_get_constr env path) env
     in
-    eval_expr fillings prims nenv lookup_exp_typed trace_state frame_no e
+    push_down_req fillings (nenv, e, value)
   | Pexp_letmodule (name, me, e) ->
+    (* Will this mutate? :/ *)
     let m = eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no me in
-    eval_expr fillings prims (env_set_module name.txt m env) lookup_exp_typed trace_state frame_no e
-  | Pexp_assert e ->
-    begin match !asserts_mode with
-    | Throw_exception ->
-      if is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)
-      then unit
-      else (
-        (*failwith "assert failure"*)
-        let loc = expr.pexp_loc in
-        let Lexing.{ pos_fname; pos_lnum; pos_cnum; _ } =
-          loc.Location.loc_start
-        in
-        raise
-          (InternalException
-            (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
-    | Gather assert_results ->
-      let open Shared.Ast_match in
-      begin try
-        let match_       = match_exp_ f_x_equals_y_pattern e in
-        let fexp         = SMap.find "f" match_.exps in
-        let argexp       = SMap.find "x" match_.exps in
-        let expected_exp = SMap.find "y" match_.exps in
-        begin match eval_expr fillings prims env lookup_exp_typed trace_state frame_no fexp with
-        | { v_ = Fexpr fexpr; _ } ->
-          handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr [(Nolabel, argexp)]
-        | fval ->
-          let argval = (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no argexp with _ -> intro_bomb ()) in
-          let actual = (try apply fillings prims lookup_exp_typed trace_state fval [(Nolabel, argval)] with _ -> intro_bomb ()) in
-          let expected = (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no expected_exp with _ -> intro_bomb ()) in
-          let passed =
-            begin match (try Some (value_compare actual expected) with _ -> None) with
-            | Some 0 -> true
-            | _      -> false
-            end in
-          assert_results :=
-            { f            = fval
-            ; arg          = argval
-            ; expected     = expected
-            ; actual       = actual
-            ; passed       = passed
-            ; expected_exp = expected_exp
-            } :: !assert_results;
-          unit
-        end
-      with Match_fail ->
-        print_endline "TODO: handle asserts that are not f x = y";
-        unit
-      end
-    end
-  | Pexp_lazy e -> intro @@ new_vtrace @@ Lz (ref (fun () -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e))
-  | Pexp_poly (e, _ty) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
-  | Pexp_newtype (_, e) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
+    let env' = Envir.env_set_module name.txt m env in
+    push_down_req fillings (env', e, value)
+  | Pexp_assert _ -> [req]
+  | Pexp_lazy _ -> [req]
+  | Pexp_poly (e, _) -> push_down_req fillings (env, e, value)
+  | Pexp_newtype (_, e) -> push_down_req fillings (env, e, value)
   | Pexp_open (_, lident, e) ->
     let nenv =
-      match env_get_module_data env lident with
+      match Envir.env_get_module_data env lident with
       | exception Not_found ->
         (* Module might be a .mli only *)
         env
-      | module_data -> env_extend false env module_data
+      | module_data -> Envir.env_extend false env module_data
     in
-    eval_expr fillings prims nenv lookup_exp_typed trace_state frame_no e
-  | Pexp_object _ -> unsupported expr.pexp_loc; assert false
-  | Pexp_pack me -> intro @@ new_vtrace @@ ModVal (eval_module_expr prims env lookup_exp_typed trace_state frame_no me)
-  | Pexp_extension _ -> unsupported expr.pexp_loc; assert false
+    push_down_req fillings (nenv, e, value)
+  | Pexp_object _ -> [req]
+  | Pexp_pack _ -> [req]
+  | Pexp_extension _ -> [req]
+
+
+exception ReqsSatisfied of fillings
+
+let terms_of_size _names_in_env n =
+  match n with
+  | 1 ->
+    List.init 11 (fun x -> Exp.int_lit (x - 5)) (* -5 to 5 *)
+    |> List.to_seq
+  | _ -> Seq.empty
+
+
+(* Preconditions: hole_reqs should (a) be non-empty and (b) be all on the same hole *)
+let guess size fillings (hole_reqs : req list) =
+  let (env1, { pexp_loc = hole_loc; _ }, _) = List.hd hole_reqs in
+  let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in
+  let eval fillings env exp =
+    try Eval.eval_expr fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
+    with _ -> new_vtrace Bomb in
+  try
+    terms_of_size names_in_env size
+    |> Seq.iter begin fun term ->
+      let fillings' = Loc_map.add hole_loc term fillings in
+      if hole_reqs |> List.for_all (fun (env, exp, expected) -> Assert_comparison.values_equal_for_assert (eval fillings' env exp) expected)
+      then raise (ReqsSatisfied fillings')
+    end;
+    None
+  with ReqsSatisfied fillings' -> Some fillings'
+
+
+let fill_holes parsed fillings reqs : expression Loc_map.t =
+  let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false in
+  let hole_locs =
+    (Exp.all parsed @ (Loc_map.bindings fillings |>@ snd |>@@ Exp.flatten))
+    |>@? is_hole |>@ Exp.loc |> List.dedup in
+  let try_fill_hole fillings hole_loc =
+    let reqs_on_hole = reqs |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+    if reqs_on_hole = [] then fillings else
+    let rec guess_up_to_size max_size size =
+      begin match guess size fillings reqs with
+      | Some fillings' -> fillings'
+      | None           -> if size < max_size then guess_up_to_size max_size (size + 1) else fillings
+      end in
+    guess_up_to_size 1 1
+  in
+  List.fold_left try_fill_hole fillings hole_locs
+
+
+let results ?(fillings = Loc_map.empty) parsed _trace assert_results _lookup_exp_typed =
+  let reqs =
+    assert_results
+    |>@& assert_result_to_req fillings in
+  let go fillings = fill_holes parsed fillings reqs in
+  let fillings' = fillings |> go |> go |> go |> go |> go |> go |> go |> go |> go |> go in
+  (* Fill holes until fixpoint or bored. *)
+  parsed
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> apply_fillings fillings'
+  |> fun x -> [x]
+

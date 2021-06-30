@@ -170,6 +170,7 @@ and expr_in_object = {
 exception InternalException of value
 
 (* We only remember asserts of form "assert (f x = y)" *)
+(* So no need to store the environment yet (f's closure environment is sufficient) *)
 type assert_result =
   { f            : value
   ; arg          : value
@@ -184,11 +185,13 @@ let add_type_opt type_opt v = { v with type_opt = type_opt }
 
 let unit = new_vtrace @@ Constructor ("()", 0, None)
 
+exception BombExn
+
 let is_true { v_; _ } =
   match v_ with
   | Constructor ("true", _, None) -> true
   | Constructor ("false", _, None) -> false
-  | _ -> assert false
+  | _ -> raise BombExn
 
 let rec pp_print_value ff { v_; _ } =
   match v_ with

@@ -14,6 +14,7 @@ type t =
   | RemoveVis         of string * string (* loc str, vis str *)
   | EditLoc           of string * string (* loc str, code str *)
   | NewAssert         of string * string * string (* loc str, lhs code str, rhs code str *)
+  | DoSynth
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -23,6 +24,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]                    -> RemoveVis (loc_str, vis_str)
   | `List [`String "EditLoc"; `String loc_str; `String code]                         -> EditLoc (loc_str, code)
   | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code] -> NewAssert (loc_str, lhs_code, rhs_code)
+  | `List [`String "DoSynth"]                                                        -> DoSynth
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 
@@ -208,3 +210,7 @@ let f : t -> Shared.Ast.program -> Shared.Ast.program = function
   | NewAssert (loc_str, lhs_code, rhs_code) ->
     let loc = Serialize.loc_of_string loc_str in
     add_assert_before_loc loc lhs_code rhs_code
+  | DoSynth ->
+    (* All actions trigger synthesis in the server. Just need some action to trigger as desired. *)
+    (* Synth is async. Don't change program here. *)
+    (fun prog -> prog)

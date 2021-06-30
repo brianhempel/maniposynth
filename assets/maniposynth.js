@@ -67,6 +67,12 @@ function newAssert(locToAssertBefore, codeToAssertOn, expectedCode) {
   ]);
 }
 
+function doSynth() {
+  doAction([
+    "DoSynth"
+  ]);
+}
+
 
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
@@ -383,6 +389,14 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
     elem.addEventListener("dblclick", beginEditCallback("new assert"));
   });
+});
+
+
+
+/////////////////// Synth Button ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById("synth-button").addEventListener("click", _ => doSynth());
 });
 
 

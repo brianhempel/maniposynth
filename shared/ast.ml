@@ -214,8 +214,10 @@ module Exp = struct
     let loc = Loc_.fresh () in
     ident ~loc { loc = loc; txt = Longident.parse name }
   let string_lit str = constant (Ast_helper.Const.string str)
+  let int_lit n = constant (Ast_helper.Const.int n)
 
   let all prog = (everything (Sis prog)).exps
+  let flatten exp = (everything (Exp exp)).exps
 
   let to_string = Pprintast.string_of_expression
   let from_string = Lexing.from_string %> Parse.expression
