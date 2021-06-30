@@ -16,9 +16,9 @@ let apply_fillings fillings prog =
 
 
 (* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
-type req = Data.env * Env.t * expression * value
+type req = Data.env * expression * value
 
-let string_of_req (_env, _tenv, exp, value) =
+let string_of_req (_env, exp, value) =
   Exp.to_string exp ^ " = " ^ Formatter_to_stringifier.f pp_print_value value
 
 
@@ -40,21 +40,20 @@ let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrut
     end
 
 (* Fillings might only be used in pat "with" clauses here *)
-let assert_result_to_req lookup_exp_typed assert_result : req option =
-  let lookup_tenv exp = Eval.lookup_type_env lookup_exp_typed exp in
-  let fillings, prims, trace_state, frame_no = Loc_map.empty, Primitives.prims, Trace.new_trace_state, -1 in
+let assert_result_to_req assert_result : req option =
+  let fillings, prims, lookup_exp_typed, trace_state, frame_no = Loc_map.empty, Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
   match assert_result.f.v_ with
   | Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref) ->
     let arg = assert_result.arg in
     let env' = Eval.pattern_bind fillings prims !env_ref lookup_exp_typed trace_state frame_no arg [] pat arg in
-    Some (env', lookup_tenv body_exp, body_exp, assert_result.expected)
+    Some (env', body_exp, assert_result.expected)
   | Function (cases, env_ref) ->
     let arg = assert_result.arg in
     begin match try_cases fillings prims !env_ref lookup_exp_typed trace_state frame_no arg cases with
     | None ->
       print_endline "Bad assert result; couldn't match arg to a function case";
       None
-    | Some (env', branch_exp) -> Some (env', lookup_tenv branch_exp, branch_exp, assert_result.expected)
+    | Some (env', branch_exp) -> Some (env', branch_exp, assert_result.expected)
     end
   | _ ->
     print_endline "Bad assert result; function should be a simple function";
@@ -111,16 +110,15 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let push_down_req _lookup_exp_typed _fillings ((_env, _tenv, _exp, _value) as _req) : req list =
-  failwith "aahh"
-  (* let open Eval in
+let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req list =
+  let open Eval in
   let recurse = push_down_req lookup_exp_typed fillings in
-  let prims, trace_state, frame_no = Primitives.prims, Trace.new_trace_state, -1 in
+  let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
   match exp.pexp_desc with
   | Pexp_ident { txt = Longident.Lident "??"; _ } ->
     begin match Loc_map.find_opt exp.pexp_loc fillings with
-    | Some filling_exp -> recurse (env, tenv, filling_exp, value) (* true env/tenv will not be smaller because it's a syntactic filling *)
+    | Some filling_exp -> recurse (env, filling_exp, value)
     | None -> [req]
     end
   | Pexp_let (recflag, vbs, e) ->
@@ -305,7 +303,7 @@ let push_down_req _lookup_exp_typed _fillings ((_env, _tenv, _exp, _value) as _r
     recurse (nenv, e, value)
   | Pexp_object _ -> [req]
   | Pexp_pack _ -> [req]
-  | Pexp_extension _ -> [req] *)
+  | Pexp_extension _ -> [req]
 
 
 exception ReqsSatisfied of (expression -> Typedtree.expression option) * fillings
@@ -317,59 +315,79 @@ let terms_of_size _names_in_env n =
     |> List.to_seq
   | _ -> Seq.empty
 
+let eval fillings env exp =
+  try Eval.eval_expr fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
+  with _ -> new_vtrace Bomb
 
-(* Preconditions: hole_reqs should (a) be non-empty and (b) be all on the same hole *)
-let guess lookup_exp_typed fillings size (hole_reqs : req list) =
-  let (env1, _, ({ pexp_loc = hole_loc; _ } as hole_exp), _) = List.hd hole_reqs in
-  let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in
-  (* names_in_env |> List.iter (fun name -> match SMap.find name env1.values with (_, Value v) -> print_endline (name ^ "\t: " ^ (v.type_opt |>& Type.to_string ||& "?")) | _ -> ()); *)
-  let eval fillings env exp =
-    try Eval.eval_expr fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
-    with _ -> new_vtrace Bomb in
-  try
-    terms_of_size names_in_env size
-    |> Seq.iter begin fun term ->
-      let fillings' = Loc_map.add hole_loc term fillings in
-      if hole_reqs |> List.for_all (fun (env, _tenv, exp, expected) -> Assert_comparison.values_equal_for_assert (eval fillings' env exp) expected)
-      then
-        (* Mess to keep track of types in the new term. *)
-        let term = Exp.freshen_locs term in
-        let fillings' = Loc_map.add hole_loc term fillings in
-        let lookup_exp_typed' =
-          try
-            let typed_term = term |> Typecore.type_expression (Eval.lookup_type_env lookup_exp_typed hole_exp) in
-            let locmap = ref Loc_map.empty in
-            let module Iter = TypedtreeIter.MakeIterator(struct
-              include TypedtreeIter.DefaultIteratorArgument
-              let enter_expression exp =
-                locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
-            end) in
-            Iter.iter_expression typed_term;
-            let locmap = !locmap in
-            begin fun exp ->
-              match Loc_map.all_at_loc exp.Parsetree.pexp_loc locmap with
-              | []       -> None (* lookup_exp_typed exp *) (* default to exising lookup in the rest of the file *)
-              | [tt_exp] -> Some tt_exp
-              | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string exp.pexp_loc; None
-            end
-          with _ ->
-            print_endline "typing failure in guess";
-            lookup_exp_typed
-        in
-        raise (ReqsSatisfied (lookup_exp_typed', fillings'))
-    end;
-    None
-  with ReqsSatisfied (lookup_exp_typed', fillings') -> Some (lookup_exp_typed', fillings')
+let is_req_satisified_by fillings (env, exp, expected) =
+  Assert_comparison.values_equal_for_assert (eval fillings env exp) expected
+
+(* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
+let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
+  List.init 11 (fun x -> Exp.int_lit (x - 5)) (* -5 to 5 *)
+  |> List.to_seq
+  |> Seq.filter begin fun term ->
+    let fillings = Loc_map.add hole_loc term fillings in
+    reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
+  end
+  |> Seq.map begin fun term ->
+    (* Mess to keep track of types in the new term. *)
+    let term = Exp.freshen_locs term in
+    let fillings = Loc_map.add hole_loc term fillings in
+    let lookup_exp_typed =
+      try
+        let typed_term = term |> Typecore.type_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
+        let locmap = ref Loc_map.empty in
+        let module Iter = TypedtreeIter.MakeIterator(struct
+          include TypedtreeIter.DefaultIteratorArgument
+          let enter_expression exp =
+            locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
+        end) in
+        Iter.iter_expression typed_term;
+        let locmap = !locmap in
+        begin fun loc ->
+          match Loc_map.all_at_loc loc locmap with
+          | []       -> lookup_exp_typed loc (* default to exising lookup in the rest of the file *)
+          | [tt_exp] -> Some tt_exp
+          | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
+        end
+      with _ ->
+        print_endline "typing failure in hole_fillings_seq";
+        lookup_exp_typed
+    in
+    (lookup_exp_typed, fillings)
+  end
 
 
-let fill_holes lookup_exp_typed parsed fillings reqs =
+let fill_holes parsed lookup_exp_typed fillings reqs =
   let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false in
   let hole_locs =
     (Exp.all parsed @ (Loc_map.bindings fillings |>@ snd |>@@ Exp.flatten))
     |>@? is_hole |>@ Exp.loc |> List.dedup in
-  let try_fill_hole (lookup_exp_typed, fillings) hole_loc =
-    let reqs' = reqs |>@@ push_down_req lookup_exp_typed fillings in
-    let reqs_on_hole = reqs' |>@? (fun (_, _, exp, _) -> Exp.loc exp = hole_loc) in
+  let rec fillings_seq lookup_exp_typed fillings hole_locs : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
+    match hole_locs with
+    | [] -> Seq.return (lookup_exp_typed, fillings)
+    | hole_loc::rest ->
+      fillings_seq lookup_exp_typed fillings rest
+      |> Seq.flat_map begin function (lookup_exp_typed, fillings) ->
+        let reqs' = reqs |>@@ push_down_req lookup_exp_typed fillings in
+        let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+        hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole
+      end
+  in
+  fillings_seq lookup_exp_typed fillings hole_locs
+  (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
+  |> Seq.filter begin function (_lookup_exp_typed, fillings) ->
+    reqs |> List.for_all (is_req_satisified_by fillings)
+  end
+  (* Return first valid filling. *)
+  |> begin fun seq ->
+    match seq () with
+    | Seq.Nil -> None
+    | Seq.Cons ((lookup_exp_typed, fillings), _) -> Some (lookup_exp_typed, fillings)
+  end
+
+  (* let try_fill_hole (lookup_exp_typed, fillings) hole_loc =
     (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
     if reqs_on_hole = [] then (lookup_exp_typed, fillings) else
     let rec guess_up_to_size max_size size =
@@ -379,32 +397,30 @@ let fill_holes lookup_exp_typed parsed fillings reqs =
       end in
     guess_up_to_size 1 1
   in
-  List.fold_left try_fill_hole (lookup_exp_typed, fillings) hole_locs
+  List.fold_left try_fill_hole (lookup_exp_typed, fillings) hole_locs *)
 
 
 let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_typed =
   let reqs =
     assert_results
-    |>@& assert_result_to_req lookup_exp_typed in
+    |>@& assert_result_to_req in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  let go (lookup_exp_typed, fillings) =
-    (* Whenver you fill a hole, you need to update the types with the new expressions *)
-    fill_holes lookup_exp_typed parsed fillings reqs
-  in
-  let (_, fillings') = (lookup_exp_typed, fillings) |> go |> go |> go |> go |> go |> go |> go |> go |> go |> go in
-  (* Fill holes until fixpoint or bored. *)
-  parsed
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> apply_fillings fillings'
-  |> fun x -> [x]
+  match fill_holes parsed lookup_exp_typed fillings reqs with
+  | None -> [parsed]
+  | Some (_, fillings') ->
+    (* Fill holes until fixpoint or bored. *)
+    parsed
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> apply_fillings fillings'
+    |> fun x -> [x]
 

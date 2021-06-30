@@ -50,9 +50,9 @@ let exp_typed_lookup_of_file path =
   end) in
   Iter.iter_structure typed_struct;
   let locmap = !locmap in
-  begin fun exp ->
-    match Loc_map.all_at_loc exp.Parsetree.pexp_loc locmap with
+  begin fun loc ->
+    match Loc_map.all_at_loc loc locmap with
     | []       -> None
     | [tt_exp] -> Some tt_exp
-    | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string exp.pexp_loc; None
+    | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
   end

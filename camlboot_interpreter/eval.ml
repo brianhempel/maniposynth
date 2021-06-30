@@ -71,13 +71,13 @@ let rec take n li = match n, li with
     | _, [] -> invalid_arg "List.take"
     | n, x::xs -> x :: take (n - 1) xs
 
-let lookup_type_opt lookup_exp_typed expr =
-  match lookup_exp_typed expr with
+let lookup_type_opt lookup_exp_typed loc =
+  match lookup_exp_typed loc with
   | Some typed_exp -> Some (Shared.Ast.Type.copy typed_exp.Typedtree.exp_type) (* Ensure the lookup map is not mutated! *)
   | None           -> None
 
-let lookup_type_env lookup_exp_typed expr =
-  match lookup_exp_typed expr with
+let lookup_type_env lookup_exp_typed loc =
+  match lookup_exp_typed loc with
   | Some typed_exp -> typed_exp.Typedtree.exp_env
   | None           -> Env.empty
 
@@ -215,7 +215,7 @@ let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
     | Function (cl, fenv_ref) -> eval_match fillings prims !fenv_ref lookup_exp_typed trace_state frame_no cl (Ok arg)
     | Prim prim -> prim arg
     | _ ->
-      Format.eprintf "Trying to apply a nonfunction: %a@." pp_print_value vf;
+      (* Format.eprintf "Trying to apply a nonfunction: %a@." pp_print_value vf; *)
       new_vtrace Bomb
       (* assert false *)
   in
@@ -276,12 +276,12 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
           !var
        with Not_found -> new_vtrace @@ Bomb
      end
-  | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ value_of_constant c
+  | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ value_of_constant c
   | Pexp_let (recflag, vals, e) ->
     (* Don't bother attaching vtrace to let results for now (the body exp will have an entry) *)
     eval_expr fillings prims (eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag vals) lookup_exp_typed trace_state frame_no e
-  | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ new_vtrace @@ Function (cl, ref env)
-  | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
+  | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Function (cl, ref env)
+  | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
   | Pexp_apply (f, l) -> ret @@
     (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no f with
     | { v_ = Fexpr fexpr; _ } ->
@@ -357,11 +357,11 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
     let d = env_get_constr env c in
     let (vv, ctor_type_opt) =
       match e with
-      | None -> (None, lookup_type_opt lookup_exp_typed expr)
+      | None -> (None, lookup_type_opt lookup_exp_typed expr.pexp_loc)
       | Some e ->
         let arg_val = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
         ( Some arg_val
-        , type_ctor (lookup_type_env lookup_exp_typed expr) c (Some arg_val)
+        , type_ctor (lookup_type_env lookup_exp_typed expr.pexp_loc) c (Some arg_val)
         )
     in
     add_type_opt ctor_type_opt @@ intro @@ new_vtrace @@ Constructor (cn, d, vv)

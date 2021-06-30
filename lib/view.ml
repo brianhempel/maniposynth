@@ -203,7 +203,7 @@ let html_of_values_for_loc trace assert_results type_env visualizers loc =
 (* Labels and values may be displayed in different ways (standalone box, or as table cells) *)
 let label_and_values trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   let type_env =
-    lookup_exp_typed exp |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
+    lookup_exp_typed exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   ( string_of_exp exp
   , html_of_values_for_loc trace assert_results type_env visualizers exp.pexp_loc

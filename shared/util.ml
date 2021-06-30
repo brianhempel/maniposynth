@@ -53,6 +53,16 @@ module List = struct
     dedup_ [] list
 end
 
+module Seq = struct
+  include Seq
+
+  (* OCaml 4.07.1 doesn't have Seq.append yet *)
+  let rec append seq1 seq2 () =
+    match seq1 () with
+    | Seq.Nil             -> seq2 ()
+    | Seq.Cons (x, seq1') -> Seq.Cons (x, append seq1' seq2)
+end
+
 module String = struct
   include String
 
