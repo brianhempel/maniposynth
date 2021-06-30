@@ -129,7 +129,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
               span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
                 [html_of_value [] [] Envir.empty_env Env.empty expected]
             end in
-          let code_to_assert_on = Exp.apply exp [(Nolabel, value_to_exp value)] |> Exp.to_string in
+          let code_to_assert_on = Exp.apply exp [(Nolabel, exp_of_value value)] |> Exp.to_string in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
               [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty result_value]

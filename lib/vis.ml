@@ -60,11 +60,11 @@ let possible_vises_for_type typ type_env =
 
 
 
-let rec value_to_exp Camlboot_interpreter.Data.{ v_; _ } =
+let rec exp_of_value Camlboot_interpreter.Data.{ v_; _ } =
   let open Camlboot_interpreter.Data in
   let open Ast_helper in
   let record_value_field_to_exp_field (name, v_ref) =
-    (Loc.mk @@ Longident.Lident name, value_to_exp !v_ref)
+    (Loc.mk @@ Longident.Lident name, exp_of_value !v_ref)
   in
   match v_ with
   | Bomb                                  -> Shared.Ast.Exp.var "??"
@@ -76,8 +76,8 @@ let rec value_to_exp Camlboot_interpreter.Data.{ v_; _ } =
   | Function (cases, _)                   -> Exp.function_ cases
   | String bytes                          -> Exp.constant (Const.string (Bytes.to_string bytes))
   | Float n                               -> Exp.constant (Const.float (string_of_float n))
-  | Tuple vs                              -> Exp.tuple (vs |>@ value_to_exp)
-  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.mk @@ Longident.Lident ctor) (v_opt |>& value_to_exp)
+  | Tuple vs                              -> Exp.tuple (vs |>@ exp_of_value)
+  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.mk @@ Longident.Lident ctor) (v_opt |>& exp_of_value)
   | Prim _                                -> Shared.Ast.Exp.var "??"
   | Fexpr _                               -> Shared.Ast.Exp.var "??"
   | ModVal _                              -> Shared.Ast.Exp.var "??"
@@ -85,7 +85,7 @@ let rec value_to_exp Camlboot_interpreter.Data.{ v_; _ } =
   | OutChannel _                          -> Shared.Ast.Exp.var "??"
   | Record fields                         -> Exp.record (SMap.bindings fields |>@ record_value_field_to_exp_field) None
   | Lz _                                  -> Shared.Ast.Exp.var "??"
-  | Array vs                              -> Exp.array (vs |> Array.to_list |>@ value_to_exp)
+  | Array vs                              -> Exp.array (vs |> Array.to_list |>@ exp_of_value)
   | Fun_with_extra_args (_, _, _)         -> Shared.Ast.Exp.var "??"
   | Object _                              -> Shared.Ast.Exp.var "??"
   | ExCall _                              -> Shared.Ast.Exp.var "??"

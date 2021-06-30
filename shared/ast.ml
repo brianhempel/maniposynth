@@ -231,6 +231,10 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_construct (lid_loced, _) -> Some lid_loced
     | _                             -> None
+
+  let freshen_locs exp =
+    let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
+    mapper.expr mapper exp
 end
 
 
