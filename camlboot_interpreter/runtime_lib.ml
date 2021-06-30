@@ -14,26 +14,27 @@ let builtin_exn_handler wrap_exn f =
     raise exn
     (* Printexc.raise_with_backtrace exn bt *)
 
+
 let prim1 f wrap_exn unwrap1 wrap =
   new_vtrace @@ Prim
-  (fun x -> wrap (builtin_exn_handler wrap_exn (fun () -> f (unwrap1 x))))
+  (fun x -> try wrap (builtin_exn_handler wrap_exn (fun () -> f (unwrap1 x))) with BombExn -> new_vtrace Bomb)
 
 let prim2 f wrap_exn unwrap1 unwrap2 wrap =
   new_vtrace @@ Prim
-  (fun x -> prim1 (f (unwrap1 x)) wrap_exn unwrap2 wrap)
+  (fun x -> try prim1 (f (unwrap1 x)) wrap_exn unwrap2 wrap with BombExn -> new_vtrace Bomb)
 
 let prim3 f wrap_exn unwrap1 unwrap2 unwrap3 wrap =
   new_vtrace @@ Prim
-  (fun x -> prim2 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 wrap)
+  (fun x -> try prim2 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 wrap with BombExn -> new_vtrace Bomb)
 
 let prim4 f wrap_exn unwrap1 unwrap2 unwrap3 unwrap4 wrap =
   new_vtrace @@ Prim
-  (fun x -> prim3 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 unwrap4 wrap)
+  (fun x -> try prim3 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 unwrap4 wrap with BombExn -> new_vtrace Bomb)
 
 let prim5 f wrap_exn unwrap1 unwrap2 unwrap3 unwrap4 unwrap5 wrap =
   new_vtrace @@ Prim
   (fun x ->
-    prim4 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 unwrap4 unwrap5 wrap)
+    try prim4 (f (unwrap1 x)) wrap_exn unwrap2 unwrap3 unwrap4 unwrap5 wrap with BombExn -> new_vtrace Bomb)
 
 let id x = x
 

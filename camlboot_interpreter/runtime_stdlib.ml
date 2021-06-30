@@ -6,14 +6,14 @@ let wrap_in_channel ic = new_vtrace @@ InChannel ic
 let unwrap_in_channel { v_; _ } =
   match v_ with
   | InChannel ic -> ic
-  | _ -> assert false
+  | _ -> raise BombExn
 
 let wrap_out_channel oc = new_vtrace @@ OutChannel oc
 
 let unwrap_out_channel { v_; _ } =
   match v_ with
   | OutChannel oc -> oc
-  | _ -> assert false
+  | _ -> raise BombExn
 
 let wrap_open_flag = function
   | Open_rdonly -> cc "Open_rdonly" 0
@@ -37,7 +37,7 @@ let unwrap_open_flag { v_; _ } =
   | Constructor ("Open_binary", _, None) -> Open_binary
   | Constructor ("Open_text", _, None) -> Open_text
   | Constructor ("Open_nonblock", _, None) -> Open_nonblock
-  | _ -> assert false
+  | _ -> raise BombExn
 
 let rec wrap_list wrapf = function
   | [] -> cc "[]" 0
@@ -52,16 +52,16 @@ let rec unwrap_list unwrapf { v_; _ } =
     begin match arg.v_ with
       | Tuple [ x; l ] ->
          unwrapf x :: unwrap_list unwrapf l
-      | _ -> assert false
+      | _ -> raise BombExn
     end
-  | _ -> assert false
+  | _ -> raise BombExn
 
 let unwrap_marshal_flag { v_; _ } =
   match v_ with
   | Constructor ("No_sharing", _, None) -> Marshal.No_sharing
   | Constructor ("Closures", _, None) -> Marshal.Closures
   | Constructor ("Compat_32", _, None) -> Marshal.Compat_32
-  | _ -> assert false
+  | _ -> raise BombExn
 
 external open_descriptor_out
   :  int ->

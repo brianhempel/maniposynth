@@ -111,8 +111,9 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let rec push_down_req lookup_exp_typed fillings ((env, tenv, exp, value) as req) : req list =
-  let open Eval in
+let push_down_req _lookup_exp_typed _fillings ((_env, _tenv, _exp, _value) as _req) : req list =
+  failwith "aahh"
+  (* let open Eval in
   let recurse = push_down_req lookup_exp_typed fillings in
   let prims, trace_state, frame_no = Primitives.prims, Trace.new_trace_state, -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
@@ -304,7 +305,7 @@ let rec push_down_req lookup_exp_typed fillings ((env, tenv, exp, value) as req)
     recurse (nenv, e, value)
   | Pexp_object _ -> [req]
   | Pexp_pack _ -> [req]
-  | Pexp_extension _ -> [req]
+  | Pexp_extension _ -> [req] *)
 
 
 exception ReqsSatisfied of (expression -> Typedtree.expression option) * fillings
