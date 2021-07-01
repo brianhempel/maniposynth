@@ -332,6 +332,19 @@ let is_tconstr_with_path target_path typ =
   | _ -> false
 
 let is_unit_type = is_tconstr_with_path Predef.path_unit
+let rec is_var_type typ = match typ.Types.desc with
+  | Types.Tvar _
+  | Types.Tunivar _ -> true
+  | Types.Tlink t
+  | Types.Tsubst t -> is_var_type t
+  | _ -> false
+let rec is_arrow_type typ = match typ.Types.desc with
+  | Types.Tarrow _ -> true
+  | Types.Tlink t
+  | Types.Tsubst t -> is_arrow_type t
+  | _ -> false
+
+
 
 let ints_seq = List.to_seq @@ List.init 21 (fun x -> Exp.int_lit (x - 10)) (* -10 to 10 *)
 let strings_seq = List.to_seq @@ [Exp.string_lit ""]
@@ -380,8 +393,10 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     | Types.Tpackage (_, _, _) -> Seq.empty
   in
   let idents_at_type_seq () = (* May be a way to cache this for deeper lookups *)
+    let target_is_var = is_var_type typ in
     let f name _path desc out =
-      if is_imperative desc.Types.val_type then out else
+      if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+      if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
       if Type.does_unify desc.Types.val_type typ
       then Exp.var name :: out
       else out
@@ -400,7 +415,7 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
       | _ -> None
     in
     let f name _path desc out =
-      if is_imperative desc.Types.val_type then out else
+      if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
       match (Type.regular desc.Types.val_type).desc with
       | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) ->
         begin match can_produce_typ ret_t |>& List.cons arg_t with
@@ -437,25 +452,27 @@ let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t 
     let fillings = Loc_map.add hole_loc term fillings in
     reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
   end
-  |> Seq.map begin fun term ->
+  |> Seq.filter_map begin fun term ->
     (* Mess to keep track of types in the new term. *)
+    (* Also, we don't (yet) keep track of type vars between terms, so there can be some incompatibilites caught here. (incompatibiliies between holes will not be caught until execution failure later) *)
     (* print_endline @@ "Typing " ^ Exp.to_string term; *)
     let term = Exp.freshen_locs term in
     let fillings = Loc_map.add hole_loc term fillings in
-    let lookup_exp_typed =
-      try
-        let locmap = term |> Typing.loc_to_type_of_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
+    try
+      let locmap = term |> Typing.loc_to_type_of_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
+      let lookup_exp_typed =
         begin fun loc ->
-          match Loc_map.all_at_loc loc locmap with
-          | []       -> lookup_exp_typed loc (* default to exising lookup in the rest of the file *)
-          | [tt_exp] -> Some tt_exp
-          | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
+        match Loc_map.all_at_loc loc locmap with
+        | []       -> lookup_exp_typed loc (* default to exising lookup in the rest of the file *)
+        | [tt_exp] -> Some tt_exp
+        | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
         end
-      with _ ->
-        print_endline @@ "typing failure in hole_fillings_seq: " ^ Exp.to_string term;
-        lookup_exp_typed
-    in
-    (lookup_exp_typed, fillings)
+      in
+      Some (lookup_exp_typed, fillings)
+    with _ ->
+      (* print_endline @@ "typing failure in hole_fillings_seq: " ^ (try Exp.to_string term with _ -> Formatter_to_stringifier.f (Printast.expression 0) term); *)
+      (* failwith "yolo"; *)
+      None
   end
 
 
@@ -507,7 +524,7 @@ let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   match fill_holes parsed lookup_exp_typed fillings reqs with
-  | exception _ -> print_endline "synth exception"; []
+  | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [parsed]
   | Some (_, fillings') ->
     print_endline "synth success";
