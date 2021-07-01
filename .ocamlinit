@@ -2,5 +2,8 @@
 
 #require "compiler-libs.common"
 
+open Camlboot_interpreter
 open Maniposynth_lib
-open Ast
+open Shared
+open Shared.Ast
+open Shared.Util

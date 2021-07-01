@@ -61,6 +61,22 @@ module Seq = struct
     match seq1 () with
     | Seq.Nil             -> seq2 ()
     | Seq.Cons (x, seq1') -> Seq.Cons (x, append seq1' seq2)
+
+  (* Don't even bother with the computation to initialize seq2 until seq1 is complete *)
+  let rec append_lazy seq1 seq2_thunk () =
+    match seq1 () with
+    | Seq.Nil             -> seq2_thunk () ()
+    | Seq.Cons (x, seq1') -> Seq.Cons (x, append_lazy seq1' seq2_thunk)
+
+  (* Turn n sequences into a sequence that produces lists of n values of all possible combinations between sequences. *)
+  let rec cart_prod seqs =
+    match seqs with
+    | seq1::rest ->
+      seq1 |> Seq.flat_map begin fun elem1 ->
+        cart_prod rest
+        |> Seq.map (List.cons elem1)
+      end
+    | [] -> Seq.return []
 end
 
 module String = struct

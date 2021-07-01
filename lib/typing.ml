@@ -40,6 +40,7 @@ let typedtree_sig_env_of_file path =
   (typed_struct, signature, env)
 
 
+(* Creates a function that given a loc might return a Typedtree.expression node *)
 let exp_typed_lookup_of_file path =
   let (typed_struct, _, _) = typedtree_sig_env_of_file path in
   let locmap = ref Loc_map.empty in
@@ -56,3 +57,16 @@ let exp_typed_lookup_of_file path =
     | [tt_exp] -> Some tt_exp
     | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
   end
+
+
+(* Types the expression and creates a map that given a loc returns the corresponding Typedtree.expression nodes *)
+let loc_to_type_of_expression type_env exp =
+  let typed_exp = Typecore.type_expression type_env exp in
+  let locmap = ref Loc_map.empty in
+  let module Iter = TypedtreeIter.MakeIterator(struct
+    include TypedtreeIter.DefaultIteratorArgument
+    let enter_expression exp =
+      locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
+  end) in
+  Iter.iter_expression typed_exp;
+  !locmap

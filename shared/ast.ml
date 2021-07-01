@@ -148,6 +148,13 @@ module Type = struct
     | Tarrow (Nolabel, ltype, rtype, Cok) -> ltype :: flatten_arrows rtype
     | Types.Tlink typ                     -> flatten_arrows typ
     | _                                   -> [typ]
+
+  (* Follow links/substs to a regular type *)
+  let rec regular typ =
+    match typ.Types.desc with
+    | Types.Tlink typ
+    | Types.Tsubst typ -> regular typ
+    | _ -> typ
 end
 
 
@@ -213,8 +220,8 @@ module Exp = struct
   let var name =
     let loc = Loc_.fresh () in
     ident ~loc { loc = loc; txt = Longident.parse name }
-  let string_lit str = constant (Ast_helper.Const.string str)
   let int_lit n = constant (Ast_helper.Const.int n)
+  let string_lit str = constant (Ast_helper.Const.string str)
 
   let all prog = (everything (Sis prog)).exps
   let flatten exp = (everything (Exp exp)).exps

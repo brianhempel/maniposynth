@@ -114,6 +114,8 @@ let type_ctor env ctor_lid arg_val_opt =
 
 
 let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
+  (* All the pattern binds can raise BombExn *)
+  try begin
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let vf, extral, extram =
@@ -242,6 +244,7 @@ let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
         | _ -> new_vtrace @@ Fun_with_extra_args (vf, [], !with_label)) (* REVISIT *)
     in
     apply_loop vf)
+  end with BombExn -> new_vtrace Bomb
 
 and handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no loc fexpr l =
   match fexpr loc l with
@@ -636,6 +639,8 @@ and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v
       (* What the heck is this *)
       let tupv = intro @@ new_vtrace @@ Tuple [ fmt; v ] in
       pattern_bind fillings prims env lookup_exp_typed trace_state frame_no tupv [] p tupv
+    | Bomb ->
+      raise BombExn
     | _ ->
       Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v;
       assert false)

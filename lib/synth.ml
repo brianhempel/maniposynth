@@ -322,10 +322,92 @@ let eval fillings env exp =
 let is_req_satisified_by fillings (env, exp, expected) =
   Assert_comparison.values_equal_for_assert (eval fillings env exp) expected
 
+
+(* Still need to search env for constructors *)
+
+
+let bool_type_path   = match Predef.type_bool.desc    with Types.Tconstr (path, _, _) -> path | _ -> assert false
+let int_type_path    = match Predef.type_int.desc    with Types.Tconstr (path, _, _) -> path | _ -> assert false
+let string_type_path = match Predef.type_string.desc with Types.Tconstr (path, _, _) -> path | _ -> assert false
+
+let ints_seq = List.to_seq @@ List.init 21 (fun x -> Exp.int_lit (x - 10)) (* -10 to 10 *)
+
+let strings_seq = List.to_seq @@ [Exp.string_lit ""]
+
+let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
+  if depth_limit <= 0 then Seq.empty else
+  let lits_seq =
+    match typ.desc with
+    | Types.Tvar _ -> Seq.empty (* Really, if there's no type information, we should only guess variables in scope introduced under a lambda *)
+    | Types.Tconstr (path, _, _) when path = bool_type_path   -> Seq.empty (* the true and false constructors should be in the type env...once we handle constructors *)
+    | Types.Tconstr (path, _, _) when path = int_type_path    -> ints_seq
+    | Types.Tconstr (path, _, _) when path = string_type_path -> strings_seq
+    | Types.Tconstr (_,    _, _)                              -> Seq.empty
+
+    | Types.Ttuple _ -> Seq.empty
+    | Types.Tfield (_, _, _, _) -> Seq.empty
+    | Types.Tarrow (_, _, _, _) -> Seq.empty
+
+    | Types.Tlink typ
+    | Types.Tsubst typ -> terms_at_type_seq depth_limit tenv typ
+
+    | Types.Tobject (_, _)
+    | Types.Tnil
+    | Types.Tvariant _
+    | Types.Tunivar _
+    | Types.Tpoly (_, _)
+    | Types.Tpackage (_, _, _) -> Seq.empty
+  in
+  let idents_at_type_seq () = (* May be a way to cache this for deeper lookups *)
+    let f name _path desc out =
+      if Type.does_unify desc.Types.val_type typ
+      then Exp.var name :: out
+      else out
+    in
+    Env.fold_values f None(* not looking in a nested module *) tenv []
+    |> List.to_seq
+  in
+  let applys_seq () =
+    Seq.empty
+    (* START HERE producing a wild mess of failures *)
+    (* Returns list of arg types needed. *)
+    (* let rec can_produce_typ ret_t =
+      let ret_t = Type.regular ret_t in
+      if Type.does_unify ret_t typ then Some [] else
+      match ret_t.desc with
+      | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ arg_t |>& List.cons ret_t
+      | _ -> None
+    in
+    let f name _path desc out =
+      match (Type.regular desc.Types.val_type).desc with
+      | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) ->
+        begin match can_produce_typ arg_t |>& List.cons ret_t with
+        | Some arg_types_needed -> (name, arg_types_needed) :: out
+        | None -> out
+        end
+      | _ -> out
+    in
+    Env.fold_values f None(* not looking in a nested module *) tenv []
+    |> List.to_seq
+    |> Seq.flat_map begin fun (name, arg_types_needed) ->
+      arg_types_needed
+      |>@ (fun arg_t -> terms_at_type_seq (depth_limit-1) tenv arg_t)
+      |> Seq.cart_prod
+      |> Seq.map (fun args -> Exp.apply (Exp.var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
+    end *)
+  in
+  (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
+  Seq.append_lazy lits_seq
+    (fun () -> Seq.append_lazy (idents_at_type_seq ()) applys_seq)
+
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
-  List.init 11 (fun x -> Exp.int_lit (x - 5)) (* -5 to 5 *)
-  |> List.to_seq
+  let terms_seq =
+    match Eval.lookup_type_opt lookup_exp_typed hole_loc with
+    | Some typ -> terms_at_type_seq 2 (Eval.lookup_type_env lookup_exp_typed hole_loc) typ
+    | _ -> Seq.empty
+  in
+  terms_seq
   |> Seq.filter begin fun term ->
     let fillings = Loc_map.add hole_loc term fillings in
     reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
@@ -336,15 +418,7 @@ let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t 
     let fillings = Loc_map.add hole_loc term fillings in
     let lookup_exp_typed =
       try
-        let typed_term = term |> Typecore.type_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
-        let locmap = ref Loc_map.empty in
-        let module Iter = TypedtreeIter.MakeIterator(struct
-          include TypedtreeIter.DefaultIteratorArgument
-          let enter_expression exp =
-            locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
-        end) in
-        Iter.iter_expression typed_term;
-        let locmap = !locmap in
+        let locmap = term |> Typing.loc_to_type_of_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
         begin fun loc ->
           match Loc_map.all_at_loc loc locmap with
           | []       -> lookup_exp_typed loc (* default to exising lookup in the rest of the file *)
