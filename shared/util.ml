@@ -34,8 +34,12 @@ end
 module List = struct
   include List
 
-  let rec findmap_opt f =
-    function
+  let rec last = function
+    | []      -> raise (Invalid_argument "List.last called on empty list")
+    | [x]     -> x
+    | _::rest -> last rest
+
+  let rec findmap_opt f = function
     | []      -> None
     | x::rest ->
       begin match f x with

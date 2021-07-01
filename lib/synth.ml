@@ -326,23 +326,44 @@ let is_req_satisified_by fillings (env, exp, expected) =
 (* Still need to search env for constructors *)
 
 
-let bool_type_path   = match Predef.type_bool.desc    with Types.Tconstr (path, _, _) -> path | _ -> assert false
-let int_type_path    = match Predef.type_int.desc    with Types.Tconstr (path, _, _) -> path | _ -> assert false
-let string_type_path = match Predef.type_string.desc with Types.Tconstr (path, _, _) -> path | _ -> assert false
+let is_tconstr_with_path target_path typ =
+  match typ.Types.desc with
+  | Types.Tconstr (path, _, _) -> path = target_path
+  | _ -> false
+
+let is_unit_type = is_tconstr_with_path Predef.path_unit
 
 let ints_seq = List.to_seq @@ List.init 21 (fun x -> Exp.int_lit (x - 10)) (* -10 to 10 *)
-
 let strings_seq = List.to_seq @@ [Exp.string_lit ""]
+
+let is_channel typ =
+  match typ.Types.desc with
+  | Types.Tconstr (Path.Pdot (_, "in_channel",  _), [], _) -> true
+  | Types.Tconstr (Path.Pdot (_, "out_channel", _), [], _) -> true
+  | _ -> false
+
+(* Estimate which functions are imperative. *)
+let is_imperative typ =
+  let flat = Type.flatten_arrows typ in
+  let ret_t = List.last flat in
+  is_unit_type ret_t ||
+  (is_unit_type (List.hd flat) && List.length flat = 2) ||
+  List.exists is_channel flat ||
+  match ret_t.desc with
+  | Types.Tvar (Some name) ->
+    Type.flatten typ |> List.exists (function { Types.desc = Types.Tvar (Some name2); _ } -> name = name2 | _ -> false)
+  | _ -> false
+
 
 let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
   if depth_limit <= 0 then Seq.empty else
   let lits_seq =
     match typ.desc with
     | Types.Tvar _ -> Seq.empty (* Really, if there's no type information, we should only guess variables in scope introduced under a lambda *)
-    | Types.Tconstr (path, _, _) when path = bool_type_path   -> Seq.empty (* the true and false constructors should be in the type env...once we handle constructors *)
-    | Types.Tconstr (path, _, _) when path = int_type_path    -> ints_seq
-    | Types.Tconstr (path, _, _) when path = string_type_path -> strings_seq
-    | Types.Tconstr (_,    _, _)                              -> Seq.empty
+    | Types.Tconstr (path, _, _) when path = Predef.path_bool   -> Seq.empty (* the true and false constructors should be in the type env...once we handle constructors *)
+    | Types.Tconstr (path, _, _) when path = Predef.path_int    -> ints_seq
+    | Types.Tconstr (path, _, _) when path = Predef.path_string -> strings_seq
+    | Types.Tconstr (_,    _, _)                                -> Seq.empty
 
     | Types.Ttuple _ -> Seq.empty
     | Types.Tfield (_, _, _, _) -> Seq.empty
@@ -360,6 +381,7 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
   in
   let idents_at_type_seq () = (* May be a way to cache this for deeper lookups *)
     let f name _path desc out =
+      if is_imperative desc.Types.val_type then out else
       if Type.does_unify desc.Types.val_type typ
       then Exp.var name :: out
       else out
@@ -368,20 +390,20 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     |> List.to_seq
   in
   let applys_seq () =
-    Seq.empty
     (* START HERE producing a wild mess of failures *)
     (* Returns list of arg types needed. *)
-    (* let rec can_produce_typ ret_t =
+    let rec can_produce_typ ret_t =
       let ret_t = Type.regular ret_t in
       if Type.does_unify ret_t typ then Some [] else
       match ret_t.desc with
-      | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ arg_t |>& List.cons ret_t
+      | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ ret_t |>& List.cons arg_t
       | _ -> None
     in
     let f name _path desc out =
+      if is_imperative desc.Types.val_type then out else
       match (Type.regular desc.Types.val_type).desc with
       | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) ->
-        begin match can_produce_typ arg_t |>& List.cons ret_t with
+        begin match can_produce_typ ret_t |>& List.cons arg_t with
         | Some arg_types_needed -> (name, arg_types_needed) :: out
         | None -> out
         end
@@ -390,11 +412,13 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     Env.fold_values f None(* not looking in a nested module *) tenv []
     |> List.to_seq
     |> Seq.flat_map begin fun (name, arg_types_needed) ->
+      (* print_endline name; *)
+      (* print_endline @@ String.concat ", " (arg_types_needed |>@ Type.to_string); *)
       arg_types_needed
       |>@ (fun arg_t -> terms_at_type_seq (depth_limit-1) tenv arg_t)
       |> Seq.cart_prod
       |> Seq.map (fun args -> Exp.apply (Exp.var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
-    end *)
+    end
   in
   (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
   Seq.append_lazy lits_seq
@@ -409,11 +433,13 @@ let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t 
   in
   terms_seq
   |> Seq.filter begin fun term ->
+    (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
     reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
   end
   |> Seq.map begin fun term ->
     (* Mess to keep track of types in the new term. *)
+    (* print_endline @@ "Typing " ^ Exp.to_string term; *)
     let term = Exp.freshen_locs term in
     let fillings = Loc_map.add hole_loc term fillings in
     let lookup_exp_typed =
@@ -426,7 +452,7 @@ let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t 
           | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
         end
       with _ ->
-        print_endline "typing failure in hole_fillings_seq";
+        print_endline @@ "typing failure in hole_fillings_seq: " ^ Exp.to_string term;
         lookup_exp_typed
     in
     (lookup_exp_typed, fillings)
@@ -481,8 +507,10 @@ let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   match fill_holes parsed lookup_exp_typed fillings reqs with
-  | None -> [parsed]
+  | exception _ -> print_endline "synth exception"; []
+  | None -> print_endline "synth failed"; [parsed]
   | Some (_, fillings') ->
+    print_endline "synth success";
     (* Fill holes until fixpoint or bored. *)
     parsed
     |> apply_fillings fillings'

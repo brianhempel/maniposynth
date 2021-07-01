@@ -149,6 +149,33 @@ module Type = struct
     | Types.Tlink typ                     -> flatten_arrows typ
     | _                                   -> [typ]
 
+  let rec flatten typ =
+    let open Types in
+    let rec flatten_row_field = function
+    | Rpresent (Some t)                                 -> flatten t
+    | Rpresent None                                     -> []
+    | Reither (_, ts, _, { contents = Some row_field }) -> concat_map flatten ts @ flatten_row_field row_field
+    | Reither (_, ts, _, { contents = None })           -> concat_map flatten ts
+    | Rabsent                                           -> []
+    in
+    typ ::
+    match typ.desc with
+    | Tvar _                                   -> []
+    | Tarrow (_, l, r, _)                      -> flatten l @ flatten r
+    | Ttuple ts                                -> concat_map flatten ts
+    | Tconstr (_, ts, _)                       -> concat_map flatten ts
+    | Tobject (t, { contents = Some (_, ts) }) -> flatten t @ concat_map flatten ts
+    | Tobject (t, { contents = None })         -> flatten t
+    | Tfield (_, _, t1, t2)                    -> flatten t1 @ flatten t2
+    | Tnil                                     -> []
+    | Tlink t                                  -> flatten t
+    | Tsubst t                                 -> flatten t
+    | Tunivar _                                -> []
+    | Tpoly (t, ts)                            -> concat_map flatten (t::ts)
+    | Tpackage (_, _, ts)                      -> concat_map flatten ts
+    | Tvariant { row_fields; row_more; row_name = Some (_, ts); _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more @ concat_map flatten ts
+    | Tvariant { row_fields; row_more; row_name = None;         _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more
+
   (* Follow links/substs to a regular type *)
   let rec regular typ =
     match typ.Types.desc with
