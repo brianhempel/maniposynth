@@ -5,7 +5,8 @@ open Shared
 open Shared.Ast
 open Shared.Util
 
-(* type constraint = Envir.env * Parsetree.expression * value *)
+
+module SSet = Set.Make(String)
 
 type fillings = expression Loc_map.t
 
@@ -24,15 +25,34 @@ let string_of_req (_env, exp, value) =
 
 let dont_care = new_vtrace ExDontCare
 
+let eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no exp =
+  Eval.with_fuel 100 begin fun () ->
+    try Eval.eval_expr fillings prims env lookup_exp_typed trace_state frame_no exp
+    with _ -> new_vtrace Bomb
+  end (fun () -> new_vtrace Bomb)
+
+let pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no root_v path p v =
+  Eval.with_fuel 100 begin fun () ->
+    Eval.pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v path p v
+  end (fun () -> raise Eval.Match_fail)
+
+let eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no mod_exp =
+  Eval.with_fuel 100 begin fun () ->
+    Some (Eval.eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no mod_exp)
+  end (fun () -> None)
+
+let eval fillings env exp =
+  eval_exp_fueled fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
+
 let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val cases =
   let open Eval in
   match cases with (* still not handling cases that mix regular ctors and exception ctors (pattern_bind_checkexn) *)
   | [] -> None
   | case:: rest -> begin try
-      let env' = pattern_bind fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val [] case.pc_lhs scrutinee_val in
+      let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val [] case.pc_lhs scrutinee_val in
       begin match case.pc_guard with
       | None -> ()
-      | Some guard when is_true (eval_expr fillings prims env' lookup_exp_typed trace_state frame_no guard) -> ()
+      | Some guard when is_true (eval_exp_fueled fillings prims env' lookup_exp_typed trace_state frame_no guard) -> ()
       | _ -> raise Match_fail
       end;
       Some (env', case.pc_rhs)
@@ -45,7 +65,7 @@ let assert_result_to_req assert_result : req option =
   match assert_result.f.v_ with
   | Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref) ->
     let arg = assert_result.arg in
-    let env' = Eval.pattern_bind fillings prims !env_ref lookup_exp_typed trace_state frame_no arg [] pat arg in
+    let env' = pattern_bind_fueled fillings prims !env_ref lookup_exp_typed trace_state frame_no arg [] pat arg in
     Some (env', body_exp, assert_result.expected)
   | Function (cases, env_ref) ->
     let arg = assert_result.arg in
@@ -153,7 +173,7 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
   | Pexp_fun (Nolabel, None, arg_pat, body_exp) ->
     begin match value.v_ with
     | ExCall (arg, expected) -> begin try
-        let env' = pattern_bind fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
+        let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
         recurse (env', body_exp, expected)
       with Match_fail -> [req]
       end
@@ -162,7 +182,7 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
   | Pexp_fun (_, _, _, _) -> [req]
   | Pexp_apply (fexp, labeled_args) ->
     if List.for_all (fun (label, _) -> label == Asttypes.Nolabel) labeled_args then
-      let arg_vals = List.map (fun (_, e) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e) labeled_args in
+      let arg_vals = List.map (fun (_, e) -> eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e) labeled_args in
       (* Expand example to arg1 -> arg2 -> ex *)
       let expanded_example = List.fold_right (fun arg ex -> new_vtrace @@ ExCall (arg, ex)) arg_vals value in
       (* Push it down the function expression *)
@@ -177,7 +197,7 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
     | _ -> [req]
     end
   | Pexp_match (e, cases) ->
-    let arg = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
+    let arg = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e in
     begin match try_cases arg cases with
     | None -> [req]
     | Some (env', branch_exp) -> recurse (env', branch_exp, value)
@@ -185,12 +205,12 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
   | Pexp_coerce (e, _, _)  -> recurse (env, e, value)
   | Pexp_constraint (e, _) -> recurse (env, e, value)
   | Pexp_sequence (e1, e2) ->
-    let _ = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in (* Do we even need to do this? *)
+    let _ = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in (* Do we even need to do this? *)
     recurse (env, e2, value)
   | Pexp_while (_, _) -> [req]
   | Pexp_for (_, _, _, _, _) -> [req]
   | Pexp_ifthenelse (e1, e2, e3_opt) ->
-    let guard_val = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e1 in
+    let guard_val = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in
     begin try if is_true guard_val
     then recurse (env, e2, value)
     else (
@@ -285,9 +305,12 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
     recurse (nenv, e, value)
   | Pexp_letmodule (name, me, e) ->
     (* Will this mutate? :/ *)
-    let m = eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no me in
-    let env' = Envir.env_set_module name.txt m env in
-    recurse (env', e, value)
+    begin match eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no me with
+    | Some m ->
+      let env' = Envir.env_set_module name.txt m env in
+      recurse (env', e, value)
+    | None -> [req]
+    end
   | Pexp_assert _ -> [req]
   | Pexp_lazy _ -> [req]
   | Pexp_poly (e, _) -> recurse (env, e, value)
@@ -306,6 +329,61 @@ let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req
   | Pexp_extension _ -> [req]
 
 
+exception Found_names of string list
+
+(* Estimate that all names syntactically under a lambda are "non-constant". *)
+let nonconstant_names_at_loc target_loc prog =
+  let dflt_iter = Ast.dflt_iter in
+  let in_func = ref false in
+  let names = ref [] in
+  let iter_case iter case =
+    let higher_names = !names in
+    if !in_func then names := Pat.names case.pc_lhs @ !names;
+    dflt_iter.case iter case;
+    names := higher_names
+  in
+  let iter_exp iter exp =
+    let higher_in_func = !in_func in
+    let higher_names   = !names in
+    if target_loc = target_loc then raise (Found_names !names);
+    begin match exp.pexp_desc with
+    | Pexp_let (Asttypes.Recursive, vbs, _body) ->
+      if !in_func then names := (vbs |>@@ Vb.names) @ !names;
+      dflt_iter.expr iter exp
+    | Pexp_let (Asttypes.Nonrecursive, vbs, body) ->
+      vbs |> List.iter (iter.value_binding iter);
+      if !in_func then names := (vbs |>@@ Vb.names) @ !names;
+      iter.expr iter body;
+    | Pexp_function _cases ->
+      in_func := true;
+      dflt_iter.expr iter exp
+    | Pexp_fun (_, arg_opt, pat, body) ->
+      arg_opt |>& iter.expr iter ||& ();
+      iter.pat iter pat;
+      in_func := true;
+      names   := Pat.names pat @ !names;
+      iter.expr iter body
+    | Pexp_for (pat, e_lo, e_hi, _, body) ->
+      iter.pat iter pat;
+      iter.expr iter e_lo;
+      iter.expr iter e_hi;
+      names := Pat.names pat @ !names;
+      iter.expr iter body
+    | _ -> dflt_iter.expr iter exp
+    end;
+    names   := higher_names;
+    in_func := higher_in_func;
+  in
+  let iter = { dflt_iter with case = iter_case; expr = iter_exp } in
+  try
+    iter.structure iter prog;
+    print_endline @@ "nonconstant_names_at_loc: didn't find loc " ^ Loc.to_string target_loc;
+    SSet.empty
+  with Found_names names ->
+    print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names;
+    SSet.of_seq (List.to_seq names)
+
+
 exception ReqsSatisfied of (expression -> Typedtree.expression option) * fillings
 
 let terms_of_size _names_in_env n =
@@ -315,11 +393,11 @@ let terms_of_size _names_in_env n =
     |> List.to_seq
   | _ -> Seq.empty
 
-let eval fillings env exp =
-  try Eval.eval_expr fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
-  with _ -> new_vtrace Bomb
 
 let is_req_satisified_by fillings (env, exp, expected) =
+  (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
+  with _ -> Loc_map.bindings fillings |>@ snd |>@ (Formatter_to_stringifier.f (Printast.expression 0)) |> List.iter print_endline
+  end; *)
   Assert_comparison.values_equal_for_assert (eval fillings env exp) expected
 
 
@@ -367,12 +445,13 @@ let is_imperative typ =
     Type.flatten typ |> List.exists (function { Types.desc = Types.Tvar (Some name2); _ } -> name = name2 | _ -> false)
   | _ -> false
 
+let unimplemented_prim_names = SSet.of_seq (List.to_seq ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"])
+let dont_bother_names = SSet.of_seq (List.to_seq ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"])
 
-let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
-  if depth_limit <= 0 then Seq.empty else
+let constants_at_type_seq nonconstant_names tenv typ =
   let lits_seq =
-    match typ.desc with
-    | Types.Tvar _ -> Seq.empty (* Really, if there's no type information, we should only guess variables in scope introduced under a lambda *)
+    match (Type.regular typ).desc with
+    | Types.Tvar _                                              -> Seq.append ints_seq strings_seq
     | Types.Tconstr (path, _, _) when path = Predef.path_bool   -> Seq.empty (* the true and false constructors should be in the type env...once we handle constructors *)
     | Types.Tconstr (path, _, _) when path = Predef.path_int    -> ints_seq
     | Types.Tconstr (path, _, _) when path = Predef.path_string -> strings_seq
@@ -382,23 +461,48 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     | Types.Tfield (_, _, _, _) -> Seq.empty
     | Types.Tarrow (_, _, _, _) -> Seq.empty
 
-    | Types.Tlink typ
-    | Types.Tsubst typ -> terms_at_type_seq depth_limit tenv typ
-
     | Types.Tobject (_, _)
     | Types.Tnil
     | Types.Tvariant _
     | Types.Tunivar _
     | Types.Tpoly (_, _)
     | Types.Tpackage (_, _, _) -> Seq.empty
+
+    | Types.Tlink _
+    | Types.Tsubst _ -> assert false (* Type.regular already traversed these *)
   in
   let idents_at_type_seq () = (* May be a way to cache this for deeper lookups *)
     let target_is_var = is_var_type typ in
     let f name _path desc out =
       if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+      if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
+      if SSet.mem name dont_bother_names then out else
+      if SSet.mem name nonconstant_names then out else
       if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
       if Type.does_unify desc.Types.val_type typ
-      then Exp.var name :: out
+      then Exp.simple_var name :: out
+      else out
+    in
+    Env.fold_values f None(* not looking in a nested module *) tenv []
+    |> List.to_seq
+  in
+  (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
+  Seq.append_lazy lits_seq idents_at_type_seq
+
+
+
+let rec nonconstants_at_type_seq depth_limit nonconstant_names (tenv : Env.t) (typ : Types.type_expr) =
+  if depth_limit <= 0 then Seq.empty else
+  let idents_at_type_seq = (* May be a way to cache this for deeper lookups *)
+    let target_is_var = is_var_type typ in
+    let f name _path desc out =
+      if not (SSet.mem name nonconstant_names) then out else
+      if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+      if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
+      if SSet.mem name dont_bother_names then out else
+      if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
+      if Type.does_unify desc.Types.val_type typ
+      then Exp.simple_var name :: out
       else out
     in
     Env.fold_values f None(* not looking in a nested module *) tenv []
@@ -409,13 +513,17 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     (* Returns list of arg types needed. *)
     let rec can_produce_typ ret_t =
       let ret_t = Type.regular ret_t in
-      if Type.does_unify ret_t typ then Some [] else
-      match ret_t.desc with
-      | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ ret_t |>& List.cons arg_t
-      | _ -> None
+      if Type.does_unify ret_t typ && (* no partial applications at type 'a *) not (is_var_type typ && is_arrow_type ret_t) then
+        Some []
+      else
+        match ret_t.desc with
+        | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ ret_t |>& List.cons arg_t
+        | _ -> None
     in
     let f name _path desc out =
       if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+      if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
+      if SSet.mem name dont_bother_names then out else
       match (Type.regular desc.Types.val_type).desc with
       | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) ->
         begin match can_produce_typ ret_t |>& List.cons arg_t with
@@ -429,27 +537,70 @@ let rec terms_at_type_seq depth_limit (tenv : Env.t) (typ : Types.type_expr) =
     |> Seq.flat_map begin fun (name, arg_types_needed) ->
       (* print_endline name; *)
       (* print_endline @@ String.concat ", " (arg_types_needed |>@ Type.to_string); *)
-      arg_types_needed
-      |>@ (fun arg_t -> terms_at_type_seq (depth_limit-1) tenv arg_t)
-      |> Seq.cart_prod
-      |> Seq.map (fun args -> Exp.apply (Exp.var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
+      match arg_types_needed with
+      | [] -> assert false
+      | [t1] ->
+        nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t1
+        |> Seq.map (fun arg -> Exp.apply (Exp.simple_var name) [(Asttypes.Nolabel, arg)])
+      | [t1; t2] ->
+        let nonconstants_at_t1 = nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t1 in
+        let nonconstants_at_t2 = nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t2 in
+        let constants_at_t1    = constants_at_type_seq                    nonconstant_names tenv t1 in
+        let constants_at_t2    = constants_at_type_seq                    nonconstant_names tenv t2 in
+        [ [nonconstants_at_t1; nonconstants_at_t2]
+        ; [nonconstants_at_t1; constants_at_t2]
+        ; [constants_at_t1;    nonconstants_at_t2]
+        ]
+        |> List.to_seq
+        |> Seq.flat_map begin fun combo ->
+          Seq.cart_prod combo
+          |> Seq.map (fun args -> Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
+        end
+      | [t1; t2; t3] ->
+        let nonconstants_at_t1 = nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t1 in
+        let nonconstants_at_t2 = nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t2 in
+        let nonconstants_at_t3 = nonconstants_at_type_seq (depth_limit-1) nonconstant_names tenv t3 in
+        let constants_at_t1    = constants_at_type_seq                    nonconstant_names tenv t1 in
+        let constants_at_t2    = constants_at_type_seq                    nonconstant_names tenv t2 in
+        let constants_at_t3    = constants_at_type_seq                    nonconstant_names tenv t3 in
+        [ [nonconstants_at_t1; nonconstants_at_t2; nonconstants_at_t3]
+        ; [constants_at_t1;    nonconstants_at_t2; nonconstants_at_t3]
+        ; [nonconstants_at_t1; constants_at_t2;    nonconstants_at_t3]
+        ; [nonconstants_at_t1; nonconstants_at_t2; constants_at_t3]
+        ; [constants_at_t1;    constants_at_t2;    nonconstants_at_t3]
+        ; [constants_at_t1;    nonconstants_at_t2; constants_at_t3]
+        ; [nonconstants_at_t1; constants_at_t2;    constants_at_t3]
+        ]
+        |> List.to_seq
+        |> Seq.flat_map begin fun combo ->
+          Seq.cart_prod combo
+          |> Seq.map (fun args -> Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
+        end
+      | _ -> Seq.empty (* Don't guess applies with more than 3 args. *)
     end
   in
   (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
-  Seq.append_lazy lits_seq
-    (fun () -> Seq.append_lazy (idents_at_type_seq ()) applys_seq)
+  Seq.append_lazy idents_at_type_seq applys_seq
+
+let terms_tested_count = ref 0
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
-let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
+let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole prog : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
   let terms_seq =
+    (* let nonconstant_names = SSet.empty in *)
+    let nonconstant_names = nonconstant_names_at_loc hole_loc (apply_fillings fillings prog) in
     match Eval.lookup_type_opt lookup_exp_typed hole_loc with
-    | Some typ -> terms_at_type_seq 2 (Eval.lookup_type_env lookup_exp_typed hole_loc) typ
+    | Some typ ->
+      let tenv = Eval.lookup_type_env lookup_exp_typed hole_loc in
+      Seq.append (constants_at_type_seq nonconstant_names tenv typ) (nonconstants_at_type_seq 3 nonconstant_names tenv typ)
     | _ -> Seq.empty
   in
   terms_seq
   |> Seq.filter begin fun term ->
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
+    incr terms_tested_count;
+    if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term);
     reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
   end
   |> Seq.filter_map begin fun term ->
@@ -476,7 +627,7 @@ let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole : ((Loc.t 
   end
 
 
-let fill_holes parsed lookup_exp_typed fillings reqs =
+let fill_holes parsed lookup_exp_typed fillings reqs prog =
   let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false in
   let hole_locs =
     (Exp.all parsed @ (Loc_map.bindings fillings |>@ snd |>@@ Exp.flatten))
@@ -489,7 +640,7 @@ let fill_holes parsed lookup_exp_typed fillings reqs =
       |> Seq.flat_map begin function (lookup_exp_typed, fillings) ->
         let reqs' = reqs |>@@ push_down_req lookup_exp_typed fillings in
         let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
-        hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole
+        hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole prog
       end
   in
   fillings_seq lookup_exp_typed fillings hole_locs
@@ -523,7 +674,7 @@ let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_
     |>@& assert_result_to_req in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  match fill_holes parsed lookup_exp_typed fillings reqs with
+  match fill_holes parsed lookup_exp_typed fillings reqs parsed with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [parsed]
   | Some (_, fillings') ->
@@ -542,4 +693,5 @@ let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_
     |> apply_fillings fillings'
     |> apply_fillings fillings'
     |> fun x -> [x]
+
 

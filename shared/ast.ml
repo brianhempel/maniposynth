@@ -244,9 +244,12 @@ module Exp = struct
   end)
 
   include Ast_helper.Exp (* Exp builders *)
-  let var name =
+  let simple_var name = (* don't parse module paths *)
     let loc = Loc_.fresh () in
-    ident ~loc { loc = loc; txt = Longident.parse name }
+    ident ~loc { loc = loc; txt = Longident.Lident name }
+  let var name = (* parse module paths *)
+    let loc = Loc_.fresh () in
+    { (name |> Lexing.from_string |> Parse.expression) with pexp_loc = loc }
   let int_lit n = constant (Ast_helper.Const.int n)
   let string_lit str = constant (Ast_helper.Const.string str)
 

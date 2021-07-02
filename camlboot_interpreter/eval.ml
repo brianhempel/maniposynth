@@ -27,6 +27,14 @@ let add_assert_result assert_result assert_results =
 
 let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] (f x) y"
 
+exception No_fuel
+let fuel = ref max_int
+let with_fuel count f out_of_fuel_f =
+  fuel := count;
+  let out = try f () with No_fuel -> out_of_fuel_f () | e -> fuel := max_int; raise e in
+  fuel := max_int;
+  out
+
 
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
@@ -254,6 +262,8 @@ and handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no 
   | Some expr -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr
 
 and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
+  fuel := !fuel - 1;
+  if !fuel < 0 then raise No_fuel;
   let attach_trace value =
     let trace_entry = (expr.pexp_loc, frame_no, value, env) in
     trace_state.Trace.trace <- Trace.add trace_entry trace_state.Trace.trace;
@@ -288,6 +298,8 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_apply (f, l) -> ret @@
     (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no f with
     | { v_ = Fexpr fexpr; _ } ->
+      (* print_endline (Shared.Ast.Exp.to_string f);
+      l |> List.iter (fun (_, arg) -> print_endline (Shared.Ast.Exp.to_string arg)); *)
       handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr l
     | func_value ->
       let args = List.map (fun (lab, e) -> (lab, eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)) l in
@@ -997,7 +1009,7 @@ and eval_structitem fillings prims env lookup_exp_typed trace_state frame_no it 
       with Not_found ->
         new_vtrace @@ Prim
           (fun _ ->
-            Format.eprintf "%a@." Location.print_loc loc;
+            Format.eprintf "Unimplemented primitive %s as %s %a@." prim_name name Location.print_loc loc;
             failwith ("Unimplemented primitive " ^ prim_name))
     in
     env_set_value name prim env

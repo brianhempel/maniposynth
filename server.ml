@@ -66,7 +66,8 @@ let render_maniposynth out_chan url =
   respond out_chan html_str
 
 let try_synth path =
-  if Unix.fork () = `In_the_child then begin
+  match Unix.fork () with
+  | `In_the_child ->
     let parsed = Camlboot_interpreter.Interp.parse path in
     (* let parsed_with_comments = Parse_unparse.parse_file path in
     let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
@@ -88,7 +89,17 @@ let try_synth path =
       end
     end;
     exit 0
-  end
+  | `In_the_parent pid ->
+    (* Kill synthesis after 5 seconds. *)
+    Unix.sleep 5;
+    begin match Unix.wait_nohang (`Pid pid) with
+    | None ->
+      ignore (Signal.send Signal.kill (`Pid pid));
+      print_endline "Synth timeout"
+    | _ -> ()
+    end
+
+
 
 
 

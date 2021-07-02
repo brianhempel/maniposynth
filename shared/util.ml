@@ -72,6 +72,11 @@ module Seq = struct
     | Seq.Nil             -> seq2_thunk () ()
     | Seq.Cons (x, seq1') -> Seq.Cons (x, append_lazy seq1' seq2_thunk)
 
+  let rec concat seqs =
+    match seqs with
+    | []        -> Seq.empty
+    | seq::rest -> append seq (concat rest)
+
   (* Turn n sequences into a sequence that produces lists of n values of all possible combinations between sequences. *)
   let rec cart_prod seqs =
     match seqs with
