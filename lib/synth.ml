@@ -6,7 +6,11 @@ open Shared.Ast
 open Shared.Util
 
 
-(* Next thing to do to make fast:  *)
+(* Next things to do to make fast:
+  - type var unification with in a filling...so it doesn't compare a list to a number
+  - when a hole has type 'a, don't try items with a more specific static type
+  - try using assert information to speculate types on holes, from specific to general (e.g. if assert result is (int list), try (int list), ('a list), and 'a)
+*)
 
 module SSet = Set.Make(String)
 
@@ -620,12 +624,12 @@ let terms_tested_count = ref 0
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 (* prog should already have fillings applied to it *)
-let hole_fillings_seq fillings hole_loc static_hole_type tenv reqs_on_hole prog : fillings Seq.t =
+let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog : fillings Seq.t =
   let terms_seq =
     (* let nonconstant_names = SSet.empty in *)
-    print_endline (Loc.to_string hole_loc);
+    (* print_endline (Loc.to_string hole_loc);
     print_endline (string_of_int (List.length reqs_on_hole));
-    print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req));
+    print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req)); *)
     let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
     let synth_env = new_synth_env nonconstant_names tenv in
     Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 3 synth_env static_hole_type)
@@ -637,7 +641,7 @@ let hole_fillings_seq fillings hole_loc static_hole_type tenv reqs_on_hole prog 
     let fillings = Loc_map.add hole_loc term fillings in
     incr terms_tested_count;
     if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term);
-    if reqs_on_hole |> List.for_all (is_req_satisified_by fillings) then
+    if true (* reqs_on_hole |> List.for_all (is_req_satisified_by fillings) *) then
       Some fillings
     else
       None
@@ -657,21 +661,26 @@ let fill_holes prog reqs file_name : fillings option =
     | hole_loc::rest ->
       fillings_seq fillings rest
       |> Seq.flat_map begin function fillings ->
-        print_endline "retyping prog";
+        (* print_endline "retyping prog"; *)
         let prog = apply_fillings fillings prog in
-        let (typed_prog, _, _) = Typing.typedtree_sig_env_of_parsed prog file_name in
+        let (typed_prog, _, _) =
+          try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
+          with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
+        in
         begin match Typing.find_node_by_loc hole_loc typed_prog with
         | None ->
-          print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog;
+          (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
           Seq.empty
         | Some hole_typed_node ->
-          let reqs' = reqs |>@@ push_down_req fillings in
-          let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
-          hole_fillings_seq fillings hole_loc hole_typed_node.exp_type hole_typed_node.exp_env reqs_on_hole prog
+          (* let reqs' = reqs |>@@ push_down_req fillings in
+          let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
+          hole_fillings_seq fillings hole_loc hole_typed_node.exp_type hole_typed_node.exp_env [] prog
         end
       end
   in
-  fillings_seq Loc_map.empty hole_locs
+  (* 29s backward *)
+  (* 302s backward *)
+  fillings_seq Loc_map.empty (hole_locs)
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
     reqs |> List.for_all (is_req_satisified_by fillings)
@@ -697,6 +706,7 @@ let fill_holes prog reqs file_name : fillings option =
 
 
 let results parsed _trace assert_results file_name =
+  let start_sec = Unix.time () in
   let reqs =
     assert_results
     |>@& assert_result_to_req in
@@ -706,7 +716,7 @@ let results parsed _trace assert_results file_name =
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [parsed]
   | Some fillings' ->
-    print_endline "synth success";
+    print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
     (* Fill holes until fixpoint or bored. *)
     parsed
     |> apply_fillings fillings'
