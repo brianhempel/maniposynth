@@ -22,23 +22,37 @@ let inital_env =
   env_with_hole
 
 
+let typedtree_sig_env_of_parsed parsed file_name =
+  Env.set_unit_name @@ Compenv.module_of_filename formatter file_name file_name;
+  (* print_endline @@ Compenv.module_of_filename formatter path path; *)
+  try Typemod.type_structure inital_env parsed (Location.in_file file_name)
+  with Typetexp.Error (_loc, env, err) ->
+    Typetexp.report_error env formatter err;
+    print_endline "";
+    failwith "typedtree conversion failed"
+
 (* Returns (typedtree_structure, signature, env) *)
 let typedtree_sig_env_of_file path =
   let parsed = Camlboot_interpreter.Interp.parse path in
   let (typed_struct, signature, env) =
-    Env.set_unit_name @@ Compenv.module_of_filename formatter path path;
-    (* print_endline @@ Compenv.module_of_filename formatter path path; *)
-    try Typemod.type_structure inital_env parsed (Location.in_file path)
-    with Typetexp.Error (_loc, env, err) ->
-      Typetexp.report_error env formatter err;
-      print_endline "";
-      failwith "typedtree conversion failed"
+    typedtree_sig_env_of_parsed parsed path
   in
   (* Printtyped.implementation formatter typedtree;
   Printtyp.signature formatter signature;
   Format.pp_print_newline formatter (); *)
   (typed_struct, signature, env)
 
+let target_loc = ref Location.none
+exception Found_exp of Typedtree.expression
+module ExpFinder = TypedtreeIter.MakeIterator(struct
+  include TypedtreeIter.DefaultIteratorArgument
+  let enter_expression exp =
+    if exp.Typedtree.exp_loc = !target_loc then raise (Found_exp exp)
+end)
+let find_node_by_loc loc typed_struct =
+  target_loc := loc;
+  try ExpFinder.iter_structure typed_struct; None
+  with Found_exp exp -> Some exp
 
 (* Creates a function that given a loc might return a Typedtree.expression node *)
 let exp_typed_lookup_of_file path =

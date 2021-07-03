@@ -79,7 +79,7 @@ let try_synth path =
       Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
         Camlboot_interpreter.Interp.run_files lookup_exp_typed [path]
       end in
-    Synth.results parsed trace assert_results lookup_exp_typed
+    Synth.results parsed trace assert_results path
     |> List.iteri ~f:begin fun i result ->
       let out_path = String.substr_replace_all path ~pattern:".ml" ~with_:("-synth" ^ string_of_int i ^ ".ml") in
       Out_channel.with_file out_path ~f:begin fun out ->

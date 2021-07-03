@@ -6,6 +6,8 @@ open Shared.Ast
 open Shared.Util
 
 
+(* Next thing to do to make fast:  *)
+
 module SSet = Set.Make(String)
 
 type fillings = expression Loc_map.t
@@ -130,9 +132,9 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let rec push_down_req lookup_exp_typed fillings ((env, exp, value) as req) : req list =
+let rec push_down_req fillings ((env, exp, value) as req) : req list =
   let open Eval in
-  let recurse = push_down_req lookup_exp_typed fillings in
+  let recurse = push_down_req fillings in
   let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
   match exp.pexp_desc with
@@ -617,82 +619,68 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
 let terms_tested_count = ref 0
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
-let hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole prog : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
+(* prog should already have fillings applied to it *)
+let hole_fillings_seq fillings hole_loc static_hole_type tenv reqs_on_hole prog : fillings Seq.t =
   let terms_seq =
     (* let nonconstant_names = SSet.empty in *)
     print_endline (Loc.to_string hole_loc);
     print_endline (string_of_int (List.length reqs_on_hole));
     print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req));
-    let nonconstant_names = nonconstant_names_at_loc hole_loc (apply_fillings fillings prog) in
-    match Eval.lookup_type_opt lookup_exp_typed hole_loc with
-    | Some typ ->
-      let tenv = Eval.lookup_type_env lookup_exp_typed hole_loc in
-      let synth_env = new_synth_env nonconstant_names tenv in
-      Seq.append (constants_at_type_seq synth_env typ) (nonconstants_at_type_seq 3 synth_env typ)
-      (* nonconstants_at_type_seq 3 synth_env typ *)
-      (* constants_at_type_seq synth_env typ *)
-    | _ -> Seq.empty
+    let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
+    let synth_env = new_synth_env nonconstant_names tenv in
+    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 3 synth_env static_hole_type)
   in
   terms_seq
-  |> Seq.filter begin fun term ->
+  |> Seq.filter_map begin fun term ->
     (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
     incr terms_tested_count;
     if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term);
-    reqs_on_hole |> List.for_all (is_req_satisified_by fillings)
-  end
-  |> Seq.filter_map begin fun term ->
-    (* Mess to keep track of types in the new term. *)
-    (* Also, we don't (yet) keep track of type vars between terms, so there can be some incompatibilites caught here. (incompatibiliies between holes will not be caught until execution failure later) *)
-    (* print_endline @@ "Typing " ^ Exp.to_string term; *)
-    let term = Exp.freshen_locs term in
-    let fillings = Loc_map.add hole_loc term fillings in
-    try
-      let locmap = term |> Typing.loc_to_type_of_expression (Eval.lookup_type_env lookup_exp_typed hole_loc) in
-      let lookup_exp_typed =
-        begin fun loc ->
-        match Loc_map.all_at_loc loc locmap with
-        | []       -> lookup_exp_typed loc (* default to exising lookup in the rest of the file *)
-        | [tt_exp] -> Some tt_exp
-        | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
-        end
-      in
-      Some (lookup_exp_typed, fillings)
-    with _ ->
-      (* print_endline @@ "typing failure in hole_fillings_seq: " ^ (try Exp.to_string term with _ -> Formatter_to_stringifier.f (Printast.expression 0) term); *)
-      (* failwith "yolo"; *)
+    if reqs_on_hole |> List.for_all (is_req_satisified_by fillings) then
+      Some fillings
+    else
       None
   end
 
-
-let fill_holes parsed lookup_exp_typed fillings reqs prog =
-  Printast.structure 0 Format.std_formatter prog;
+let fill_holes prog reqs file_name : fillings option =
+  (* Printast.structure 0 Format.std_formatter prog; *)
   let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false in
   let hole_locs =
-    (Exp.all parsed @ (Loc_map.bindings fillings |>@ snd |>@@ Exp.flatten))
-    |>@? is_hole |>@ Exp.loc |> List.dedup in
-  let rec fillings_seq lookup_exp_typed fillings hole_locs : ((Loc.t -> Typedtree.expression option) * fillings) Seq.t =
+    (* let reqs' = reqs |>@@ push_down_req Loc_map.empty in *)
+    Exp.all prog |>@? is_hole |>@ Exp.loc
+    (* |> Sort.list (fun loc1 loc2 -> loc1 <= loc2) *)
+  in
+  let rec fillings_seq fillings hole_locs : fillings Seq.t =
     match hole_locs with
-    | [] -> Seq.return (lookup_exp_typed, fillings)
+    | [] -> Seq.return fillings
     | hole_loc::rest ->
-      fillings_seq lookup_exp_typed fillings rest
-      |> Seq.flat_map begin function (lookup_exp_typed, fillings) ->
-        let reqs' = reqs |>@@ push_down_req lookup_exp_typed fillings in
-        let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
-        hole_fillings_seq lookup_exp_typed fillings hole_loc reqs_on_hole prog
+      fillings_seq fillings rest
+      |> Seq.flat_map begin function fillings ->
+        print_endline "retyping prog";
+        let prog = apply_fillings fillings prog in
+        let (typed_prog, _, _) = Typing.typedtree_sig_env_of_parsed prog file_name in
+        begin match Typing.find_node_by_loc hole_loc typed_prog with
+        | None ->
+          print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog;
+          Seq.empty
+        | Some hole_typed_node ->
+          let reqs' = reqs |>@@ push_down_req fillings in
+          let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+          hole_fillings_seq fillings hole_loc hole_typed_node.exp_type hole_typed_node.exp_env reqs_on_hole prog
+        end
       end
   in
-  fillings_seq lookup_exp_typed fillings hole_locs
+  fillings_seq Loc_map.empty hole_locs
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
-  |> Seq.filter begin function (_lookup_exp_typed, fillings) ->
+  |> Seq.filter begin function fillings ->
     reqs |> List.for_all (is_req_satisified_by fillings)
   end
   (* Return first valid filling. *)
   |> begin fun seq ->
     match seq () with
     | Seq.Nil -> None
-    | Seq.Cons ((lookup_exp_typed, fillings), _) -> Some (lookup_exp_typed, fillings)
+    | Seq.Cons (fillings, _) -> Some fillings
   end
 
   (* let try_fill_hole (lookup_exp_typed, fillings) hole_loc =
@@ -708,16 +696,16 @@ let fill_holes parsed lookup_exp_typed fillings reqs prog =
   List.fold_left try_fill_hole (lookup_exp_typed, fillings) hole_locs *)
 
 
-let results ?(fillings = Loc_map.empty) parsed _trace assert_results lookup_exp_typed =
+let results parsed _trace assert_results file_name =
   let reqs =
     assert_results
     |>@& assert_result_to_req in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  match fill_holes parsed lookup_exp_typed fillings reqs parsed with
+  match fill_holes parsed reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [parsed]
-  | Some (_, fillings') ->
+  | Some fillings' ->
     print_endline "synth success";
     (* Fill holes until fixpoint or bored. *)
     parsed
