@@ -34,6 +34,11 @@ end
 module List = struct
   include List
 
+  (* List.for_all2 but returns false when lists have different lengths *)
+  let for_all2_safe pred list1 list2 =
+    try for_all2 pred list1 list2
+    with Invalid_argument _ -> false
+
   let rec last = function
     | []      -> raise (Invalid_argument "List.last called on empty list")
     | [x]     -> x
@@ -47,6 +52,14 @@ module List = struct
       | some_y -> some_y
       end
 
+  let rec assoc_by_opt pred = function
+    | [] -> None
+    | (k, v)::rest ->
+      if pred k then Some v
+      else assoc_by_opt pred rest
+
+  (* List already has sort_uniq *)
+  (* This preserves order. *)
   let dedup list =
     let rec dedup_ out = function
     | [] -> rev out

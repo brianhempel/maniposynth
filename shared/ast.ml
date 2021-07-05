@@ -95,6 +95,8 @@ module Type = struct
   type t = Types.type_expr
 
   let to_string typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.type_expr typ
+  (* let to_string_raw typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.raw_type_expr typ *)
+  let to_string_raw typ = Formatter_to_stringifier.f Printtyp.raw_type_expr typ
   let from_string ?(env = Env.empty) str =
     begin
       Lexing.from_string str
@@ -109,7 +111,131 @@ module Type = struct
       Typetexp.report_error type_env Format.std_formatter err;
       None
 
-  let copy (t : t) : t = Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
+  let copy (t : t) : t = Btype.cleanup_abbrev (); Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
+
+  let new_var () = Btype.newgenvar ()
+
+
+  (* Follow links/substs to a regular type *)
+  (* See printtyp.ml for "safe_repr" version that catches cycles *)
+  let rec regular typ =
+    match typ.Types.desc with
+    | Types.Tlink typ
+    | Types.Tsubst typ -> regular typ
+    | _ -> typ
+
+  (* For cache keying. Faster than unification. *)
+  let rec equal_ignoring_id_and_scope (* ?(show = false) *) (t1 : t) (t2 : t) : bool =
+    let open Types in
+    (* let rec safe_repr v = function (* copied from printtyp.ml *)
+      {desc = Tlink t; _} when not (List.memq t v) ->
+        safe_repr (t::v) t
+      | t -> t
+    in *)
+    let recurse = equal_ignoring_id_and_scope (* ~show *) in
+    let t1 = regular t1 in
+    let t2 = regular t2 in
+    t1.level = t2.level &&
+    begin
+    (* (fun b -> if not b then
+      (if show then print_endline (to_string_raw t1 ^ " <> " ^ to_string_raw t2); b)
+    else
+      b
+    ) @@ *)
+    match t1.desc, t2.desc with
+    | Tvar str_opt1, Tvar str_opt2
+    | Tunivar str_opt1, Tunivar str_opt2 ->
+      (* let p = function None -> "None" | Some str -> "Some \'" ^ str ^ "\'" in
+      if show then print_endline (p str_opt1 ^ " vs " ^ p str_opt2 ^ " " ^ string_of_bool (str_opt1 = str_opt2)); *)
+      str_opt1 = str_opt2
+
+    | Tarrow (lab1, t_l1, t_r1, comm1)
+    , Tarrow (lab2, t_l2, t_r2, comm2) -> lab1 = lab2 && comm1 = comm2 && recurse t_l1 t_l2 && recurse t_r1 t_r2
+
+    | Ttuple ts1
+    , Ttuple ts2 -> List.for_all2_safe recurse ts1 ts2
+
+    | Tconstr (path1, ts1, _abbrev_memo1)
+    , Tconstr (path2, ts2, _abbrev_memo2) ->
+      (* if show then begin match path1, path2 with
+      | Path.Pident ident1, Path.Pident ident2 -> print_endline (Formatter_to_stringifier.f Ident.print ident1 ^ " vs " ^ Formatter_to_stringifier.f Ident.print ident2 ^ " is " ^ string_of_bool (Path.same path1 path2))
+      | _ -> ()
+      end; *)
+      Path.same path1 path2 && (
+        (* if show then begin
+          print_endline (string_of_bool (List.for_all2_safe recurse ts1 ts2));
+          print_endline ("ts1: " ^ String.concat ", " (ts1 |>@ to_string_raw));
+          print_endline ("ts2: " ^ String.concat ", " (ts2 |>@ to_string_raw));
+        end; *)
+        List.for_all2_safe recurse ts1 ts2
+      )
+
+    | Tobject (t1, { contents = Some (path1, ts1) })
+    , Tobject (t2, { contents = Some (path2, ts2) }) ->
+      recurse t1 t2 && Path.same path1 path2 && List.for_all2_safe recurse ts1 ts2
+
+    | Tobject (t1, { contents = None })
+    , Tobject (t2, { contents = None }) ->
+      recurse t1 t2
+
+    | Tobject _
+    , Tobject _ -> false
+
+    | Tfield (lab1, kind1, t1, t_rest1)
+    , Tfield (lab2, kind2, t2, t_rest2) ->
+      lab1 = lab2 && kind1 = kind2 && recurse t1 t2 && recurse t_rest1 t_rest2
+
+    | Tnil
+    , Tnil -> true
+
+    | Tlink t1, _
+    | Tsubst t1, _ -> recurse t1 t2
+    | _, Tlink t2
+    | _, Tsubst t2 -> recurse t1 t2
+
+    | Tvariant row1
+    , Tvariant row2 ->
+      List.for_all2_safe begin fun (lab1, field1) (lab2, field2) ->
+        lab1 = lab2 &&
+        let rec row_fields_equal_ignoring_id field1 field2 =
+          match field1, field2 with
+          | Rpresent (Some t1), Rpresent (Some t2)-> recurse t1 t2
+          | Rpresent None, Rpresent None -> true
+          | Reither (bool_a1, ts1, bool_b1, { contents = Some field1 })
+          , Reither (bool_a2, ts2, bool_b2, { contents = Some field2 }) ->
+            bool_a1 = bool_a2 &&
+            List.for_all2_safe recurse ts1 ts2 &&
+            bool_b1 = bool_b2 &&
+            row_fields_equal_ignoring_id field1 field2
+          | Reither (bool_a1, ts1, bool_b1, { contents = None })
+          , Reither (bool_a2, ts2, bool_b2, { contents = None }) ->
+            bool_a1 = bool_a2 &&
+            List.for_all2_safe recurse ts1 ts2 &&
+            bool_b1 = bool_b2
+          | Rabsent, Rabsent -> true
+          | _ -> false
+        in
+        row_fields_equal_ignoring_id field1 field2
+      end row1.row_fields row2.row_fields &&
+      recurse row1.row_more row2.row_more &&
+      row1.row_closed = row2.row_closed &&
+      row1.row_fixed = row2.row_fixed &&
+      begin match row1.row_name, row2.row_name with
+      | Some (path1, ts1), Some (path2, ts2) -> Path.same path1 path2 && List.for_all2_safe recurse ts1 ts2
+      | None, None -> true
+      | _ -> false
+      end
+
+    | Tpoly (t1, ts1)
+    , Tpoly (t2, ts2) -> recurse t1 t2 && List.for_all2_safe recurse ts1 ts2
+
+    | Tpackage (path1, lids1, ts1)
+    , Tpackage (path2, lids2, ts2) ->
+      Path.same path1 path2 && List.for_all2_safe (=) lids1 lids2 && List.for_all2_safe recurse ts1 ts2
+
+    | _ -> false
+    end
+
 
   (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
   (* These all don't work. *)
@@ -140,14 +266,37 @@ module Type = struct
       (* print_endline @@ to_string t1 ^ " !~ " ^ to_string t2; *)
       false
 
+  (* I think t1 and t2 may still be mutated even if unification fails. *)
+  let unify_mutating_opt t1 t2 =
+    try
+      Ctype.unify Env.empty t1 t2;
+      Some t1
+    with _ -> None
+
+  let unify_opt t1 t2 =
+    let t1' = copy t1 in
+    try
+      Ctype.unify Env.empty t1' (copy t2);
+      Some t1'
+    with _ -> None
+
   (* Stops flattening if a labeled argument is encountered. *)
   (* e.g. 'a -> 'b -> 'c to ['a, 'b, 'c] *)
   let rec flatten_arrows typ =
     let open Types in
     match typ.desc with
     | Tarrow (Nolabel, ltype, rtype, Cok) -> ltype :: flatten_arrows rtype
-    | Types.Tlink typ                     -> flatten_arrows typ
+    | Tlink typ                           -> flatten_arrows typ
     | _                                   -> [typ]
+
+  let arrow t1 t2 =
+    Btype.newgenty @@ Tarrow (Nolabel, t1, t2, Cok)
+
+  let rec unflatten_arrows types =
+    match types with
+    | []      -> failwith "shouldn't give an empty type list to Type.unflatten_arrows"
+    | [t]     -> t
+    | t::rest -> arrow t (unflatten_arrows rest)
 
   let rec flatten typ =
     let open Types in
@@ -175,13 +324,6 @@ module Type = struct
     | Tpackage (_, _, ts)                      -> concat_map flatten ts
     | Tvariant { row_fields; row_more; row_name = Some (_, ts); _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more @ concat_map flatten ts
     | Tvariant { row_fields; row_more; row_name = None;         _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more
-
-  (* Follow links/substs to a regular type *)
-  let rec regular typ =
-    match typ.Types.desc with
-    | Types.Tlink typ
-    | Types.Tsubst typ -> regular typ
-    | _ -> typ
 end
 
 

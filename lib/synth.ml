@@ -397,12 +397,13 @@ let nonconstant_names_at_loc target_loc prog =
 type synth_env =
     { nonconstant_names                : SSet.t
     ; tenv                             : Env.t
-    ; mutable constants_at_t           : (Types.type_expr * expression Seq.t) list
-    ; mutable nonconstants_at_t        : (Types.type_expr * expression Seq.t) list
-    ; mutable funcs_that_can_produce_t : (Types.type_expr * (string * Types.type_expr list) Seq.t) list
+    ; mutable constants_at_t           : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
+    ; mutable nonconstants_at_t        : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
+    ; mutable funcs_that_can_produce_t : (Types.type_expr * (string * int * Types.type_expr) Seq.t) list
     }
 
 let new_synth_env nonconstant_names tenv =
+  print_endline "------------------------------ new synth env ------------------------------";
   { nonconstant_names        = nonconstant_names
   ; tenv                     = tenv
   ; constants_at_t           = []
@@ -440,8 +441,10 @@ let rec is_arrow_type typ = match typ.Types.desc with
 
 
 
-let ints = List.init 21 (fun x -> Exp.int_lit (x - 10)) (* -10 to 10 *)
-let strings = [Exp.string_lit ""]
+(* -10 to 10 *)
+let ints = List.init 21 (fun x -> (Exp.int_lit (x - 10), Predef.type_int))
+(* let ints = [(Exp.int_lit 0, Predef.type_int); (Exp.int_lit 1, Predef.type_int)] *)
+let strings = [(Exp.string_lit "", Predef.type_string)]
 
 let is_channel typ =
   match typ.Types.desc with
@@ -462,13 +465,15 @@ let is_imperative typ =
   | _ -> false
 
 let unimplemented_prim_names = SSet.of_seq (List.to_seq ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"])
-let dont_bother_names = SSet.of_seq (List.to_seq ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"])
+let dont_bother_names = SSet.of_seq (List.to_seq ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"])
 
 let constants_at_type_seq synth_env typ =
-  match List.assoc_opt typ synth_env.constants_at_t with
+  match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.constants_at_t with
   | Some seq -> seq
   | None ->
-    print_endline @@ "Recomputing constants at " ^ Type.to_string typ;
+    print_endline @@ "Recomputing constants at " ^ Type.to_string typ(*  ^ "\n" ^ Type.to_string_raw typ ^ "\n" *);
+    (* ignore (List.assoc_by_opt (Type.equal_ignoring_id_and_scope ~show:true typ) synth_env.constants_at_t); *)
+    (* print_endline (fst (List.split synth_env.constants_at_t) |>@ Type.to_string_raw |> String.concat ", "); *)
     let lits =
       match (Type.regular typ).desc with
       | Types.Tvar _                                              -> ints @ strings
@@ -499,9 +504,9 @@ let constants_at_type_seq synth_env typ =
         if SSet.mem name dont_bother_names then out else
         if SSet.mem name synth_env.nonconstant_names then out else
         if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
-        if Type.does_unify desc.Types.val_type typ
-        then Exp.simple_var name :: out
-        else out
+        match Type.unify_opt desc.Types.val_type typ with
+        | Some type' -> (Exp.simple_var name, type') :: out
+        | None -> out
       in
       Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
     in
@@ -514,7 +519,7 @@ let constants_at_type_seq synth_env typ =
 let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
   if depth_limit <= 0 || SSet.is_empty synth_env.nonconstant_names then Seq.empty else
   let idents_at_type_seq =
-    match List.assoc_opt typ synth_env.nonconstants_at_t with
+    match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.nonconstants_at_t with
     | Some seq -> seq
     | None ->
       print_endline @@ "Recomputing nonconstants at " ^ Type.to_string typ;
@@ -525,9 +530,9 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
         if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
         if SSet.mem name dont_bother_names then out else
         if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
-        if Type.does_unify desc.Types.val_type typ
-        then Exp.simple_var name :: out
-        else out
+        match Type.unify_opt desc.Types.val_type typ with
+        | Some type' -> (Exp.simple_var name, type') :: out
+        | None -> out
       in
       let seq =
         Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
@@ -539,28 +544,42 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
   in
   let applys_seq () =
     let funcs_seq =
-      match List.assoc_opt typ synth_env.funcs_that_can_produce_t with
+      match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
       | Some seq -> seq
       | None ->
         print_endline @@ "Recomputing possible funcs at " ^ Type.to_string typ;
-        let rec can_produce_typ ret_t = (* Returns list of arg types needed. *)
-          let ret_t = Type.regular ret_t in
-          if Type.does_unify ret_t typ && (* no partial applications at type 'a *) not (is_var_type typ && is_arrow_type ret_t) then
-            Some []
-          else
-            match ret_t.desc with
-            | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) -> can_produce_typ ret_t |>& List.cons arg_t
+        let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicit remember number of args in case desired return type is an arrow. *)
+          let t = Type.regular t in
+          begin match Type.unify_opt t typ with
+          | Some t ->
+            if not (is_var_type typ && is_arrow_type t) (* no partial applications at type 'a *)
+            then Some (0, t)
+            else None
+          | None ->
+            begin match t.desc with
+            | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) ->
+              can_produce_typ t_r
+              |>&& begin fun (arg_count, t_r') ->
+                Type.(unify_mutating_opt (copy t) (arrow (new_var ()) t_r'))
+                |>& (fun t' -> (arg_count + 1, t'))
+              end
             | _ -> None
+            end
+          end
         in
         let f name _path desc out =
           if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
           if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
           if SSet.mem name dont_bother_names then out else
-          match (Type.regular desc.Types.val_type).desc with
-          | Types.Tarrow (Asttypes.Nolabel, arg_t, ret_t, _) ->
-            begin match can_produce_typ ret_t |>& List.cons arg_t with
-            | Some arg_types_needed -> (name, arg_types_needed) :: out
-            | None -> out
+          let name_type = Type.regular desc.Types.val_type in
+          match name_type.desc with
+          | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->
+            begin match can_produce_typ t_r with
+            | Some (arg_count, t_r_unified_with_goal_ret_t) ->
+              Type.(unify_mutating_opt (copy name_type) (arrow (new_var ()) t_r_unified_with_goal_ret_t))
+              |>& (fun name_type' -> (* print_endline (name ^ " : " ^ Type.to_string name_type' ^ " for " ^ Type.to_string typ); *) (name, arg_count + 1, name_type') :: out )
+              ||& out
+            | _ -> out
             end
           | _ -> out
         in
@@ -572,10 +591,60 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
         seq
     in
     funcs_seq
-    |> Seq.flat_map begin fun (name, arg_types_needed) ->
-      (* print_endline name; *)
-      (* print_endline @@ String.concat ", " (arg_types_needed |>@ Type.to_string); *)
-      match arg_types_needed with
+    |> Seq.flat_map begin fun (name, arg_count, func_type) ->
+      let rec args_seq arg_count func_type =
+        if arg_count <= 0 then Seq.return ([], false, func_type) else
+        let func_type = Type.regular func_type in
+        match func_type.desc with
+        | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->
+          args_seq (arg_count - 1) t_r
+          |> Seq.flat_map begin fun (args_r, non_constant_used, t_r') ->
+            let arg_t' = Type.new_var () in
+            begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' (copy t_r'))) with
+            | Some func_type' ->
+              let nonconstants = nonconstants_at_type_seq (depth_limit-1) synth_env arg_t' in
+              let constants    = constants_at_type_seq                    synth_env arg_t' in
+              Seq.append begin
+                nonconstants
+                |> Seq.filter_map begin fun (term, term_t) ->
+                  Type.unify_opt func_type' (Type.arrow term_t t_r')
+                  |>& (fun func_type'' -> (* print_endline (name ^ " : " ^ Type.to_string func_type ^ " to " ^ Type.to_string func_type'' ^ " for arg " ^ Exp.to_string term ^ " of type " ^ Type.to_string term_t); *) (term::args_r, true, func_type''))
+                end
+              end begin
+                constants
+                |> Seq.filter_map begin fun (term, term_t) ->
+                  Type.unify_opt func_type' (Type.arrow term_t t_r')
+                  |>& (fun func_type'' -> (term::args_r, non_constant_used, func_type''))
+                end
+              end
+            | None ->
+              Seq.empty
+            end
+          end
+        | _ -> failwith "this shouldn't happen"
+      in
+      args_seq arg_count func_type
+      |> Seq.filter_map begin fun (args, non_constant_used, func_type) ->
+        (* print_endline name;
+        print_endline @@ Type.to_string func_type; *)
+        let rec drop_n_args_from_arrow n typ =
+          if n <= 0 then typ else
+          begin match (Type.regular typ).desc with
+          | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) -> drop_n_args_from_arrow (n - 1) t_r
+          | _                                          -> failwith "huuuuuuh?"
+          end
+        in
+        if non_constant_used then
+          Some
+            ( Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg))
+            , drop_n_args_from_arrow (List.length args) func_type
+            )
+        else
+          None
+      end
+
+
+      (* match Type.flatten_arrows func_type with
       | [] -> assert false
       | [t1] ->
         nonconstants_at_type_seq (depth_limit-1) synth_env t1
@@ -615,6 +684,7 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
           |> Seq.map (fun args -> Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
         end
       | _ -> Seq.empty (* Don't guess applies with more than 3 args. *)
+ *)
     end
   in
   (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
@@ -635,8 +705,8 @@ let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog
     Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 3 synth_env static_hole_type)
   in
   terms_seq
-  |> Seq.filter_map begin fun term ->
-    (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
+  |> Seq.filter_map begin fun (term, term_t) ->
+    print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term ^ "\t" ^ Type.to_string term_t ^ "\t" ^ Type.to_string static_hole_type);
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
     incr terms_tested_count;
@@ -679,8 +749,8 @@ let fill_holes prog reqs file_name : fillings option =
       end
   in
   (* 29s backward *)
-  (* 302s backward *)
-  fillings_seq Loc_map.empty (hole_locs)
+  (* 302s forward *)
+  fillings_seq Loc_map.empty hole_locs
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
     reqs |> List.for_all (is_req_satisified_by fillings)
