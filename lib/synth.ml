@@ -399,7 +399,7 @@ type synth_env =
     ; tenv                             : Env.t
     ; mutable constants_at_t           : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
     ; mutable nonconstants_at_t        : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
-    ; mutable funcs_that_can_produce_t : (Types.type_expr * (string * int * Types.type_expr) Seq.t) list
+    ; mutable funcs_that_can_produce_t : (Types.type_expr * (Types.type_expr (* func type, already unified with the ret type *) * (int (* number of arguments needed *) * string list ref (* function names at that type *))) Seq.t) list
     }
 
 let new_synth_env nonconstant_names tenv =
@@ -543,12 +543,12 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
       seq
   in
   let applys_seq () =
-    let funcs_seq =
+    let func_types_seq =
       match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
-      | Some seq -> seq
+      | Some func_types -> func_types
       | None ->
         print_endline @@ "Recomputing possible funcs at " ^ Type.to_string typ;
-        let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicit remember number of args in case desired return type is an arrow. *)
+        let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicitly remember number of args in case desired return type is an arrow. *)
           let t = Type.regular t in
           begin match Type.unify_opt t typ with
           | Some t ->
@@ -583,22 +583,61 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
             end
           | _ -> out
         in
-        let seq =
-          Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
+        let func_types_seq =
+          let list_of_name_args_func_type : (string * int * Types.type_expr) list =
+            Env.fold_values f None(* not looking in a nested module *) synth_env.tenv [] in
+          let gather (name, arg_count, func_type) out : (Types.type_expr * (int * string list ref)) list =
+            match List.assoc_by_opt (Type.equal_ignoring_id_and_scope func_type) out with
+            | None -> (func_type, (arg_count, ref [name])) :: out
+            | Some (_, names_ref) -> names_ref := name :: !names_ref; out
+          in
+          List.fold_right gather list_of_name_args_func_type []
           |> List.to_seq
         in
-        synth_env.funcs_that_can_produce_t <- synth_env.funcs_that_can_produce_t @ [(typ, seq)];
-        seq
+        synth_env.funcs_that_can_produce_t <- synth_env.funcs_that_can_produce_t @ [(typ, func_types_seq)];
+        func_types_seq
     in
-    funcs_seq
-    |> Seq.flat_map begin fun (name, arg_count, func_type) ->
-      let rec args_seq arg_count func_type =
-        if arg_count <= 0 then Seq.return ([], false, func_type) else
+    func_types_seq
+    |> Seq.flat_map begin fun (func_type, (arg_count, names_ref)) ->
+      let rec args_seq arg_count non_constant_used func_type =
+        if arg_count <= 0 then Seq.return ([], func_type) else
         let func_type = Type.regular func_type in
         match func_type.desc with
+        | Types.Tarrow (Asttypes.Nolabel, arg_t, t_r, _) ->
+          (* let nonconstants = nonconstants_at_type_seq (depth_limit-1) synth_env arg_t in *)
+          (* let constants    = constants_at_type_seq                    synth_env arg_t in *)
+          let seq1 =
+            nonconstants_at_type_seq (depth_limit-1) synth_env arg_t
+            |> Seq.flat_map begin fun (arg, arg_t') ->
+              let t_r' = Type.copy t_r in
+              begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' t_r')) with
+              | Some func_type' ->
+                args_seq (arg_count-1) true func_type'
+                |> Seq.map (fun (args_r, func_type'') -> (arg::args_r, func_type''))
+              | None -> Seq.empty
+              end
+            end
+          in
+          let seq2 () =
+            if arg_count = 1 && not non_constant_used then Seq.empty else
+            nonconstants_at_type_seq (depth_limit-1) synth_env arg_t
+            |> Seq.flat_map begin fun (arg, arg_t') ->
+              let t_r' = Type.copy t_r in
+              begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' t_r')) with
+              | Some func_type' ->
+                args_seq (arg_count-1) non_constant_used func_type'
+                |> Seq.map (fun (args_r, func_type'') -> (arg::args_r, func_type''))
+              | None -> Seq.empty
+              end
+            end
+          in
+          Seq.append_lazy seq1 seq2
+        | _ -> failwith "this shouldn't happen"
+
+        (* match func_type.desc with
         | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->
-          args_seq (arg_count - 1) t_r
-          |> Seq.flat_map begin fun (args_r, non_constant_used, t_r') ->
+          args_seq (arg_count - 1) non_constant_used t_r
+          |> Seq.flat_map begin fun (args_r, t_r') ->
             let arg_t' = Type.new_var () in
             begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' (copy t_r'))) with
             | Some func_type' ->
@@ -608,23 +647,23 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
                 nonconstants
                 |> Seq.filter_map begin fun (term, term_t) ->
                   Type.unify_opt func_type' (Type.arrow term_t t_r')
-                  |>& (fun func_type'' -> (* print_endline (name ^ " : " ^ Type.to_string func_type ^ " to " ^ Type.to_string func_type'' ^ " for arg " ^ Exp.to_string term ^ " of type " ^ Type.to_string term_t); *) (term::args_r, true, func_type''))
+                  |>& (fun func_type'' -> (* print_endline (name ^ " : " ^ Type.to_string func_type ^ " to " ^ Type.to_string func_type'' ^ " for arg " ^ Exp.to_string term ^ " of type " ^ Type.to_string term_t); *) (term::args_r, func_type''))
                 end
               end begin
                 constants
                 |> Seq.filter_map begin fun (term, term_t) ->
                   Type.unify_opt func_type' (Type.arrow term_t t_r')
-                  |>& (fun func_type'' -> (term::args_r, non_constant_used, func_type''))
+                  |>& (fun func_type'' -> (term::args_r, func_type''))
                 end
               end
             | None ->
               Seq.empty
             end
           end
-        | _ -> failwith "this shouldn't happen"
+        | _ -> failwith "this shouldn't happen" *)
       in
-      args_seq arg_count func_type
-      |> Seq.filter_map begin fun (args, non_constant_used, func_type) ->
+      args_seq arg_count false func_type
+      |> Seq.flat_map begin fun (args, func_type) ->
         (* print_endline name;
         print_endline @@ Type.to_string func_type; *)
         let rec drop_n_args_from_arrow n typ =
@@ -634,61 +673,17 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
           | _                                          -> failwith "huuuuuuh?"
           end
         in
-        if non_constant_used then
-          Some
-            ( Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg))
-            , drop_n_args_from_arrow (List.length args) func_type
-            )
-        else
-          None
+        let out_type = drop_n_args_from_arrow arg_count func_type in
+        let arg_exps = args |>@ fun arg -> (Asttypes.Nolabel, arg) in
+        !names_ref
+        |>@ (fun name -> (Exp.apply (Exp.simple_var name) arg_exps, out_type))
+        |> List.to_seq
       end
-
-
-      (* match Type.flatten_arrows func_type with
-      | [] -> assert false
-      | [t1] ->
-        nonconstants_at_type_seq (depth_limit-1) synth_env t1
-        |> Seq.map (fun arg -> Exp.apply (Exp.simple_var name) [(Asttypes.Nolabel, arg)])
-      | [t1; t2] ->
-        let nonconstants_at_t1 = nonconstants_at_type_seq (depth_limit-1) synth_env t1 in
-        let nonconstants_at_t2 = nonconstants_at_type_seq (depth_limit-1) synth_env t2 in
-        let constants_at_t1    = constants_at_type_seq                    synth_env t1 in
-        let constants_at_t2    = constants_at_type_seq                    synth_env t2 in
-        [ [nonconstants_at_t1; nonconstants_at_t2]
-        ; [nonconstants_at_t1; constants_at_t2]
-        ; [constants_at_t1;    nonconstants_at_t2]
-        ]
-        |> List.to_seq
-        |> Seq.flat_map begin fun combo ->
-          Seq.cart_prod combo
-          |> Seq.map (fun args -> Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
-        end
-      | [t1; t2; t3] ->
-        let nonconstants_at_t1 = nonconstants_at_type_seq (depth_limit-1) synth_env t1 in
-        let nonconstants_at_t2 = nonconstants_at_type_seq (depth_limit-1) synth_env t2 in
-        let nonconstants_at_t3 = nonconstants_at_type_seq (depth_limit-1) synth_env t3 in
-        let constants_at_t1    = constants_at_type_seq                    synth_env t1 in
-        let constants_at_t2    = constants_at_type_seq                    synth_env t2 in
-        let constants_at_t3    = constants_at_type_seq                    synth_env t3 in
-        [ [nonconstants_at_t1; nonconstants_at_t2; nonconstants_at_t3]
-        ; [constants_at_t1;    nonconstants_at_t2; nonconstants_at_t3]
-        ; [nonconstants_at_t1; constants_at_t2;    nonconstants_at_t3]
-        ; [nonconstants_at_t1; nonconstants_at_t2; constants_at_t3]
-        ; [constants_at_t1;    constants_at_t2;    nonconstants_at_t3]
-        ; [constants_at_t1;    nonconstants_at_t2; constants_at_t3]
-        ; [nonconstants_at_t1; constants_at_t2;    constants_at_t3]
-        ]
-        |> List.to_seq
-        |> Seq.flat_map begin fun combo ->
-          Seq.cart_prod combo
-          |> Seq.map (fun args -> Exp.apply (Exp.simple_var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg)))
-        end
-      | _ -> Seq.empty (* Don't guess applies with more than 3 args. *)
- *)
     end
   in
   (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
   Seq.append_lazy idents_at_type_seq applys_seq
+  (* idents_at_type_seq *)
 
 let terms_tested_count = ref 0
 
