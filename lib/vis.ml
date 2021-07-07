@@ -64,7 +64,7 @@ let rec exp_of_value Camlboot_interpreter.Data.{ v_; _ } =
   let open Camlboot_interpreter.Data in
   let open Ast_helper in
   let record_value_field_to_exp_field (name, v_ref) =
-    (Loc.mk @@ Longident.Lident name, exp_of_value !v_ref)
+    (Loc.lident name, exp_of_value !v_ref)
   in
   match v_ with
   | Bomb                                  -> Shared.Ast.Exp.var "??"
@@ -77,7 +77,7 @@ let rec exp_of_value Camlboot_interpreter.Data.{ v_; _ } =
   | String bytes                          -> Exp.constant (Const.string (Bytes.to_string bytes))
   | Float n                               -> Exp.constant (Const.float (string_of_float n))
   | Tuple vs                              -> Exp.tuple (vs |>@ exp_of_value)
-  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.mk @@ Longident.Lident ctor) (v_opt |>& exp_of_value)
+  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.lident ctor) (v_opt |>& exp_of_value)
   | Prim _                                -> Shared.Ast.Exp.var "??"
   | Fexpr _                               -> Shared.Ast.Exp.var "??"
   | ModVal _                              -> Shared.Ast.Exp.var "??"

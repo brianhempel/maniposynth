@@ -44,6 +44,13 @@ module List = struct
     | [x]     -> x
     | _::rest -> last rest
 
+  let rec replace_nth i new_elem = function
+    | [] -> raise (Invalid_argument "List.replace_nth called on a list that is too short")
+    | x::rest ->
+      if i = 0
+      then new_elem :: rest
+      else x :: replace_nth (i-1) new_elem rest
+
   let rec findmap_opt f = function
     | []      -> None
     | x::rest ->

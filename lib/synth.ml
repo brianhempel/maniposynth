@@ -421,12 +421,16 @@ let is_req_satisified_by fillings (env, exp, expected) =
 (* Still need to search env for constructors *)
 
 
-let is_tconstr_with_path target_path typ =
+let rec is_tconstr_with_path target_path typ =
   match typ.Types.desc with
   | Types.Tconstr (path, _, _) -> path = target_path
+  | Types.Tlink t
+  | Types.Tsubst t -> is_tconstr_with_path target_path t
   | _ -> false
 
 let is_unit_type = is_tconstr_with_path Predef.path_unit
+let is_exn_type =  is_tconstr_with_path Predef.path_exn
+
 let rec is_var_type typ = match typ.Types.desc with
   | Types.Tvar _
   | Types.Tunivar _ -> true
@@ -440,14 +444,13 @@ let rec is_arrow_type typ = match typ.Types.desc with
   | _ -> false
 
 
-
 (* -10 to 10 *)
 let ints = List.init 21 (fun x -> (Exp.int_lit (x - 10), Predef.type_int))
 (* let ints = [(Exp.int_lit 0, Predef.type_int); (Exp.int_lit 1, Predef.type_int)] *)
 let strings = [(Exp.string_lit "", Predef.type_string)]
 
 let is_channel typ =
-  match typ.Types.desc with
+  match (Type.regular typ).Types.desc with
   | Types.Tconstr (Path.Pdot (_, "in_channel",  _), [], _) -> true
   | Types.Tconstr (Path.Pdot (_, "out_channel", _), [], _) -> true
   | _ -> false
@@ -459,7 +462,7 @@ let is_imperative typ =
   is_unit_type ret_t ||
   (is_unit_type (List.hd flat) && List.length flat = 2) ||
   List.exists is_channel flat ||
-  match ret_t.desc with
+  match (Type.regular ret_t).desc with
   | Types.Tvar (Some name) ->
     Type.flatten typ |> List.exists (function { Types.desc = Types.Tvar (Some name2); _ } -> name = name2 | _ -> false)
   | _ -> false
@@ -497,8 +500,8 @@ let constants_at_type_seq synth_env typ =
       | Types.Tsubst _ -> assert false (* Type.regular already traversed these *)
     in
     let idents_at_type =
-      let target_is_var = is_var_type typ in
       let f name _path desc out =
+        let target_is_var = is_var_type typ in
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
         if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
         if SSet.mem name dont_bother_names then out else
@@ -510,11 +513,19 @@ let constants_at_type_seq synth_env typ =
       in
       Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
     in
-    let seq = List.to_seq (lits @ idents_at_type) in
+    let ctors_at_type =
+      let f {Types.cstr_name; cstr_arity; cstr_res; _} out =
+        if cstr_arity <> 0 then out else (* For constants, we only want arg-less ctors (because OCaml doesn't even allow partial application of ctors). *)
+        if is_exn_type cstr_res then out else (* Exclude exceptions. *)
+        match Type.unify_opt cstr_res typ with
+        | Some type' -> (Exp.construct (Longident.lident cstr_name) None, type') :: out
+        | None -> out
+      in
+      Env.fold_constructors f None(* not looking in a nested module *) synth_env.tenv []
+    in
+    let seq = List.to_seq (lits @ idents_at_type @ ctors_at_type) in
     synth_env.constants_at_t <- synth_env.constants_at_t @ [(typ, seq)];
     seq
-
-
 
 let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
   if depth_limit <= 0 || SSet.is_empty synth_env.nonconstant_names then Seq.empty else
@@ -543,19 +554,15 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
       seq
   in
   let applys_seq () =
+    if depth_limit <= 1 then Seq.empty else
     let func_types_seq =
       match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
       | Some func_types -> func_types
       | None ->
-        print_endline @@ "Recomputing possible funcs at " ^ Type.to_string typ;
+        print_endline @@ "Recomputing possible funcs/ctors at " ^ Type.to_string typ;
         let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicitly remember number of args in case desired return type is an arrow. *)
           let t = Type.regular t in
-          begin match Type.unify_opt t typ with
-          | Some t ->
-            if not (is_var_type typ && is_arrow_type t) (* no partial applications at type 'a *)
-            then Some (0, t)
-            else None
-          | None ->
+          let try_right () =
             begin match t.desc with
             | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) ->
               can_produce_typ t_r
@@ -565,9 +572,16 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
               end
             | _ -> None
             end
+          in
+          begin match Type.unify_opt t typ with
+          | Some t ->
+            if not (is_var_type typ && is_arrow_type t) (* no partial applications at type 'a *)
+            then Some (0, t)
+            else try_right ()
+          | None -> try_right ()
           end
         in
-        let f name _path desc out =
+        let values_folder name _path desc out =
           if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
           if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
           if SSet.mem name dont_bother_names then out else
@@ -583,15 +597,31 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
             end
           | _ -> out
         in
+        let ctors_folder {Types.cstr_name; cstr_arity; cstr_args; cstr_res; _} out =
+          if cstr_arity = 0 then out else
+          if is_exn_type cstr_res then out else (* Exclude exceptions. *)
+          (* Pretend ctors are arrows to reuse logic above (and below) *)
+          let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
+          print_endline @@ cstr_name ^ " : " ^ Type.to_string ctor_type_as_arrows ^ " vs " ^ Type.to_string_raw typ;
+          begin match can_produce_typ ctor_type_as_arrows with
+          | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
+            print_endline cstr_name;
+            if arg_count <> cstr_arity then out else (* Ctors must always be fully applied *)
+            (cstr_name, cstr_arity, ctor_type_as_arrows_unified_with_goal_ret_t) :: out
+          | None -> out
+          end
+        in
         let func_types_seq =
-          let list_of_name_args_func_type : (string * int * Types.type_expr) list =
-            Env.fold_values f None(* not looking in a nested module *) synth_env.tenv [] in
+          let list_of_name_args_func_type1 : (string * int * Types.type_expr) list =
+            Env.fold_values values_folder None(* not looking in a nested module *) synth_env.tenv [] in
+          let list_of_name_args_func_type2 : (string * int * Types.type_expr) list =
+            Env.fold_constructors ctors_folder None(* not looking in a nested module *) synth_env.tenv [] in
           let gather (name, arg_count, func_type) out : (Types.type_expr * (int * string list ref)) list =
             match List.assoc_by_opt (Type.equal_ignoring_id_and_scope func_type) out with
             | None -> (func_type, (arg_count, ref [name])) :: out
             | Some (_, names_ref) -> names_ref := name :: !names_ref; out
           in
-          List.fold_right gather list_of_name_args_func_type []
+          List.fold_right gather (list_of_name_args_func_type1 @ list_of_name_args_func_type2) []
           |> List.to_seq
         in
         synth_env.funcs_that_can_produce_t <- synth_env.funcs_that_can_produce_t @ [(typ, func_types_seq)];
@@ -599,70 +629,41 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
     in
     func_types_seq
     |> Seq.flat_map begin fun (func_type, (arg_count, names_ref)) ->
-      let rec args_seq arg_count non_constant_used func_type =
+      let rec args_seq arg_count arg_i_to_unify non_constant_used func_type =
         if arg_count <= 0 then Seq.return ([], func_type) else
-        let func_type = Type.regular func_type in
-        match func_type.desc with
-        | Types.Tarrow (Asttypes.Nolabel, arg_t, t_r, _) ->
-          (* let nonconstants = nonconstants_at_type_seq (depth_limit-1) synth_env arg_t in *)
-          (* let constants    = constants_at_type_seq                    synth_env arg_t in *)
+        match Type.flatten_arrows func_type with
+        | (_::_::_) as flat_type ->
+          let arg_t = List.nth flat_type arg_i_to_unify in
           let seq1 =
             nonconstants_at_type_seq (depth_limit-1) synth_env arg_t
+            (* START HERE this is worng *)
             |> Seq.flat_map begin fun (arg, arg_t') ->
-              let t_r' = Type.copy t_r in
-              begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' t_r')) with
-              | Some func_type' ->
-                args_seq (arg_count-1) true func_type'
-                |> Seq.map (fun (args_r, func_type'') -> (arg::args_r, func_type''))
+              let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
+              begin match Type.unify_opt func_type func_type' with
+              | Some func_type'' ->
+                args_seq (arg_count-1) (arg_i_to_unify+1) true func_type''
+                |> Seq.map (fun (args_r, func_type''') -> (arg::args_r, func_type'''))
               | None -> Seq.empty
               end
             end
           in
           let seq2 () =
             if arg_count = 1 && not non_constant_used then Seq.empty else
-            nonconstants_at_type_seq (depth_limit-1) synth_env arg_t
+            constants_at_type_seq synth_env arg_t
             |> Seq.flat_map begin fun (arg, arg_t') ->
-              let t_r' = Type.copy t_r in
-              begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' t_r')) with
-              | Some func_type' ->
-                args_seq (arg_count-1) non_constant_used func_type'
-                |> Seq.map (fun (args_r, func_type'') -> (arg::args_r, func_type''))
+              let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
+              begin match Type.unify_opt func_type func_type' with
+              | Some func_type'' ->
+                args_seq (arg_count-1) (arg_i_to_unify+1) non_constant_used func_type''
+                |> Seq.map (fun (args_r, func_type''') -> (arg::args_r, func_type'''))
               | None -> Seq.empty
               end
             end
           in
           Seq.append_lazy seq1 seq2
         | _ -> failwith "this shouldn't happen"
-
-        (* match func_type.desc with
-        | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->
-          args_seq (arg_count - 1) non_constant_used t_r
-          |> Seq.flat_map begin fun (args_r, t_r') ->
-            let arg_t' = Type.new_var () in
-            begin match Type.(unify_mutating_opt (copy func_type) (arrow arg_t' (copy t_r'))) with
-            | Some func_type' ->
-              let nonconstants = nonconstants_at_type_seq (depth_limit-1) synth_env arg_t' in
-              let constants    = constants_at_type_seq                    synth_env arg_t' in
-              Seq.append begin
-                nonconstants
-                |> Seq.filter_map begin fun (term, term_t) ->
-                  Type.unify_opt func_type' (Type.arrow term_t t_r')
-                  |>& (fun func_type'' -> (* print_endline (name ^ " : " ^ Type.to_string func_type ^ " to " ^ Type.to_string func_type'' ^ " for arg " ^ Exp.to_string term ^ " of type " ^ Type.to_string term_t); *) (term::args_r, func_type''))
-                end
-              end begin
-                constants
-                |> Seq.filter_map begin fun (term, term_t) ->
-                  Type.unify_opt func_type' (Type.arrow term_t t_r')
-                  |>& (fun func_type'' -> (term::args_r, func_type''))
-                end
-              end
-            | None ->
-              Seq.empty
-            end
-          end
-        | _ -> failwith "this shouldn't happen" *)
       in
-      args_seq arg_count false func_type
+      args_seq arg_count 0 false func_type
       |> Seq.flat_map begin fun (args, func_type) ->
         (* print_endline name;
         print_endline @@ Type.to_string func_type; *)
@@ -675,8 +676,22 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
         in
         let out_type = drop_n_args_from_arrow arg_count func_type in
         let arg_exps = args |>@ fun arg -> (Asttypes.Nolabel, arg) in
+        let ctor_arg =
+          if arg_count = 1
+          then Some (List.hd args)
+          else Some (Exp.tuple args)
+        in
+        let is_ctor_name name =
+          let first_char = String.get name 0 in
+          (first_char <= 'Z' && 'A' <= first_char) || name = "::"
+        in
         !names_ref
-        |>@ (fun name -> (Exp.apply (Exp.simple_var name) arg_exps, out_type))
+        |>@ begin fun name ->
+          if is_ctor_name name then
+            (Exp.construct (Longident.lident name) ctor_arg, out_type)
+          else
+            (Exp.apply (Exp.simple_var name) arg_exps, out_type)
+        end
         |> List.to_seq
       end
     end
@@ -697,6 +712,7 @@ let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog
     print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req)); *)
     let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
     let synth_env = new_synth_env nonconstant_names tenv in
+    (* START HERE why does depth 2 not find the term (succ (length rest))? *)
     Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 3 synth_env static_hole_type)
   in
   terms_seq
@@ -743,8 +759,6 @@ let fill_holes prog reqs file_name : fillings option =
         end
       end
   in
-  (* 29s backward *)
-  (* 302s forward *)
   fillings_seq Loc_map.empty hole_locs
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
@@ -756,18 +770,6 @@ let fill_holes prog reqs file_name : fillings option =
     | Seq.Nil -> None
     | Seq.Cons (fillings, _) -> Some fillings
   end
-
-  (* let try_fill_hole (lookup_exp_typed, fillings) hole_loc =
-    (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
-    if reqs_on_hole = [] then (lookup_exp_typed, fillings) else
-    let rec guess_up_to_size max_size size =
-      begin match guess lookup_exp_typed fillings size reqs_on_hole with
-      | Some (lookup_exp_typed', fillings') -> (lookup_exp_typed', fillings')
-      | None           -> if size < max_size then guess_up_to_size max_size (size + 1) else (lookup_exp_typed, fillings)
-      end in
-    guess_up_to_size 1 1
-  in
-  List.fold_left try_fill_hole (lookup_exp_typed, fillings) hole_locs *)
 
 
 let results parsed _trace assert_results file_name =

@@ -76,6 +76,10 @@ module Loc_ = struct
   let loc { Location.loc; txt = _ } = loc
   let txt { Location.txt; loc = _ } = txt
 
+  (* Makes a fresh loc *)
+  (* Use Longident.lident for Location.none *)
+  let lident str = mk (Longident.Lident str)
+
   let to_string { Location.loc_start; loc_end; loc_ghost } =
     "{ loc_start = " ^ Pos.to_string loc_start ^
     "; loc_end = " ^ Pos.to_string loc_end ^
@@ -87,6 +91,10 @@ end
 
 module Longident = struct
   include Longident
+
+  (* Uses Location.none *)
+  (* Use Loc.ident for a fresh loc *)
+  let lident str = Location.mknoloc (Lident str)
 
   let to_string = flatten %> String.concat "."
 end
@@ -286,7 +294,7 @@ module Type = struct
     let open Types in
     match typ.desc with
     | Tarrow (Nolabel, ltype, rtype, Cok) -> ltype :: flatten_arrows rtype
-    | Tlink typ                           -> flatten_arrows typ
+    | Tlink typ | Tsubst typ              -> flatten_arrows typ
     | _                                   -> [typ]
 
   let arrow t1 t2 =
