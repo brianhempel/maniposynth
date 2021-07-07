@@ -13,7 +13,9 @@ let rec seen_before a b = function
 (* Needs to be able to compare closures *)
 (* Turn on "loose" for comparing closure environments. There are certain values captured in environments that we don't elsewhere support, so those are compared loosely. *)
 (* The graph can have cycles, so keep track of the items compared down the callstack *)
-let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) ?(loose = false) Data.{ v_ = v_1; _ } Data.{ v_ = v_2; _ } =
+let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) ?(loose = false) (Data.{ v_ = v_1; _ } as _v1) (Data.{ v_ = v_2; _ } as _v2) =
+  (* Data.pp_print_value Format.std_formatter v1;
+  Data.pp_print_value Format.std_formatter v2; *)
   v_1 == v_2 || seen_before v_1 v_2 seen_v_s || (* Cycle. They're equal as far as this branch of execution is concerned. *)
   let seen_v_s = (v_1, v_2)::seen_v_s in
   let recurse = values_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods in

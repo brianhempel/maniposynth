@@ -25,7 +25,7 @@ let with_gather_asserts f =
 let add_assert_result assert_result assert_results =
   assert_results := assert_result :: !assert_results
 
-let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] (f x) y"
+let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] ((f x)[@rhs]) y"
 
 exception No_fuel
 let fuel = ref max_int
@@ -473,6 +473,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
       let open Shared.Ast_match in
       begin try
         let match_       = match_exp_ f_x_equals_y_pattern e in
+        let rhs_exp      = SMap.find "rhs" match_.exps in
         let fexp         = SMap.find "f" match_.exps in
         let argexp       = SMap.find "x" match_.exps in
         let expected_exp = SMap.find "y" match_.exps in
@@ -489,7 +490,9 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
             | _      -> false
             end in
           assert_results :=
-            { f            = fval
+            { env          = env
+            ; rhs_exp      = rhs_exp
+            ; f            = fval
             ; arg          = argval
             ; expected     = expected
             ; actual       = actual

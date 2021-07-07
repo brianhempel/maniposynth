@@ -172,7 +172,9 @@ exception InternalException of value
 (* We only remember asserts of form "assert (f x = y)" *)
 (* So no need to store the environment yet (f's closure environment is sufficient) *)
 type assert_result =
-  { f            : value
+  { env          : env
+  ; rhs_exp      : expression
+  ; f            : value
   ; arg          : value
   ; expected     : value
   ; actual       : value

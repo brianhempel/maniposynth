@@ -66,24 +66,8 @@ let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrut
     end
 
 (* Fillings might only be used in pat "with" clauses here *)
-let assert_result_to_req assert_result : req option =
-  let fillings, prims, lookup_exp_typed, trace_state, frame_no = Loc_map.empty, Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
-  match assert_result.f.v_ with
-  | Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref) ->
-    let arg = assert_result.arg in
-    let env' = pattern_bind_fueled fillings prims !env_ref lookup_exp_typed trace_state frame_no arg [] pat arg in
-    Some (env', body_exp, assert_result.expected)
-  | Function (cases, env_ref) ->
-    let arg = assert_result.arg in
-    begin match try_cases fillings prims !env_ref lookup_exp_typed trace_state frame_no arg cases with
-    | None ->
-      print_endline "Bad assert result; couldn't match arg to a function case";
-      None
-    | Some (env', branch_exp) -> Some (env', branch_exp, assert_result.expected)
-    end
-  | _ ->
-    print_endline "Bad assert result; function should be a simple function";
-    None
+let req_of_assert_result (assert_result : assert_result) : req =
+  (assert_result.env, assert_result.rhs_exp, assert_result.expected)
 
 (*
   If I know that name should have value, and pat looks
@@ -727,7 +711,8 @@ let terms_tested_count = ref 0
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 (* prog should already have fillings applied to it *)
-let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog : fillings Seq.t =
+
+let hole_fillings_seq fillings size_limit hole_loc static_hole_type tenv _reqs_on_hole prog : fillings Seq.t =
   let terms_seq =
     (* let nonconstant_names = SSet.empty in *)
     (* print_endline (Loc.to_string hole_loc);
@@ -735,8 +720,7 @@ let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog
     print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req)); *)
     let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
     let synth_env = new_synth_env nonconstant_names tenv in
-    (* START HERE why does depth 2 not find the term (succ (length rest))? *)
-    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 5 synth_env static_hole_type)
+    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq size_limit synth_env static_hole_type)
   in
   terms_seq
   |> Seq.filter_map begin fun (term, _term_t) ->
@@ -759,11 +743,11 @@ let fill_holes prog reqs file_name : fillings option =
     Exp.all prog |>@? is_hole |>@ Exp.loc
     (* |> Sort.list (fun loc1 loc2 -> loc1 <= loc2) *)
   in
-  let rec fillings_seq fillings hole_locs : fillings Seq.t =
+  let rec fillings_seq fillings size_limit hole_locs : fillings Seq.t =
     match hole_locs with
     | [] -> Seq.return fillings
     | hole_loc::rest ->
-      fillings_seq fillings rest
+      fillings_seq fillings size_limit rest
       |> Seq.flat_map begin function fillings ->
         (* print_endline "retyping prog"; *)
         let prog = apply_fillings fillings prog in
@@ -778,11 +762,19 @@ let fill_holes prog reqs file_name : fillings option =
         | Some hole_typed_node ->
           (* let reqs' = reqs |>@@ push_down_req fillings in
           let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
-          hole_fillings_seq fillings hole_loc hole_typed_node.exp_type hole_typed_node.exp_env [] prog
+          hole_fillings_seq fillings size_limit hole_loc hole_typed_node.exp_type hole_typed_node.exp_env [] prog
         end
       end
   in
-  fillings_seq Loc_map.empty hole_locs
+  Seq.concat
+    [ fillings_seq Loc_map.empty 1 hole_locs
+    ; fillings_seq Loc_map.empty 2 hole_locs
+    ; fillings_seq Loc_map.empty 3 hole_locs
+    ; fillings_seq Loc_map.empty 4 hole_locs
+    ; fillings_seq Loc_map.empty 5 hole_locs
+    ; fillings_seq Loc_map.empty 6 hole_locs
+    ; fillings_seq Loc_map.empty 7 hole_locs
+    ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
     reqs |> List.for_all (is_req_satisified_by fillings)
@@ -796,10 +788,9 @@ let fill_holes prog reqs file_name : fillings option =
 
 
 let results parsed _trace assert_results file_name =
+  terms_tested_count := 0;
   let start_sec = Unix.time () in
-  let reqs =
-    assert_results
-    |>@& assert_result_to_req in
+  let reqs = assert_results |>@ req_of_assert_result in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   match fill_holes parsed reqs file_name with
