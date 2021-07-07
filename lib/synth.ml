@@ -334,6 +334,27 @@ let rec push_down_req fillings ((env, exp, value) as req) : req list =
   | Pexp_pack _ -> [req]
   | Pexp_extension _ -> [req]
 
+let exp_size exp =
+  let size = ref 0 in
+  let iter_exp iter exp =
+    incr size;
+    dflt_iter.expr iter exp;
+    (* Don't count the tuple for multi-arg constructors. (E-guessing counts the terms the same way as multi-arg functions.) *)
+    match exp.pexp_desc with
+    | Pexp_construct (_, Some { pexp_desc = Pexp_tuple _; _ }) -> decr size
+    | _ -> ()
+  in
+  let iter_pat iter pat =
+    incr size;
+    dflt_iter.pat iter pat;
+    (* Don't count the tuple for multi-arg constructors. *)
+    match pat.ppat_desc with
+    | Ppat_construct (_, Some { ppat_desc = Ppat_tuple _; _ }) -> decr size
+    | _ -> ()
+  in
+  let iter = { dflt_iter with expr = iter_exp; pat = iter_pat } in
+  iter.expr iter exp;
+  !size
 
 exception Found_names of string list
 
@@ -527,8 +548,8 @@ let constants_at_type_seq synth_env typ =
     synth_env.constants_at_t <- synth_env.constants_at_t @ [(typ, seq)];
     seq
 
-let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
-  if depth_limit <= 0 || SSet.is_empty synth_env.nonconstant_names then Seq.empty else
+let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
+  if size_limit <= 0 || SSet.is_empty synth_env.nonconstant_names then Seq.empty else
   let idents_at_type_seq =
     match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.nonconstants_at_t with
     | Some seq -> seq
@@ -554,7 +575,7 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
       seq
   in
   let applys_seq () =
-    if depth_limit <= 1 then Seq.empty else
+    if size_limit <= 2 then Seq.empty else
     let func_types_seq =
       match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
       | Some func_types -> func_types
@@ -629,19 +650,21 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
     in
     func_types_seq
     |> Seq.flat_map begin fun (func_type, (arg_count, names_ref)) ->
-      let rec args_seq arg_count arg_i_to_unify non_constant_used func_type =
+      if 2 + arg_count > size_limit then Seq.empty else
+      let rec args_seq size_limit arg_count arg_i_to_unify non_constant_used func_type =
         if arg_count <= 0 then Seq.return ([], func_type) else
+        if size_limit <= 0 then (failwith "shouldn't happen. term size math is precise elsewhere") else
         match Type.flatten_arrows func_type with
         | (_::_::_) as flat_type ->
           let arg_t = List.nth flat_type arg_i_to_unify in
           let seq1 =
-            nonconstants_at_type_seq (depth_limit-1) synth_env arg_t
-            (* START HERE this is worng *)
+            nonconstants_at_type_seq (size_limit-arg_count+1) synth_env arg_t
             |> Seq.flat_map begin fun (arg, arg_t') ->
+              let arg_size = exp_size arg in
               let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
               begin match Type.unify_opt func_type func_type' with
               | Some func_type'' ->
-                args_seq (arg_count-1) (arg_i_to_unify+1) true func_type''
+                args_seq (size_limit-arg_size) (arg_count-1) (arg_i_to_unify+1) true func_type''
                 |> Seq.map (fun (args_r, func_type''') -> (arg::args_r, func_type'''))
               | None -> Seq.empty
               end
@@ -654,7 +677,7 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
               let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
               begin match Type.unify_opt func_type func_type' with
               | Some func_type'' ->
-                args_seq (arg_count-1) (arg_i_to_unify+1) non_constant_used func_type''
+                args_seq (size_limit-1) (arg_count-1) (arg_i_to_unify+1) non_constant_used func_type''
                 |> Seq.map (fun (args_r, func_type''') -> (arg::args_r, func_type'''))
               | None -> Seq.empty
               end
@@ -663,7 +686,7 @@ let rec nonconstants_at_type_seq depth_limit synth_env (typ : Types.type_expr) =
           Seq.append_lazy seq1 seq2
         | _ -> failwith "this shouldn't happen"
       in
-      args_seq arg_count 0 false func_type
+      args_seq (size_limit-2) arg_count 0 false func_type
       |> Seq.flat_map begin fun (args, func_type) ->
         (* print_endline name;
         print_endline @@ Type.to_string func_type; *)
@@ -713,7 +736,7 @@ let hole_fillings_seq fillings hole_loc static_hole_type tenv _reqs_on_hole prog
     let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
     let synth_env = new_synth_env nonconstant_names tenv in
     (* START HERE why does depth 2 not find the term (succ (length rest))? *)
-    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 3 synth_env static_hole_type)
+    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq 5 synth_env static_hole_type)
   in
   terms_seq
   |> Seq.filter_map begin fun (term, term_t) ->
