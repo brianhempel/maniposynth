@@ -21,7 +21,6 @@ let inital_env =
   in
   env_with_hole
 
-
 let typedtree_sig_env_of_parsed parsed file_name =
   Env.set_unit_name @@ Compenv.module_of_filename formatter file_name file_name;
   (* print_endline @@ Compenv.module_of_filename formatter path path; *)
@@ -72,6 +71,9 @@ let exp_typed_lookup_of_file path =
     | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
   end
 
+let type_expression_opt ?(type_env = inital_env) exp =
+  try Some (Typecore.type_expression type_env exp).exp_type
+  with _ -> None
 
 (* Types the expression and creates a map that given a loc returns the corresponding Typedtree.expression nodes *)
 let loc_to_type_of_expression type_env exp =

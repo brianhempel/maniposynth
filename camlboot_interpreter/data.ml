@@ -14,7 +14,8 @@ end)
 
 type value = { v_ : value_; vtrace : vtrace; type_opt : Types.type_expr option }
 and value_ =
-  | Bomb
+  | Bomb (* Evalution hit some error, e.g. a hole made it to elimination position *)
+  | Hole of (env ref * frame_no * expression) (* Evalution hit a hole - allows pushing requirements into bare holes in e.g. let not_a_func_yet = (??) in assert (not_a_func_yet [] = 0) *)
   | Int of int
   | Int32 of int32
   | Int64 of int64
@@ -198,6 +199,7 @@ let is_true { v_; _ } =
 let rec pp_print_value ff { v_; _ } =
   match v_ with
   | Bomb -> Format.fprintf ff "💣"
+  | Hole _ -> Format.fprintf ff "(??)"
   | Int n -> Format.fprintf ff "%d" n
   | Int32 n -> Format.fprintf ff "%ldl" n
   | Int64 n -> Format.fprintf ff "%LdL" n
@@ -295,6 +297,8 @@ let rec value_compare { v_ = v_1; _ } { v_ = v_2; _ } =
   match v_1, v_2 with
   | Bomb, _ -> failwith "tried to compare 💣"
   | _, Bomb -> failwith "tried to compare 💣"
+  | Hole _, _ -> failwith "tried to compare holeval"
+  | _, Hole _ -> failwith "tried to compare holeval"
   | Fun _, _
   | Function _, _
   | _, Fun _

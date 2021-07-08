@@ -560,6 +560,14 @@ module StructItems = struct
 
   let to_string = Pprintast.string_of_structure
 
+  (* Variable names introduced or used. Excludes ctors. *)
+  (* Includes endings of qualified names, e.g. "x" in Thing.x *)
+  let names prog =
+    let everything = everything (Sis prog) in
+    let pat_names = everything.pats |>@& Pat.name_loced |>@ Loc_.txt in
+    let ident_names = everything.exps |>@& Exp.ident_lid |>@ Longident.last in
+    pat_names @ ident_names
+
   let map f struct_items =
     let map_sis mapper sis = f (dflt_mapper.structure mapper sis) in
     let mapper = { dflt_mapper with structure = map_sis } in

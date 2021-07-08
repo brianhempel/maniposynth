@@ -16,10 +16,18 @@ module SSet = Set.Make(String)
 
 type fillings = expression Loc_map.t
 
-(* Does not recursively apply fillings. That might result in an infinite loop. *)
-let apply_fillings fillings prog =
-  Loc_map.bindings fillings
-  |> List.fold_left (fun prog (loc, exp) -> Exp.replace loc exp prog) prog
+(* Apply until fixpoint. *)
+let rec apply_fillings fillings prog =
+  let changed = ref false in
+  let prog' =
+    Loc_map.bindings fillings
+    |> List.fold_left begin fun prog (loc, exp) ->
+      Exp.map_by_loc loc (fun _ -> changed := true; exp) prog
+    end prog
+  in
+  if !changed
+  then apply_fillings fillings prog'
+  else prog'
 
 
 (* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
@@ -140,7 +148,7 @@ let rec push_down_req fillings ((env, exp, value) as req) : req list =
       match Exp.ident_lid exp with
       | Some (Longident.Lident name) ->
         begin match vbs |>@? (Vb.names %> List.mem name) with
-        | [vb] ->
+        | [vb] when Exp.flatten e |> List.exists (Exp.loc %> (=) exp.pexp_loc) -> (* Ensure it's actually an ident inside the body (i.e. we didn't jump out to some function lambda or something) *)
           let req_env = if recflag = Asttypes.Recursive then env' else env in
           let new_ex = expand_named_example_to_pat req_env name value vb.pvb_pat in
           recurse (req_env, vb.pvb_expr, new_ex)
@@ -149,7 +157,19 @@ let rec push_down_req fillings ((env, exp, value) as req) : req list =
       | _ -> [req]
     end
   | Pexp_constant _ -> [req]
-  | Pexp_ident _ -> [req]
+  | Pexp_ident lid_loced ->
+    (* If ident refers to something that carries an env (a func or a holeval) then push the req into that *)
+    begin match Envir.env_get_value_or_lvar env lid_loced with
+      | Value { v_ = Hole (env_ref, _, e); _ } ->
+        recurse (!env_ref, e, value)
+      | Value { v_ = Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref); _ } ->
+        recurse (!env_ref, Exp.fun_ Nolabel None pat body_exp, value)
+      | Value { v_ = Function (cases, env_ref); _ } ->
+        recurse (!env_ref, Exp.function_ cases, value)
+      | Value _ -> [req]
+      | Instance_variable _ -> [req]
+      | exception Not_found -> [req]
+    end
   | Pexp_function cases ->
     begin match value.v_ with
     | ExCall (arg, expected) ->
@@ -420,7 +440,10 @@ let is_req_satisified_by fillings (env, exp, expected) =
   (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
   with _ -> Loc_map.bindings fillings |>@ snd |>@ (Formatter_to_stringifier.f (Printast.expression 0)) |> List.iter print_endline
   end; *)
-  Assert_comparison.values_equal_for_assert (eval fillings env exp) expected
+  (* print_endline @@ string_of_req (env, exp, expected); *)
+  let evaled = eval fillings env exp in
+  (* print_endline @@ Formatter_to_stringifier.f pp_print_value evaled; *)
+  Assert_comparison.values_equal_for_assert evaled expected
 
 
 (* Still need to search env for constructors *)
@@ -479,7 +502,9 @@ let constants_at_type_seq synth_env typ =
   match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.constants_at_t with
   | Some seq -> seq
   | None ->
+    (*
     print_endline @@ "Recomputing constants at " ^ Type.to_string typ(*  ^ "\n" ^ Type.to_string_raw typ ^ "\n" *);
+    *)
     (* ignore (List.assoc_by_opt (Type.equal_ignoring_id_and_scope ~show:true typ) synth_env.constants_at_t); *)
     (* print_endline (fst (List.split synth_env.constants_at_t) |>@ Type.to_string_raw |> String.concat ", "); *)
     let lits =
@@ -538,7 +563,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
     match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.nonconstants_at_t with
     | Some seq -> seq
     | None ->
-      print_endline @@ "Recomputing nonconstants at " ^ Type.to_string typ;
+      (* print_endline @@ "Recomputing nonconstants at " ^ Type.to_string typ; *)
       let target_is_var = is_var_type typ in
       let f name _path desc out =
         if not (SSet.mem name synth_env.nonconstant_names) then out else
@@ -564,7 +589,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
       match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
       | Some func_types -> func_types
       | None ->
-        print_endline @@ "Recomputing possible funcs/ctors at " ^ Type.to_string typ;
+        (* print_endline @@ "Recomputing possible funcs/ctors at " ^ Type.to_string typ; *)
         let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicitly remember number of args in case desired return type is an arrow. *)
           let t = Type.regular t in
           let try_right () =
@@ -607,10 +632,10 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
           if is_exn_type cstr_res then out else (* Exclude exceptions. *)
           (* Pretend ctors are arrows to reuse logic above (and below) *)
           let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
-          print_endline @@ cstr_name ^ " : " ^ Type.to_string ctor_type_as_arrows ^ " vs " ^ Type.to_string_raw typ;
+          (* print_endline @@ cstr_name ^ " : " ^ Type.to_string ctor_type_as_arrows ^ " vs " ^ Type.to_string_raw typ; *)
           begin match can_produce_typ ctor_type_as_arrows with
           | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
-            print_endline cstr_name;
+            (* print_endline cstr_name; *)
             if arg_count <> cstr_arity then out else (* Ctors must always be fully applied *)
             (cstr_name, cstr_arity, ctor_type_as_arrows_unified_with_goal_ret_t) :: out
           | None -> out
@@ -690,7 +715,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
         in
         let is_ctor_name name =
           let first_char = String.get name 0 in
-          (first_char <= 'Z' && 'A' <= first_char) || name = "::"
+          Char.is_capital first_char || name = "::"
         in
         !names_ref
         |>@ begin fun name ->
@@ -728,21 +753,20 @@ let hole_fillings_seq fillings size_limit hole_loc static_hole_type tenv _reqs_o
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
     incr terms_tested_count;
-    if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term);
+    (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
+    if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
     if true (* reqs_on_hole |> List.for_all (is_req_satisified_by fillings) *) then
       Some fillings
     else
       None
   end
 
-let fill_holes prog reqs file_name : fillings option =
+let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false
+let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? is_hole |>@ Exp.loc
+
+let e_guess fillings size_limit prog file_name : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
-  let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false in
-  let hole_locs =
-    (* let reqs' = reqs |>@@ push_down_req Loc_map.empty in *)
-    Exp.all prog |>@? is_hole |>@ Exp.loc
-    (* |> Sort.list (fun loc1 loc2 -> loc1 <= loc2) *)
-  in
+  let hole_locs = hole_locs prog fillings in
   let rec fillings_seq fillings size_limit hole_locs : fillings Seq.t =
     match hole_locs with
     | [] -> Seq.return fillings
@@ -766,17 +790,142 @@ let fill_holes prog reqs file_name : fillings option =
         end
       end
   in
+  List.init size_limit (fun i -> fillings_seq fillings (i+1) hole_locs)
+  |> Seq.concat
+
+(* Use hole requirements+types to sketch out possible solutions *)
+(* e.g introduce lambda or pattern match *)
+let refine prog fillings reqs file_name next =
+  let reqs'           = reqs |>@@ push_down_req fillings in
+  let hole_locs       = hole_locs prog fillings in
+  let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false in
+  let is_ex_dont_care = function { v_ = ExDontCare; _ } -> true | _ -> false in
+  reqs |> List.iter (string_of_req %> print_endline);
+  hole_locs |> List.iter (Loc.to_string %> print_endline);
+  reqs' |> List.iter (string_of_req %> print_endline);
+  let prog = apply_fillings fillings prog in
+  let (_, _, tenv) =
+    try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
+    with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
+  in
+  hole_locs
+  |>@@ begin fun hole_loc ->
+    let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
+    reqs_on_hole |> List.iter (string_of_req %> print_endline);
+    if reqs_on_hole = [] then [] else
+    let intro_lambda_seqs =
+      if reqs_on_hole |> List.for_all (fun (_, _, expected) -> is_ex_call expected) then
+        let base_name =
+          match List.hd reqs_on_hole with
+          | (_, _, { v_ = ExCall (v, _); _} ) -> Name.from_val v
+          | _ -> "var"
+        in
+        let sketch = Exp.from_string @@ "fun " ^ Name.gen ~base_name prog ^ " -> (??)" in
+        [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch)) ]
+      else
+        []
+    in
+    let destruct_seqs =
+      nonconstant_names_at_loc hole_loc prog
+      |> SSet.elements
+      |>@@ begin fun scrutinee_name ->
+        let ctor_type_path_opts_at_name =
+          (* Ensure the name is always a ctor... *)
+          reqs_on_hole
+          |>@ begin fun (env, _, _) ->
+            match Envir.env_get_value_or_lvar env (Longident.lident scrutinee_name) with
+            | Value { v_ = Constructor (ctor_name, _, _); _} ->
+              begin match Env.lookup_constructor (Longident.Lident ctor_name) tenv with
+              | { cstr_res = { desc = Types.Tconstr (type_path, _, _); _ } ; _ } -> Some type_path
+              | _ -> None
+              end
+            | _ -> None
+            | exception Not_found -> None
+          end
+        in
+        match Option.project ctor_type_path_opts_at_name |>& List.dedup with
+        | Some [type_path] ->
+          let ctor_descs, _ = Env.find_type_descrs type_path tenv in
+          let cases =
+            let new_names = ref [] in
+            ctor_descs
+            |>@ (fun ctor_desc ->
+              (* Tag_name (typ1, typ2) -> Ctor ("Tag_name", "type", [value_of_typ typ1, value_of_typ typ2]) *)
+              let arg_names =
+                ctor_desc.Types.cstr_args
+                |>@ begin fun arg_type ->
+                    let arg_name = Name.gen ~avoid:!new_names ~base_name:(Name.from_type arg_type) prog in
+                    new_names := arg_name :: !new_names;
+                    arg_name
+                end
+              in
+              let case_pat =
+                (* Tag_name (typ1, typ2) *)
+                let args_pat_opt =
+                  (match arg_names with
+                  | []         -> None
+                  | [arg_name] -> Some (Pat.var arg_name)
+                  | arg_names  -> Some (Pat.tuple (List.map Pat.var arg_names))
+                  )
+                in
+                (* Assuming constructors don't need path prefixes .. see https://github.com/ocaml/merlin/blob/v3.3.8/src/analysis/destruct.ml.new for how to change that when the time comes *)
+                Pat.construct (Longident.lident ctor_desc.cstr_name) args_pat_opt
+              in
+              Exp.case case_pat (Exp.simple_var "??")
+            )
+          in
+          let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
+          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch)) ]
+        | _ -> []
+      end
+    in
+    intro_lambda_seqs @ destruct_seqs
+  end
+  |> Seq.concat
+
+
+
+let fill_holes prog reqs file_name : fillings option =
   Seq.concat
-    [ fillings_seq Loc_map.empty 1 hole_locs
-    ; fillings_seq Loc_map.empty 2 hole_locs
-    ; fillings_seq Loc_map.empty 3 hole_locs
-    ; fillings_seq Loc_map.empty 4 hole_locs
-    ; fillings_seq Loc_map.empty 5 hole_locs
-    ; fillings_seq Loc_map.empty 6 hole_locs
-    ; fillings_seq Loc_map.empty 7 hole_locs
+    [ e_guess Loc_map.empty 5 prog file_name
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> e_guess fillings 5 prog file_name)
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 5 prog file_name))
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 5 prog file_name)))
+    ; e_guess Loc_map.empty 6 prog file_name
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> e_guess fillings 6 prog file_name)
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 6 prog file_name))
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 6 prog file_name)))
+    ; e_guess Loc_map.empty 7 prog file_name
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> e_guess fillings 7 prog file_name)
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 7 prog file_name))
+    ; refine prog Loc_map.empty reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> refine prog fillings reqs file_name
+        (fun fillings -> e_guess fillings 7 prog file_name)))
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
+    (* let code = StructItems.to_string (apply_fillings fillings prog) in
+    if String.includes "succ (length" code && String.includes "-> 0" code then begin
+      print_endline (string_of_int !terms_tested_count ^ "\t" ^ code);
+      reqs |> List.for_all (is_req_satisified_by fillings)
+    end else
+      false *)
     reqs |> List.for_all (is_req_satisified_by fillings)
   end
   (* Return first valid filling. *)
@@ -800,16 +949,6 @@ let results parsed _trace assert_results file_name =
     print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
     (* Fill holes until fixpoint or bored. *)
     parsed
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
-    |> apply_fillings fillings'
     |> apply_fillings fillings'
     |> fun x -> [x]
 

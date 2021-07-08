@@ -279,16 +279,21 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_ident { txt = Longident.Lident "??"; _ } ->
     begin match Shared.Loc_map.find_opt expr.pexp_loc fillings with
     | Some filling_exp -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no filling_exp
-    | None -> intro_bomb ()
+    | None -> intro @@ new_vtrace @@ Hole (ref env, frame_no, expr)
     end
   | Pexp_ident id -> use @@
      begin try match env_get_value_or_lvar env id with
-       | Value v -> v
-       | Instance_variable (obj, name) ->
-          let var = SMap.find name obj.variables in
-          !var
-       with Not_found -> new_vtrace @@ Bomb
-     end
+      | Value ({ v_ = Hole (env_ref, frame_no, e); _ } as v) ->
+        begin match Shared.Loc_map.find_opt e.pexp_loc fillings with
+        | Some filling_exp -> eval_expr fillings prims !env_ref lookup_exp_typed trace_state frame_no filling_exp
+        | None -> v
+        end
+      | Value v -> v
+      | Instance_variable (obj, name) ->
+        let var = SMap.find name obj.variables in
+        !var
+      with Not_found -> (* print_endline @@ "ident " ^ Longident.last id.txt ^ " not found"; *) intro_bomb ()
+    end
   | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ value_of_constant c
   | Pexp_let (recflag, vals, e) ->
     (* Don't bother attaching vtrace to let results for now (the body exp will have an entry) *)
@@ -572,6 +577,7 @@ and eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recfl
         env defs vals in
       let rec packpatch_env { v_; _ } =
         match v_ with
+        | Hole (env_ref, _, _)       -> env_ref := nenv
         | Fun (_, _, _, _, env_ref)  -> env_ref := nenv
         | Function (_, env_ref)      -> env_ref := nenv
         | Tuple vals                 -> List.iter packpatch_env vals
@@ -657,7 +663,7 @@ and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v
     | Bomb ->
       raise BombExn
     | _ ->
-      Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v;
+      (* Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v; *)
       assert false)
   | Ppat_variant (name, p) ->
     (match v_ with

@@ -25,6 +25,11 @@ let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods =
   | Bomb, _ -> false
   | _, Bomb -> false
 
+  | Hole (env_ref1, frame_no1, loc1), Hole (env_ref2, frame_no2, loc2) ->
+    loc1 = loc2 && frame_no1 = frame_no2 && envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods !env_ref1 !env_ref2
+  | Hole _, _ -> false
+  | _, Hole _ -> false
+
   | Fun (arg_label1, exp_opt1, pat1, exp1, env_ref1)
   , Fun (arg_label2, exp_opt2, pat2, exp2, env_ref2) ->
     arg_label1 = arg_label2 && exp_opt1 = exp_opt2 && pat1 = pat2 && exp1 = exp2 && envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods !env_ref1 !env_ref2

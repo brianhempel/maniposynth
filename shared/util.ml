@@ -108,6 +108,16 @@ module Seq = struct
     | [] -> Seq.return []
 end
 
+module Char = struct
+  include Char
+
+  let is_capital c = 'A' <= c && c <= 'Z'
+  let is_lower c = 'a' <= c && c <= 'z'
+  let is_letter c = is_lower c || is_capital c
+  let is_number c = '0' <= c && c <= '9'
+  let is_alphanum c = is_letter c || is_number c
+end
+
 module String = struct
   include String
 
@@ -167,6 +177,9 @@ module String = struct
       None
     else
       loop start_index
+
+  let includes target str : bool =
+    find_index target str <> None
 
   let rec split ?(limit = -1) ?(start_index = 0) sep str =
     if limit = 1 then

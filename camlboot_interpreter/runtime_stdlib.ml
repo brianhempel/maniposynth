@@ -120,6 +120,7 @@ external random_seed : unit -> int array = "caml_sys_random_seed"
 let seeded_hash_param meaningful total seed { v_; _ } =
   match v_ with
   | Bomb -> failwith "tried to hash 💣"
+  | Hole _ -> failwith "tried to hash holeval"
   | Int n -> Hashtbl.seeded_hash_param meaningful total seed n
   | Int32 n -> Hashtbl.seeded_hash_param meaningful total seed n
   | Int64 n -> Hashtbl.seeded_hash_param meaningful total seed n

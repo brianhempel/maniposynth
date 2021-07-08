@@ -166,6 +166,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
   apply_visualizers assert_results visualizers env type_env value ^
   match value_ with
   | Bomb                                     -> "💣"
+  | Hole _                                   -> "??"
   | Int int                                  -> string_of_int int
   | Int32 int32                              -> Int32.to_string int32
   | Int64 int64                              -> Int64.to_string int64

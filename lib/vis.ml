@@ -67,7 +67,7 @@ let rec exp_of_value Camlboot_interpreter.Data.{ v_; _ } =
     (Loc.lident name, exp_of_value !v_ref)
   in
   match v_ with
-  | Bomb                                  -> Shared.Ast.Exp.var "??"
+  | Bomb | Hole _                         -> Shared.Ast.Exp.simple_var "??"
   | Int n                                 -> Exp.constant (Const.int n)
   | Int32 n                               -> Exp.constant (Const.int32 n)
   | Int64 n                               -> Exp.constant (Const.int64 n)
@@ -78,15 +78,15 @@ let rec exp_of_value Camlboot_interpreter.Data.{ v_; _ } =
   | Float n                               -> Exp.constant (Const.float (string_of_float n))
   | Tuple vs                              -> Exp.tuple (vs |>@ exp_of_value)
   | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.lident ctor) (v_opt |>& exp_of_value)
-  | Prim _                                -> Shared.Ast.Exp.var "??"
-  | Fexpr _                               -> Shared.Ast.Exp.var "??"
-  | ModVal _                              -> Shared.Ast.Exp.var "??"
-  | InChannel _                           -> Shared.Ast.Exp.var "??"
-  | OutChannel _                          -> Shared.Ast.Exp.var "??"
+  | Prim _                                -> Shared.Ast.Exp.simple_var "??"
+  | Fexpr _                               -> Shared.Ast.Exp.simple_var "??"
+  | ModVal _                              -> Shared.Ast.Exp.simple_var "??"
+  | InChannel _                           -> Shared.Ast.Exp.simple_var "??"
+  | OutChannel _                          -> Shared.Ast.Exp.simple_var "??"
   | Record fields                         -> Exp.record (SMap.bindings fields |>@ record_value_field_to_exp_field) None
-  | Lz _                                  -> Shared.Ast.Exp.var "??"
+  | Lz _                                  -> Shared.Ast.Exp.simple_var "??"
   | Array vs                              -> Exp.array (vs |> Array.to_list |>@ exp_of_value)
-  | Fun_with_extra_args (_, _, _)         -> Shared.Ast.Exp.var "??"
-  | Object _                              -> Shared.Ast.Exp.var "??"
-  | ExCall _                              -> Shared.Ast.Exp.var "??"
-  | ExDontCare                            -> Shared.Ast.Exp.var "??"
+  | Fun_with_extra_args (_, _, _)         -> Shared.Ast.Exp.simple_var "??"
+  | Object _                              -> Shared.Ast.Exp.simple_var "??"
+  | ExCall _                              -> Shared.Ast.Exp.simple_var "??"
+  | ExDontCare                            -> Shared.Ast.Exp.simple_var "??"
