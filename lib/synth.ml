@@ -952,4 +952,47 @@ let results parsed _trace assert_results file_name =
     |> apply_fillings fillings'
     |> fun x -> [x]
 
-
+let try_async path =
+  if Unix.fork () = 0 then () else (* Don't hold up the request. *)
+  (* Start synthesis and the synth process killer. *)
+  match Unix.fork () with
+  | 0 ->
+    let parsed = Interp.parse path in
+    (* let parsed_with_comments = Parse_unparse.parse_file path in
+    let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
+    let callables = Read_execution_env.callables_of_file path in
+    let trace = Tracing.run_with_tracing path in
+    let html_str = View.html_str callables trace bindings_skels in *)
+    let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
+    let (trace, assert_results) =
+      Eval.with_gather_asserts begin fun () ->
+        Interp.run_files lookup_exp_typed [path]
+      end in
+    begin match results parsed trace assert_results path with
+    | result::_ ->
+      let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
+      print_endline out_str;
+      let out_chan = open_out path in
+      output_string out_chan out_str;
+      close_out out_chan;
+    | _ -> ()
+    end;
+    (* |> List.iteri begin fun i result ->
+      let out_path = String.replace ~target:".ml" ~replacement:("-synth" ^ string_of_int i ^ ".ml") path in
+      let out_chan = open_out out_path in (* create or truncate file, return channel *)
+      let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
+      print_endline out_str;
+      output_string out_chan out_str;
+      close_out out_chan;
+    end; *)
+    exit 0
+  | pid ->
+    (* Start process killer *)
+    (* Kill synthesis after 5 seconds. *)
+    Unix.sleep 5;
+    begin match Unix.waitpid [WNOHANG] pid with
+    | (0, _) ->
+      Unix.kill pid 9;
+      print_endline "Synth timeout"
+    | _ -> ()
+    end

@@ -192,8 +192,8 @@ module String = struct
       | None ->
           [sub str start_index (length str - start_index)]
 
-  (* let replace ~target ~replacement str =
-    split target str |> String.concat replacement *)
+  let replace ~target ~replacement str =
+    split target str |> String.concat replacement
 end
 
 

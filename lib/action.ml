@@ -193,7 +193,7 @@ let add_assert_before_loc loc lhs_code rhs_code old =
   (* |> Exp.map_by_loc loc (Exp.let_ Nonrecursive [Vb.mk (Pat.any ()) assert_exp]) *)
   |> Exp.map_by_loc loc (Exp.sequence assert_exp)
 
-let f : t -> Shared.Ast.program -> Shared.Ast.program = function
+let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
     let value = Serialize.value_of_string value_str in
@@ -211,6 +211,9 @@ let f : t -> Shared.Ast.program -> Shared.Ast.program = function
     let loc = Serialize.loc_of_string loc_str in
     add_assert_before_loc loc lhs_code rhs_code
   | DoSynth ->
-    (* All actions trigger synthesis in the server. Just need some action to trigger as desired. *)
     (* Synth is async. Don't change program here. *)
+    Synth.try_async path;
+    (fun prog -> prog)
+  | Undo ->
+    if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=undo"|];
     (fun prog -> prog)

@@ -65,42 +65,6 @@ let render_maniposynth out_chan url =
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
   respond out_chan html_str
 
-let try_synth path =
-  match Unix.fork () with
-  | `In_the_child ->
-    let parsed = Camlboot_interpreter.Interp.parse path in
-    (* let parsed_with_comments = Parse_unparse.parse_file path in
-    let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
-    let callables = Read_execution_env.callables_of_file path in
-    let trace = Tracing.run_with_tracing path in
-    let html_str = View.html_str callables trace bindings_skels in *)
-    let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
-    let (trace, assert_results) =
-      Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
-        Camlboot_interpreter.Interp.run_files lookup_exp_typed [path]
-      end in
-    Synth.results parsed trace assert_results path
-    |> List.iteri ~f:begin fun i result ->
-      let out_path = String.substr_replace_all path ~pattern:".ml" ~with_:("-synth" ^ string_of_int i ^ ".ml") in
-      Out_channel.with_file out_path ~f:begin fun out ->
-        let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
-        print_endline out_str;
-        Out_channel.output_string out out_str
-      end
-    end;
-    exit 0
-  | `In_the_parent pid ->
-    (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 5;
-    begin match Unix.wait_nohang (`Pid pid) with
-    | None ->
-      ignore (Signal.send Signal.kill (`Pid pid));
-      print_endline "Synth timeout"
-    | _ -> ()
-    end
-
-
-
 
 
 let colon_space = String.Search_pattern.create ": "
@@ -158,13 +122,14 @@ let handle_connection in_chan out_chan =
         let action = Action.t_of_yojson action_yojson in
         let path = String.drop_prefix url 1 in
         let parsed = Camlboot_interpreter.Interp.parse path in
-        let parsed' = Action.f action parsed in
+        let parsed' = Action.f path action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
-        Out_channel.with_file path ~f:begin fun out ->
-          Shared.Formatter_to_stringifier.f Pprintast.structure parsed'
-          |> Out_channel.output_string out
-        end;
-        try_synth path;
+        let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure parsed' in
+        let in_str  = Shared.Formatter_to_stringifier.f Pprintast.structure parsed in
+        if out_str <> in_str then
+          Out_channel.with_file path ~f:begin fun out ->
+            Out_channel.output_string out out_str
+          end;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan
