@@ -14,6 +14,8 @@ type t =
   | RemoveVis         of string * string (* loc str, vis str *)
   | EditLoc           of string * string (* loc str, code str *)
   | NewAssert         of string * string * string (* loc str, lhs code str, rhs code str *)
+  | Undo
+  | Redo
   | DoSynth
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
@@ -25,8 +27,9 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "EditLoc"; `String loc_str; `String code]                         -> EditLoc (loc_str, code)
   | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code] -> NewAssert (loc_str, lhs_code, rhs_code)
   | `List [`String "DoSynth"]                                                        -> DoSynth
+  | `List [`String "Undo"]                                                           -> Undo
+  | `List [`String "Redo"]                                                           -> Redo
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
-
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
 1. assign unique names (not done yet)
@@ -217,3 +220,7 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | Undo ->
     if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=undo"|];
     (fun prog -> prog)
+  | Redo ->
+    if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=redo"|];
+    (fun prog -> prog)
+

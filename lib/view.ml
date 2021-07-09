@@ -329,7 +329,8 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
     ; body begin
-        [ div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []]
+        [ div ~attrs:[("id", "topbar")] [button ~attrs:[("class","undo")] ["Undo"]; button ~attrs:[("class","redo")] ["Redo"]]
+        ; div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []]
         ; button ~attrs:[("id", "synth-button")] ["Synth"]
         ]
         @ List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items

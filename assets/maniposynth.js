@@ -73,6 +73,18 @@ function doSynth() {
   ]);
 }
 
+function undo() {
+  doAction([
+    "Undo"
+  ]);
+}
+
+function redo() {
+  doAction([
+    "Redo"
+  ]);
+}
+
 
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
@@ -397,6 +409,25 @@ window.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById("synth-button").addEventListener("click", _ => doSynth());
+});
+
+
+
+/////////////////// Undo/Redo ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll(".undo").forEach(elem => elem.addEventListener("click", _ => undo()));
+  document.querySelectorAll(".redo").forEach(elem => elem.addEventListener("click", _ => redo()));
+
+  document.addEventListener('keydown', event => {
+    if (event.metaKey && event.shiftKey && event.key === 'z') {
+      redo();
+      event.preventDefault();
+    } else if (event.metaKey && event.key === 'z') {
+      undo();
+      event.preventDefault();
+    }
+  });
 });
 
 
