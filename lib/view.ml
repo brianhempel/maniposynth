@@ -319,7 +319,43 @@ let html_of_structure_item trace assert_results lookup_exp_typed (item : Parsetr
   | Pstr_extension (_, _)       -> failwith "can't handle Pstr_extension"
 
 
-let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_results : Data.assert_result list) lookup_exp_typed =
+let drawing_tools tenv =
+  let ctors_folder ({Types.cstr_res; _} as ctor_desc) out =
+    if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
+    (* let ctor_type =
+      match cstr_args with
+      | []      -> cstr_res
+      | [arg_t] -> Type.unflatten_arrows [arg_t; cstr_res]
+      | args    -> Type.unflatten_arrows [Type.tuple args; cstr_res]
+    in *)
+    let type_str = Type.to_string cstr_res in
+    let existing = SMap.find_opt type_str out ||& [] in
+    SMap.add type_str (ctor_desc :: existing) out
+  in
+  let ctors_by_type_str = Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv SMap.empty in
+  let lits =
+    [ (Predef.type_int,  List.init 10 (fun n -> Exp.int_lit n))
+    ; (Predef.type_bool, [Exp.simple_var "true"; Exp.simple_var "false"])
+    ]
+  in
+  let examples depth_limit {Types.cstr_name; cstr_args; cstr_res = _; _} =
+    (* START HERE: need to do standard pick arg + unify & repeat as in Synth.ml *)
+    [Exp.ctor cstr_name (cstr_args |>@ (fun _ -> Exp.hole))]
+    |>@ Exp.to_string
+  in
+  span
+    ~attrs:[("class", "tools")]
+    begin
+      ctors_by_type_str
+      |> SMap.bindings
+      |>@ begin fun (type_str, ctors) ->
+        let ctor_tools = ctors |>@ (fun ctor_desc -> span ~attrs:[("class", "tool")] (examples SMap.empty ctor_desc)) in
+        span ~attrs:[("class", "tool")] [type_str ^ " ▾"; span ~attrs:[("class", "tools")] ctor_tools]
+      end
+    end
+
+
+let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_results : Data.assert_result list) lookup_exp_typed final_tenv =
   html
     [ head
         [ title "Maniposynth"
@@ -329,7 +365,7 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
     ; body begin
-        [ div ~attrs:[("id", "topbar")] [button ~attrs:[("class","undo")] ["Undo"]; button ~attrs:[("class","redo")] ["Redo"]]
+        [ div ~attrs:[("id", "topbar")] ([span ~attrs:[("class","undo tool")] ["Undo"]; span ~attrs:[("class","redo tool")] ["Redo"]] @ [drawing_tools final_tenv])
         ; div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []]
         ; button ~attrs:[("id", "synth-button")] ["Synth"]
         ]

@@ -122,6 +122,7 @@ module Type = struct
   let copy (t : t) : t = Btype.cleanup_abbrev (); Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
 
   let new_var () = Btype.newgenvar ()
+  let tuple ts = Btype.newgenty (Ttuple ts)
 
 
   (* Follow links/substs to a regular type *)
@@ -244,6 +245,27 @@ module Type = struct
     | _ -> false
     end
 
+
+
+  let rec is_tconstr_with_path target_path typ =
+    match typ.Types.desc with
+    | Types.Tconstr (path, _, _) -> path = target_path
+    | Types.Tlink t
+    | Types.Tsubst t -> is_tconstr_with_path target_path t
+    | _ -> false
+  let is_unit_type = is_tconstr_with_path Predef.path_unit
+  let is_exn_type =  is_tconstr_with_path Predef.path_exn
+  let rec is_var_type typ = match typ.Types.desc with
+    | Types.Tvar _
+    | Types.Tunivar _ -> true
+    | Types.Tlink t
+    | Types.Tsubst t -> is_var_type t
+    | _ -> false
+  let rec is_arrow_type typ = match typ.Types.desc with
+    | Types.Tarrow _ -> true
+    | Types.Tlink t
+    | Types.Tsubst t -> is_arrow_type t
+    | _ -> false
 
   (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
   (* These all don't work. *)
@@ -400,6 +422,13 @@ module Exp = struct
   let var name = (* parse module paths *)
     let loc = Loc_.fresh () in
     { (name |> Lexing.from_string |> Parse.expression) with pexp_loc = loc }
+  let hole = simple_var "??"
+  let ctor name args =
+    construct (Loc_.lident name) @@
+    match args with
+    | []    -> None
+    | [arg] -> Some arg
+    | args  -> Some (tuple args)
   let int_lit n = constant (Ast_helper.Const.int n)
   let string_lit str = constant (Ast_helper.Const.string str)
 

@@ -1,8 +1,8 @@
 open Asttypes
 open Parsetree
 
-module SMap = Map.Make (String)
-module SSet = Set.Make (String)
+module SMap = Shared.Util.SMap
+module SSet = Shared.Util.SSet
 
 type frame_no = int (* execution frame numbers for tracing *)
 

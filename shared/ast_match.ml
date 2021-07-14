@@ -1,6 +1,6 @@
 open Parsetree
 
-module SMap = Map.Make(String)
+module SMap = Util.SMap
 
 exception Match_fail
 

@@ -53,13 +53,14 @@ let render_maniposynth out_chan url =
   let callables = Read_execution_env.callables_of_file path in
   let trace = Tracing.run_with_tracing path in
   let html_str = View.html_str callables trace bindings_skels in *)
-  let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
+  let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file path in
+  let lookup_exp_typed = Typing.exp_typed_lookup_of_typed_structure typed_struct in
   let (trace, assert_results) =
     Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
       Camlboot_interpreter.Interp.run_files lookup_exp_typed [path]
     end in
   (* print_endline @@ string_of_int (List.length assert_results); *)
-  let html_str = View.html_str parsed trace assert_results lookup_exp_typed in
+  let html_str = View.html_str parsed trace assert_results lookup_exp_typed final_tenv in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

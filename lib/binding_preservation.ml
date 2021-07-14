@@ -11,9 +11,6 @@ open Shared.Util
 (* Additionally, module signatures are ignored and all module top-level items are considered exported. (It appears Camlboot_interpreter also ignores signatures.) *)
 
 
-module SMap = Map.Make(String)
-module SSet = Set.Make(String)
-
 module StaticEnv = struct
   type t =
     (* bool indicates if the item should be exported from the module *)

@@ -7,10 +7,40 @@ body {
   /* margin: var(--body-margin); */
   /* margin-top: 88px; */
   /* padding: 0; */
+  margin: 0;
   /* width: calc(100% - 3*var(--body-margin) - var(--toolbox-width)); */
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
   /* color: #3a3a3a; */
+}
+
+#topbar {
+  border-bottom: solid 1px black;
+}
+
+.tool {
+  line-height: 2.5em;
+  border: none;
+  background: none;
+  display: inline-block;
+  padding: 0 1em;
+  margin: 0;
+  cursor: default;
+}
+
+.tool > .tools {
+  display: none;
+  position: absolute;
+  margin-left: -1em;
+}
+
+.tool:hover {
+  background: var(--color);
+}
+
+.tool:hover > .tools {
+  display: block;
+  background: lightgray;
 }
 
 
@@ -105,7 +135,7 @@ td {
   border: solid 1px black;
   position: fixed;
   right: 0;
-  top: 0;
+  top: 2.5em;
   width: 200px;
   min-height: 100px;
 }

@@ -1,5 +1,8 @@
 (* Convenience methods and filling in missing bits of the Stdlib. *)
 
+module SMap = Map.Make (String)
+module SSet = Set.Make (String)
+
 let clamp lo hi x =
   if x < lo then lo
   else if x > hi then hi

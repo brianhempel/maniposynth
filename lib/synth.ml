@@ -12,8 +12,6 @@ open Shared.Util
   - try using assert information to speculate types on holes, from specific to general (e.g. if assert result is (int list), try (int list), ('a list), and 'a)
 *)
 
-module SSet = Set.Make(String)
-
 type fillings = expression Loc_map.t
 
 (* Apply until fixpoint. *)
@@ -104,7 +102,7 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
       fieldpats
       |>@ begin fun (lid_loced, fieldpat) -> (Eval.lident_name lid_loced.txt, ref @@ recurse fieldpat) end
       |> List.to_seq
-      |> Data.SMap.of_seq
+      |> SMap.of_seq
     in
     new_vtrace @@ Record ex_fields
   | Ppat_array ps                                              -> new_vtrace @@ Array (ps |>@ recurse |> Array.of_list)
@@ -449,29 +447,6 @@ let is_req_satisified_by fillings (env, exp, expected) =
 (* Still need to search env for constructors *)
 
 
-let rec is_tconstr_with_path target_path typ =
-  match typ.Types.desc with
-  | Types.Tconstr (path, _, _) -> path = target_path
-  | Types.Tlink t
-  | Types.Tsubst t -> is_tconstr_with_path target_path t
-  | _ -> false
-
-let is_unit_type = is_tconstr_with_path Predef.path_unit
-let is_exn_type =  is_tconstr_with_path Predef.path_exn
-
-let rec is_var_type typ = match typ.Types.desc with
-  | Types.Tvar _
-  | Types.Tunivar _ -> true
-  | Types.Tlink t
-  | Types.Tsubst t -> is_var_type t
-  | _ -> false
-let rec is_arrow_type typ = match typ.Types.desc with
-  | Types.Tarrow _ -> true
-  | Types.Tlink t
-  | Types.Tsubst t -> is_arrow_type t
-  | _ -> false
-
-
 (* -10 to 10 *)
 let ints = List.init 21 (fun x -> (Exp.int_lit (x - 10), Predef.type_int))
 (* let ints = [(Exp.int_lit 0, Predef.type_int); (Exp.int_lit 1, Predef.type_int)] *)
@@ -487,8 +462,8 @@ let is_channel typ =
 let is_imperative typ =
   let flat = Type.flatten_arrows typ in
   let ret_t = List.last flat in
-  is_unit_type ret_t ||
-  (is_unit_type (List.hd flat) && List.length flat = 2) ||
+  Type.is_unit_type ret_t ||
+  (Type.is_unit_type (List.hd flat) && List.length flat = 2) ||
   List.exists is_channel flat ||
   match (Type.regular ret_t).desc with
   | Types.Tvar (Some name) ->
@@ -531,12 +506,12 @@ let constants_at_type_seq synth_env typ =
     in
     let idents_at_type =
       let f name _path desc out =
-        let target_is_var = is_var_type typ in
+        let target_is_var = Type.is_var_type typ in
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
         if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
         if SSet.mem name dont_bother_names then out else
         if SSet.mem name synth_env.nonconstant_names then out else
-        if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
+        if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
         match Type.unify_opt desc.Types.val_type typ with
         | Some type' -> (Exp.simple_var name, type') :: out
         | None -> out
@@ -546,7 +521,7 @@ let constants_at_type_seq synth_env typ =
     let ctors_at_type =
       let f {Types.cstr_name; cstr_arity; cstr_res; _} out =
         if cstr_arity <> 0 then out else (* For constants, we only want arg-less ctors (because OCaml doesn't even allow partial application of ctors). *)
-        if is_exn_type cstr_res then out else (* Exclude exceptions. *)
+        if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
         match Type.unify_opt cstr_res typ with
         | Some type' -> (Exp.construct (Longident.lident cstr_name) None, type') :: out
         | None -> out
@@ -564,13 +539,13 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
     | Some seq -> seq
     | None ->
       (* print_endline @@ "Recomputing nonconstants at " ^ Type.to_string typ; *)
-      let target_is_var = is_var_type typ in
+      let target_is_var = Type.is_var_type typ in
       let f name _path desc out =
         if not (SSet.mem name synth_env.nonconstant_names) then out else
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
         if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
         if SSet.mem name dont_bother_names then out else
-        if target_is_var && is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
+        if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
         match Type.unify_opt desc.Types.val_type typ with
         | Some type' -> (Exp.simple_var name, type') :: out
         | None -> out
@@ -605,7 +580,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
           in
           begin match Type.unify_opt t typ with
           | Some t ->
-            if not (is_var_type typ && is_arrow_type t) (* no partial applications at type 'a *)
+            if not (Type.is_var_type typ && Type.is_arrow_type t) (* no partial applications at type 'a *)
             then Some (0, t)
             else try_right ()
           | None -> try_right ()
@@ -629,7 +604,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
         in
         let ctors_folder {Types.cstr_name; cstr_arity; cstr_args; cstr_res; _} out =
           if cstr_arity = 0 then out else
-          if is_exn_type cstr_res then out else (* Exclude exceptions. *)
+          if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
           (* Pretend ctors are arrows to reuse logic above (and below) *)
           let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
           (* print_endline @@ cstr_name ^ " : " ^ Type.to_string ctor_type_as_arrows ^ " vs " ^ Type.to_string_raw typ; *)
@@ -871,7 +846,7 @@ let refine prog fillings reqs file_name next =
                 (* Assuming constructors don't need path prefixes .. see https://github.com/ocaml/merlin/blob/v3.3.8/src/analysis/destruct.ml.new for how to change that when the time comes *)
                 Pat.construct (Longident.lident ctor_desc.cstr_name) args_pat_opt
               in
-              Exp.case case_pat (Exp.simple_var "??")
+              Exp.case case_pat Exp.hole
             )
           in
           let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
