@@ -333,24 +333,19 @@ let drawing_tools tenv =
     SMap.add type_str (ctor_desc :: existing) out
   in
   let ctors_by_type_str = Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv SMap.empty in
-  let lits =
-    [ (Predef.type_int,  List.init 10 (fun n -> Exp.int_lit n))
-    ; (Predef.type_bool, [Exp.simple_var "true"; Exp.simple_var "false"])
-    ]
-  in
-  let examples depth_limit {Types.cstr_name; cstr_args; cstr_res = _; _} =
-    (* START HERE: need to do standard pick arg + unify & repeat as in Synth.ml *)
-    [Exp.ctor cstr_name (cstr_args |>@ (fun _ -> Exp.hole))]
-    |>@ Exp.to_string
-  in
   span
     ~attrs:[("class", "tools")]
     begin
       ctors_by_type_str
       |> SMap.bindings
       |>@ begin fun (type_str, ctors) ->
-        let ctor_tools = ctors |>@ (fun ctor_desc -> span ~attrs:[("class", "tool")] (examples SMap.empty ctor_desc)) in
-        span ~attrs:[("class", "tool")] [type_str ^ " ▾"; span ~attrs:[("class", "tools")] ctor_tools]
+        let typ = (List.hd ctors).cstr_res in
+        let tools =
+          Example_gen.examples 8 tenv typ
+          |>@ (fun (example_exp, _) -> span ~attrs:[("class", "tool")] [Exp.to_string example_exp])
+        in
+        (* let ctor_tools = ctors  in *)
+        span ~attrs:[("class", "tool")] [type_str ^ " ▾"; span ~attrs:[("class", "tools")] tools]
       end
     end
 
