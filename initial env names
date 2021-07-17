@@ -1,0 +1,31 @@
+# Env.fold_values (fun name _ _ list -> name :: list) None (Compmisc.initial_env ()) [];;
+- : string list =
+["~-."; "~-"; "~+."; "~+"; "||"; "|>"; "valid_float_lexem";
+ "unsafe_really_input"; "truncate"; "tanh"; "tan"; "succ"; "string_of_int";
+ "string_of_format"; "string_of_float"; "string_of_bool"; "stdout"; "stdin";
+ "stderr"; "sqrt"; "snd"; "sinh"; "sin"; "set_binary_mode_out";
+ "set_binary_mode_in"; "seek_out"; "seek_in"; "ref"; "really_input_string";
+ "really_input"; "read_line"; "read_int_opt"; "read_int"; "read_float_opt";
+ "read_float"; "raise_notrace"; "raise"; "print_string"; "print_newline";
+ "print_int"; "print_float"; "print_endline"; "print_char"; "print_bytes";
+ "prerr_string"; "prerr_newline"; "prerr_int"; "prerr_float"; "prerr_endline";
+ "prerr_char"; "prerr_bytes"; "pred"; "pos_out"; "pos_in"; "output_value";
+ "output_substring"; "output_string"; "output_char"; "output_bytes";
+ "output_byte"; "output_binary_int"; "output"; "out_channel_length"; "or";
+ "open_out_gen"; "open_out_bin"; "open_out"; "open_in_gen"; "open_in_bin";
+ "open_in"; "not"; "neg_infinity"; "nan"; "modf"; "mod_float"; "mod";
+ "min_int"; "min_float"; "min"; "max_int"; "max_float"; "max"; "lxor"; "lsr";
+ "lsl"; "lor"; "log1p"; "log10"; "log"; "lnot"; "ldexp"; "land"; "invalid_arg";
+ "int_of_string_opt"; "int_of_string"; "int_of_float"; "int_of_char";
+ "input_value"; "input_line"; "input_char"; "input_byte"; "input_binary_int";
+ "input"; "infinity"; "incr"; "in_channel_length"; "ignore"; "hypot"; "fst";
+ "frexp"; "format_of_string"; "flush_all"; "flush"; "floor";
+ "float_of_string_opt"; "float_of_string"; "float_of_int"; "float"; "failwith";
+ "expm1"; "exp"; "exit"; "epsilon_float"; "do_at_exit"; "decr"; "cosh"; "cos";
+ "copysign"; "compare"; "close_out_noerr"; "close_out"; "close_in_noerr";
+ "close_in"; "classify_float"; "char_of_int"; "ceil"; "bool_of_string_opt";
+ "bool_of_string"; "atan2"; "atan"; "at_exit"; "asr"; "asin"; "acos";
+ "abs_float"; "abs"; "__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__";
+ "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "^^"; "^"; "@@"; "@";
+ ">="; ">"; "=="; "="; "<>"; "<="; "<"; ":="; "/."; "/"; "-."; "-"; "+."; "+";
+ "*."; "**"; "*"; "&&"; "&"; "!="; "!"]

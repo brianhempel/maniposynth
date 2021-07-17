@@ -78,6 +78,12 @@ module List = struct
       then dedup_ out rest
       else dedup_ (x :: out) rest in
     dedup_ [] list
+
+  let sort_by f list =
+    list
+    |> map (fun elem -> (f elem, elem))
+    |> sort (fun (a, _) (b, _) -> compare a b)
+    |> map snd
 end
 
 module Seq = struct

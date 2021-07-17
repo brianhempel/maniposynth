@@ -4,9 +4,8 @@ open Shared.Util
 module SSet = Set.Make(String)
 
 let pervasives_names =
-  let initial_env = Compmisc.initial_env () in
-  Env.fold_values         (fun name _ _              list -> name      :: list) None initial_env []
-  @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None initial_env []
+  Env.fold_values         (fun name _ _              list -> name      :: list) None Typing.initial_env []
+  @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
   |> SSet.of_list
 
 
@@ -16,7 +15,7 @@ let from_type typ =
   |> String.trim
   |> String.map (fun c -> if Char.is_alphanum c then c else '_')
 
-let rec from_val ?(type_env = Typing.inital_env) v =
+let rec from_val ?(type_env = Typing.initial_env) v =
   let open Camlboot_interpreter.Data in
   let recurse = from_val ~type_env in
   match v.v_ with
@@ -62,3 +61,8 @@ let gen ?(avoid = []) ?(base_name = "var") prog =
   done;
   !name
 
+let gen_from_exp ?(avoid = []) ?(type_env = Typing.initial_env) exp prog =
+  Type.of_exp_opt ~type_env exp
+  |>& from_type
+  |>& (fun base_name -> gen ~avoid ~base_name prog)
+  ||& gen ~avoid prog

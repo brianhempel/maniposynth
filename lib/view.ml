@@ -320,32 +320,25 @@ let html_of_structure_item trace assert_results lookup_exp_typed (item : Parsetr
 
 
 let drawing_tools tenv =
-  let ctors_folder ({Types.cstr_res; _} as ctor_desc) out =
+  let ctors_folder {Types.cstr_res; _} out =
     if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
-    (* let ctor_type =
-      match cstr_args with
-      | []      -> cstr_res
-      | [arg_t] -> Type.unflatten_arrows [arg_t; cstr_res]
-      | args    -> Type.unflatten_arrows [Type.tuple args; cstr_res]
-    in *)
-    let type_str = Type.to_string cstr_res in
-    let existing = SMap.find_opt type_str out ||& [] in
-    SMap.add type_str (ctor_desc :: existing) out
+    if List.exists (Type.equal_ignoring_id_and_scope cstr_res) out then out else cstr_res::out
   in
-  let ctors_by_type_str = Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv SMap.empty in
+  let ctors_types = Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv [] in
   span
     ~attrs:[("class", "tools")]
     begin
-      ctors_by_type_str
-      |> SMap.bindings
-      |>@ begin fun (type_str, ctors) ->
-        let typ = (List.hd ctors).cstr_res in
+      ctors_types
+      |> List.sort_by Type.to_string
+      |>@ begin fun typ ->
         let tools =
-          Example_gen.examples 8 tenv typ
-          |>@ (fun (example_exp, _) -> span ~attrs:[("class", "tool")] [Exp.to_string example_exp])
+          Example_gen.examples 12 tenv typ
+          |>@ begin fun (example_exp, _) ->
+            let code = Exp.to_string example_exp in
+            span ~attrs:[("class", "tool"); ("data-insert-code", code)] [code]
+          end
         in
-        (* let ctor_tools = ctors  in *)
-        span ~attrs:[("class", "tool")] [type_str ^ " ▾"; span ~attrs:[("class", "tools")] tools]
+        span ~attrs:[("class", "tool")] [Type.to_string typ ^ " ▾"; span ~attrs:[("class", "tools")] tools]
       end
     end
 

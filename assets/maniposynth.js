@@ -85,6 +85,12 @@ function redo() {
   ]);
 }
 
+function insertCode(code) {
+  doAction([
+    "InsertCode",
+    code
+  ]);
+}
 
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
@@ -429,6 +435,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+
+/////////////////// Topbar Tools ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll("[data-insert-code]").forEach(elem => {
+    elem.addEventListener("click", _ => {
+      insertCode(elem.dataset.insertCode);
+    });
+  });
+});
+
 
 
 /////////////////// Example Management ///////////////////

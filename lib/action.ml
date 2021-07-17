@@ -17,6 +17,7 @@ type t =
   | Undo
   | Redo
   | DoSynth
+  | InsertCode        of string (* code *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -29,6 +30,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "DoSynth"]                                                        -> DoSynth
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
+  | `List [`String "InsertCode"; `String code]                                       -> InsertCode code
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -128,7 +130,7 @@ let insert_value_before vb_loc { vtrace; _ } old =
   vtrace
   |>@@ (fun ((_, loc), _) -> all_exps |>@? (Exp.loc %> (=) loc))
   |>@@ begin fun e ->
-    let name = Binding_preservation.Name.gen [([], "asdf.ml", old)] in
+    let name = Name.gen old in
     let vb' = Vb.mk (Pat.var name) e in
     old
     |> Exp.(replace (loc e) (var name))
@@ -172,7 +174,6 @@ let drop_value_before vb_loc (value : value) old =
   print_locs new_free new_prog;
   new_prog
 
-
 let add_vis_to_loc loc vis_str old =
   old
   |> Exp.map_by_loc loc begin fun exp ->
@@ -195,6 +196,33 @@ let add_assert_before_loc loc lhs_code rhs_code old =
   old
   (* |> Exp.map_by_loc loc (Exp.let_ Nonrecursive [Vb.mk (Pat.any ()) assert_exp]) *)
   |> Exp.map_by_loc loc (Exp.sequence assert_exp)
+
+(* Add to last vb *)
+let insert_code code old =
+  let exp = Exp.from_string code in
+  let name = Name.gen_from_exp exp old in
+  let vb' = Vb.mk (Pat.var name) exp in
+  let inserted = ref false in
+  let new_prog =
+    old
+    |> List.rev
+    |> List.map begin fun struct_item ->
+      match struct_item.pstr_desc with
+      | Pstr_value (Asttypes.Recursive, vbs) when not !inserted ->
+        inserted := true;
+        { struct_item with pstr_desc = Pstr_value (Asttypes.Recursive, vbs @ [vb'])}
+      | _ -> struct_item
+    end
+    |> List.rev
+  in
+  if !inserted then
+    new_prog
+  else
+    (* Program doesn't have any recursive top-level bindings yet *)
+    old @ [Ast_helper.Str.value Asttypes.Recursive [vb']]
+
+
+
 
 let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | DropValueBeforeVb (vb_loc_str, value_str) ->
@@ -223,4 +251,5 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | Redo ->
     if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=redo"|];
     (fun prog -> prog)
-
+  | InsertCode code ->
+    insert_code code
