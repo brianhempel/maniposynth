@@ -38,8 +38,14 @@ let table  ?(attrs = [])       inners = tag "table" ~attrs inners
 let tr     ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td     ?(attrs = [])       inners = tag "td" ~attrs inners
 let button ?(attrs = [])       inners = tag "button" ~attrs inners
-let box    ?(attrs = []) klass inners =
-  let attrs = ("class", ("box " ^ klass))::attrs in
+let box    ?(attrs = []) ?(parsetree_attrs = []) klass inners =
+  let pos_attrs =
+    parsetree_attrs
+    |> Pos.from_attrs
+    |>& (fun pos -> ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;"))
+    |> Option.to_list
+  in
+  let attrs = ("class", ("box " ^ klass))::(pos_attrs @ attrs) in
   div ~attrs inners
 
 let string_of_pat ?(editable = true) pat =
@@ -244,7 +250,7 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     | _                     -> exp
   in
   let html_of_vb vb =
-    box "value_binding" @@
+    box ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
       match vb.pvb_pat.ppat_desc with
       | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
       | _ ->

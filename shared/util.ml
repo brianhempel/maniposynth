@@ -42,6 +42,10 @@ module List = struct
     try for_all2 pred list1 list2
     with Invalid_argument _ -> false
 
+  let hd_opt = function
+    | []   -> None
+    | x::_ -> Some x
+
   let rec last = function
     | []      -> raise (Invalid_argument "List.last called on empty list")
     | [x]     -> x

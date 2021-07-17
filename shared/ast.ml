@@ -438,6 +438,11 @@ module Exp = struct
   let to_string = Pprintast.string_of_expression
   let from_string = Lexing.from_string %> Parse.expression
 
+  let int (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_constant (Pconst_integer (int_str, None)) -> Some (int_of_string int_str)
+    | _ -> None
+
   let ident_lid_loced (exp : expression) =
     match exp.pexp_desc with
     | Pexp_ident lid_loced -> Some lid_loced
@@ -601,6 +606,47 @@ module StructItems = struct
     let map_sis mapper sis = f (dflt_mapper.structure mapper sis) in
     let mapper = { dflt_mapper with structure = map_sis } in
     mapper.structure mapper struct_items
+end
+
+
+(* Parsetree node attributes *)
+(* We use these for storing visualizers and canvas positions. *)
+module Attr = struct
+  type t = attribute
+
+  let name (Location.{ txt; _ }, _) = txt
+  let payload (_, payload) = payload
+  let exp_opt = function
+    | (_, PStr [{ pstr_desc = Pstr_eval (exp, _); _}]) -> Some exp
+    | _                                                -> None
+
+  (* let exp_of_payload = function
+    | PStr [{ pstr_desc = Pstr_eval (exp, _); _}] -> Some exp
+    | _ -> None *)
+
+  let findall_exp target_name attrs =
+    attrs
+    |>@& begin fun attr ->
+      if name attr = target_name
+      then exp_opt attr
+      else None
+    end
+
+  let find_exp target_name attrs =
+    List.hd_opt (findall_exp target_name attrs)
+
+  let add_exp target_name exp attrs =
+    attrs @ [(Loc_.mk target_name, PStr [Ast_helper.Str.eval exp])]
+
+  (* Compares exps by their unparsed representation *)
+  let remove_exp target_name exp attrs =
+    let target_code = Exp.to_string exp in
+    attrs |>@? begin fun attr ->
+      name attr <> target_name || (exp_opt attr |>& Exp.to_string) <> Some target_code
+    end
+
+  let remove_name target_name attrs =
+    attrs |>@? (name %> (<>) target_name)
 end
 
 

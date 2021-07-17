@@ -43,13 +43,16 @@ body {
   background: lightgray;
 }
 
-
 .box {
   /* border: solid 1px black; */
   /* box-shadow: -2px 1px 5px rgba(0,0,0,0.2); */
   /* border-left: solid 1px black; */
-  display: inline-block;
+  /* display: inline-block; */
   margin: var(--padding);
+  display: block;
+  position: absolute;
+  max-width: 100%;
+  /* START HERE position boxes */
 }
 
 .box > :last-child {

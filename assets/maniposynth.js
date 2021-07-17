@@ -449,6 +449,47 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 
+/////////////////// Moving Boxes ///////////////////
+
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll(".box").forEach(elem => {
+    elem.addEventListener("mousedown", event => {
+      window.stuffMoving = {
+        startX : event.pageX,
+        startY : event.pageY,
+        elems  : [elem],
+      }
+    });
+  });
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll("body").forEach(elem => {
+    elem.addEventListener("mousemove", event => {
+      if (window.stuffMoving) {
+        const dx = event.pageX - stuffMoving.startX;
+        const dy = event.pageY - stuffMoving.startY;
+        window.stuffMoving.elems.forEach(elem => {
+          elem.style.transform = `translate(${dx}px,${dy}px)`
+        });
+      }
+    });
+
+    elem.addEventListener("mouseup", event => {
+      if (window.stuffMoving) {
+        const dx = event.pageX - stuffMoving.startX;
+        const dy = event.pageY - stuffMoving.startY;
+        if (dx !== 0 || dy !== 0) {
+          // START HERE set new box position
+        }
+        window.stuffMoving = undefined;
+      }
+    });
+  });
+});
+
+
 /////////////////// Example Management ///////////////////
 
 
