@@ -18,6 +18,7 @@ type t =
   | Redo
   | DoSynth
   | InsertCode        of string (* code *)
+  | SetPos            of string * int * int (* loc str, x, y *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -31,6 +32,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String code]                                       -> InsertCode code
+  | `List [`String "SetPos"; `String loc_str; `Int x; `Int y]                        -> SetPos (loc_str, x, y)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -201,7 +203,7 @@ let add_assert_before_loc loc lhs_code rhs_code old =
 let insert_code code old =
   let exp = Exp.from_string code in
   let name = Name.gen_from_exp exp old in
-  let vb' = Vb.mk (Pat.var name) exp in
+  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
   let inserted = ref false in
   let new_prog =
     old
@@ -221,7 +223,10 @@ let insert_code code old =
     (* Program doesn't have any recursive top-level bindings yet *)
     old @ [Ast_helper.Str.value Asttypes.Recursive [vb']]
 
-
+let set_pos loc x y old =
+  old
+  |> Vb.map_by_loc loc (Pos.set_vb_pos x y)
+  (* |> Exp.map_by_loc loc (fun exp -> { exp with pexp_attributes = Pos.set_pos_attr x y exp.pexp_attributes } ) *)
 
 
 let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
@@ -253,3 +258,7 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
     (fun prog -> prog)
   | InsertCode code ->
     insert_code code
+  | SetPos (loc_str, x, y) ->
+    let loc = Serialize.loc_of_string loc_str in
+    set_pos loc x y
+

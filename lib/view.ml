@@ -38,14 +38,11 @@ let table  ?(attrs = [])       inners = tag "table" ~attrs inners
 let tr     ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td     ?(attrs = [])       inners = tag "td" ~attrs inners
 let button ?(attrs = [])       inners = tag "button" ~attrs inners
-let box    ?(attrs = []) ?(parsetree_attrs = []) klass inners =
-  let pos_attrs =
-    parsetree_attrs
-    |> Pos.from_attrs
-    |>& (fun pos -> ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;"))
-    |> Option.to_list
-  in
-  let attrs = ("class", ("box " ^ klass))::(pos_attrs @ attrs) in
+let box    ?(attrs = []) ?loc ?(parsetree_attrs = []) klass inners =
+  let loc_attr = ("data-loc", Serialize.string_of_loc (loc ||& Location.none)) in
+  let pos = Pos.from_attrs parsetree_attrs ||& { x = 0; y = 0 } in
+  let pos_attr = ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;")in
+  let attrs = ("class", ("box " ^ klass))::loc_attr::pos_attr::attrs in
   div ~attrs inners
 
 let string_of_pat ?(editable = true) pat =
@@ -250,7 +247,7 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     | _                     -> exp
   in
   let html_of_vb vb =
-    box ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
+    box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
       match vb.pvb_pat.ppat_desc with
       | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
       | _ ->
@@ -300,7 +297,7 @@ let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb :
       ] []
   in
   [ drop_target_before_vb vb
-  ; box "value_binding"
+  ; box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding"
       @@ [ string_of_pat vb.pvb_pat ]
       @  [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
   ]

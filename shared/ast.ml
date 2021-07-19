@@ -507,9 +507,20 @@ module Pat = struct
 end
 
 module Vb = struct
-  type t = value_binding
+  include Common(struct
+    type t = value_binding
+    let loc { pvb_loc; _ } = pvb_loc
+    let iter f struct_items =
+      let iter_vb iter e = dflt_iter.value_binding iter e; f e in
+      let iter = { dflt_iter with value_binding = iter_vb } in
+      iter.structure iter struct_items
+    let map f struct_items =
+      let map_vb mapper e = f (dflt_mapper.value_binding mapper e) in
+      let mapper = { dflt_mapper with value_binding = map_vb } in
+      mapper.structure mapper struct_items
+  end)
+
   let all prog = (everything (Sis prog)).vbs
-  let loc { pvb_loc; _ } = pvb_loc
 
   include Ast_helper.Vb (* Vb builders *)
 
@@ -647,6 +658,8 @@ module Attr = struct
 
   let remove_name target_name attrs =
     attrs |>@? (name %> (<>) target_name)
+
+  let set_exp target_name exp = remove_name target_name %> add_exp target_name exp
 end
 
 

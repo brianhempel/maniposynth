@@ -52,7 +52,7 @@ body {
   display: block;
   position: absolute;
   max-width: 100%;
-  /* START HERE position boxes */
+  cursor: move;
 }
 
 .box > :last-child {
@@ -94,10 +94,14 @@ td {
   display: none !important;
 }
 
-[draggable=true] {
-  /* cursor: grab; */
-  cursor: move;
+.value {
+  cursor: pointer;
 }
+
+/* [draggable=true] { */
+  /* cursor: grab; */
+  /* cursor: move; */
+/* } */
 
 .draggable-hovered {
   /* background-color: rgba(200,200,200,0.5); */

@@ -92,6 +92,15 @@ function insertCode(code) {
   ]);
 }
 
+function setPos(loc, x, y) {
+  doAction([
+    "SetPos",
+    loc,
+    x,
+    y
+  ]);
+}
+
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
 //     "AddCodeToScopeBindings",
@@ -458,7 +467,7 @@ window.addEventListener('DOMContentLoaded', () => {
       window.stuffMoving = {
         startX : event.pageX,
         startY : event.pageY,
-        elems  : [elem],
+        elem   : elem,
       }
     });
   });
@@ -470,9 +479,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (window.stuffMoving) {
         const dx = event.pageX - stuffMoving.startX;
         const dy = event.pageY - stuffMoving.startY;
-        window.stuffMoving.elems.forEach(elem => {
-          elem.style.transform = `translate(${dx}px,${dy}px)`
-        });
+        window.stuffMoving.elem.style.transform = `translate(${dx}px,${dy}px)`;
       }
     });
 
@@ -480,8 +487,11 @@ window.addEventListener('DOMContentLoaded', () => {
       if (window.stuffMoving) {
         const dx = event.pageX - stuffMoving.startX;
         const dy = event.pageY - stuffMoving.startY;
+        const elem = stuffMoving.elem;
         if (dx !== 0 || dy !== 0) {
-          // START HERE set new box position
+          const x = dx + parseInt(elem.style.left);
+          const y = dy + parseInt(elem.style.top);
+          setPos(elem.dataset.loc, x, y);
         }
         window.stuffMoving = undefined;
       }
