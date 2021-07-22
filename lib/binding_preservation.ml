@@ -1,4 +1,6 @@
 
+(* May not need this. Typedtree tracks binding locations via uniquely stamped Idents *)
+
 (* let (restore_names, old) = assign_unique_names old in *)
 open Asttypes
 open Parsetree
@@ -350,6 +352,22 @@ let binding_map_and_free flags_and_units =
   ignore @@ iter_rec_units iter_funs StaticEnv.empty flags_and_units;
   !uses, !free
 
+(* Var names only. *)
+let free_var_lids_in_exp exp =
+  let free = ref [] in
+  let use getter env lid_loced =
+    try
+      ignore (getter env lid_loced.txt)
+    with
+      Not_found -> free := lid_loced.txt::!free
+  in
+  let iter_funs =
+    { dummy_iter_funs with
+      use_value = use StaticEnv.get_value_loc_by_lid
+    } in
+  ignore @@ iter_exp iter_funs StaticEnv.empty exp;
+  !free
+
 
 (* Terminal names used or defined. *)
 let names_seen flags_and_units =
@@ -369,8 +387,7 @@ let names_seen flags_and_units =
   ignore @@ iter_rec_units iter_funs StaticEnv.empty flags_and_units;
   !nameset
 
-
-module Name = struct
+(* module Name = struct
   (* Generates a name not used or defined in the given programs. *)
   (* May shadow imported names not used or defined in flags_and_units, but otherwise conservative. *)
   let gen ?(base_name = "var") flags_and_units =
@@ -383,3 +400,5 @@ module Name = struct
     done;
     !name
 end
+
+ *)

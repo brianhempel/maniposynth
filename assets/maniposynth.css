@@ -145,6 +145,13 @@ td {
   top: 2.5em;
   width: 200px;
   min-height: 100px;
+  padding: var(--padding);
+}
+
+#inspector h2 {
+  margin: var(--padding) 0;
+  font-size: 20px;
+  /* color: var(--color); */
 }
 
 #inspector label,

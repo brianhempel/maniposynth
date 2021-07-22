@@ -313,15 +313,28 @@ function containingLoc(elem) {
 
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
+  hide(inspector);
+
+  document.getElementById("add-vis-textbox").addEventListener("keydown", event => {
+    let textbox = event.currentTarget;
+    if (event.key === "Enter" && textbox.value) {
+      const elem = document.querySelector('.selected');
+      if (elem) {
+        const vis = textbox.value;
+        addVis(containingLoc(elem), vis);
+      }
+    } else if (event.key === "Escape") {
+      textbox.value = "";
+    }
+  });
 });
 
-function updateInspector() {
-  const inspector = window.inspector;
-  const typeOfSelected = document.getElementById("type-of-selected");
-  const visesForSelected = document.getElementById("vises-for-selected");
 
-  // START HERE
-  // const elems = document.querySelectorAll('.selected');
+function updateInspector() {
+  const inspector        = window.inspector;
+  const typeOfSelected   = document.getElementById("type-of-selected");
+  const visesForSelected = document.getElementById("vises-for-selected");
+  const addVisTextbox    = document.getElementById("add-vis-textbox");
 
   const elem = document.querySelector('.selected');
 
@@ -346,6 +359,7 @@ function updateInspector() {
   }
 
   if (elem) {
+    show(inspector);
     const typeStr = elem.dataset.type || "Unknown";
     typeOfSelected.innerHTML = "";
     visesForSelected.innerHTML = "";
@@ -360,8 +374,7 @@ function updateInspector() {
       }
     });
   } else {
-    typeOfSelected.innerHTML = "";
-    visesForSelected.innerHTML = "";
+    hide(inspector);
   }
 }
 

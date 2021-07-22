@@ -72,6 +72,9 @@ module List = struct
       if pred k then Some v
       else assoc_by_opt pred rest
 
+  let diff list1 items_to_remove =
+    list1 |> filter (fun x -> not (mem x items_to_remove))
+
   (* List already has sort_uniq *)
   (* This preserves order. *)
   let dedup list =

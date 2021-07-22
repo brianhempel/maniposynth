@@ -569,7 +569,7 @@ module StructItem = struct
 
   include Ast_helper.Str (* Structure item builders *)
 
-  let value { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
+  let value_opt { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
 
   (* let name_loced { pstr_desc; _ } =
     match pstr_desc with
@@ -604,6 +604,7 @@ module StructItems = struct
   let all prog = prog
 
   let to_string = Pprintast.string_of_structure
+  let from_string = Lexing.from_string %> Parse.implementation
 
   (* Variable names introduced or used. Excludes ctors. *)
   (* Includes endings of qualified names, e.g. "x" in Thing.x *)

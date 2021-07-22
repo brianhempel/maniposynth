@@ -176,11 +176,33 @@ let drop_value_before vb_loc (value : value) old =
   print_locs new_free new_prog;
   new_prog
 
+let insert_binding name exp old =
+  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
+  let inserted = ref false in
+  let new_prog =
+    old
+    |> List.rev
+    |> List.map begin fun struct_item ->
+      match struct_item.pstr_desc with
+      | Pstr_value (Asttypes.Recursive, vbs) when not !inserted ->
+        inserted := true;
+        { struct_item with pstr_desc = Pstr_value (Asttypes.Recursive, vbs @ [vb'])}
+      | _ -> struct_item
+    end
+    |> List.rev
+  in
+  if !inserted then
+    new_prog
+  else
+    (* Program doesn't have any recursive top-level bindings yet *)
+    old @ [Ast_helper.Str.value Asttypes.Recursive [vb']]
+
 let add_vis_to_loc loc vis_str old =
   old
   |> Exp.map_by_loc loc begin fun exp ->
     { exp with pexp_attributes = Vis.add_vis_str_to_attrs vis_str exp.pexp_attributes }
   end
+  |> Bindings.fixup
 
 let remove_vis_from_loc loc vis_str old =
   old
@@ -203,25 +225,8 @@ let add_assert_before_loc loc lhs_code rhs_code old =
 let insert_code code old =
   let exp = Exp.from_string code in
   let name = Name.gen_from_exp exp old in
-  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
-  let inserted = ref false in
-  let new_prog =
-    old
-    |> List.rev
-    |> List.map begin fun struct_item ->
-      match struct_item.pstr_desc with
-      | Pstr_value (Asttypes.Recursive, vbs) when not !inserted ->
-        inserted := true;
-        { struct_item with pstr_desc = Pstr_value (Asttypes.Recursive, vbs @ [vb'])}
-      | _ -> struct_item
-    end
-    |> List.rev
-  in
-  if !inserted then
-    new_prog
-  else
-    (* Program doesn't have any recursive top-level bindings yet *)
-    old @ [Ast_helper.Str.value Asttypes.Recursive [vb']]
+  insert_binding name exp old
+  |> Bindings.fixup
 
 let set_pos loc x y old =
   old

@@ -31,14 +31,16 @@ let script ?src ?(attrs = []) str =
   | None         -> tag "script" ~attrs                                [str]
 
 
-let body   ?(attrs = [])       inners = tag "body" ~attrs inners
-let div    ?(attrs = [])       inners = tag "div" ~attrs inners
-let span   ?(attrs = [])       inners = tag "span" ~attrs inners
-let table  ?(attrs = [])       inners = tag "table" ~attrs inners
-let tr     ?(attrs = [])       inners = tag "tr" ~attrs inners
-let td     ?(attrs = [])       inners = tag "td" ~attrs inners
-let button ?(attrs = [])       inners = tag "button" ~attrs inners
-let box    ?(attrs = []) ?loc ?(parsetree_attrs = []) klass inners =
+let body    ?(attrs = [])       inners = tag "body" ~attrs inners
+let div     ?(attrs = [])       inners = tag "div" ~attrs inners
+let h2      ?(attrs = [])       inners = tag "h2" ~attrs inners
+let span    ?(attrs = [])       inners = tag "span" ~attrs inners
+let table   ?(attrs = [])       inners = tag "table" ~attrs inners
+let tr      ?(attrs = [])       inners = tag "tr" ~attrs inners
+let td      ?(attrs = [])       inners = tag "td" ~attrs inners
+let button  ?(attrs = [])       inners = tag "button" ~attrs inners
+let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
+let box     ?(attrs = []) ?loc ?(parsetree_attrs = []) klass inners =
   let loc_attr = ("data-loc", Serialize.string_of_loc (loc ||& Location.none)) in
   let pos = Pos.from_attrs parsetree_attrs ||& { x = 0; y = 0 } in
   let pos_attr = ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;")in
@@ -305,7 +307,7 @@ let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb :
 let html_of_structure_item trace assert_results lookup_exp_typed (item : Parsetree.structure_item) =
   let open Parsetree in
   match item.pstr_desc with
-  | Pstr_eval (_, _)            -> failwith "can't handle Pstr_eval"
+  | Pstr_eval (exp, _)          -> html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp
   | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.concat @@ List.map (htmls_of_top_level_value_binding trace assert_results lookup_exp_typed) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
@@ -356,8 +358,17 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
     ; body begin
-        [ div ~attrs:[("id", "topbar")] ([span ~attrs:[("class","undo tool")] ["Undo"]; span ~attrs:[("class","redo tool")] ["Redo"]] @ [drawing_tools final_tenv])
-        ; div ~attrs:[("id", "inspector")] [div ~attrs:[("id", "type-of-selected")] []; div ~attrs:[("id", "vises-for-selected")] []]
+        [ div ~attrs:[("id", "topbar")] @@
+          [ span ~attrs:[("class","undo tool")] ["Undo"]
+          ; span ~attrs:[("class","redo tool")] ["Redo"]
+          ] @ [drawing_tools final_tenv]
+        ; div ~attrs:[("id", "inspector")]
+          [ h2 ["Type"]
+          ; div ~attrs:[("id", "type-of-selected")] []
+          ; h2 ["Visualize"]
+          ; div ~attrs:[("id", "vises-for-selected")] []
+          ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
+          ]
         ; button ~attrs:[("id", "synth-button")] ["Synth"]
         ]
         @ List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
