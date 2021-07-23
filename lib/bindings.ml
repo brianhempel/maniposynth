@@ -25,10 +25,6 @@ open Shared.Ast
 open Shared.Util
 
 (*
-  1. For each unsatisfied binding, find the binding (if any)
-     that should be in scope for it.
-  2. For each binding, if all its intended uses are not in scope, move the binding up.
-  3. Repeat, but check for cycles.
 
   The non-linear playpens are:
   1. Top level
@@ -172,28 +168,50 @@ and free_unqualified_names_struct_items struct_items =
     end
 
 
-let rec fixup_top_level defined_names struct_items =
-  let recurse ?(defined_names = defined_names) = fixup_top_level defined_names in
+(*
+    Need two passes.
+
+    Pass 1 moves existing items upward into scope.
+    Pass 2 adds missing bindings.
+*)
+
+let rec rearrange_top_level defined_names struct_items =
+  let recurse ?(defined_names = defined_names) = rearrange_top_level defined_names in
   match struct_items with
   | [] -> []
   | si::rest ->
     begin match si.pstr_desc with
-    | Pstr_eval (exp, _) ->
+    | Pstr_eval (exp, attrs) ->
+      let exp = rearrange_exp exp in
+      let si' = { si with pstr_desc = Pstr_eval (exp, attrs) } in
       let names_needed = List.diff (free_unqualified_names exp) defined_names in
-      begin match names_needed with
-      | []      -> si :: recurse rest
-      | name::_ ->
-        begin match extract_vb_with_name rest with
-        | None ->
-          let vb = Vb.mk (Pat.var name) Exp.hole in
-          recurse (StructItem.value Asttypes.Nonrecursive [vb] :: struct_items)
-        | Some (vb, rest') ->
-          recurse (StructItem.value Asttypes.Nonrecursive [vb] :: si :: rest')
+      let rec fix_a_name names_needed =
+        begin match names_needed with
+        | []                -> si' :: recurse rest
+        | name::other_names ->
+          begin match extract_vb_with_name name rest with
+          | None             -> fix_a_name other_names
+          | Some (vb, rest') -> recurse (StructItem.value Asttypes.Nonrecursive [vb] :: si' :: rest')
+          end
         end
-      end
+      in
+      fix_a_name names_needed
     | Pstr_value (Asttypes.Nonrecursive, vbs) ->
-       (* START HERE *)
-    | Pstr_value (Asttypes.Recursive, vbs) -> (??)
+      let vbs = vbs |>@ Vb.map_exp rearrange_exp in
+      let si' = { si with pstr_desc = Pstr_value (Asttypes.Nonrecursive, vbs) } in
+      let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names in
+      let rec fix_a_name names_needed =
+        begin match names_needed with
+        | []                -> si' :: recurse ~defined_names:((vbs |>@@ Vb.names) @ defined_names) rest
+        | name::other_names ->
+          begin match extract_vb_with_name name rest with
+          | None             -> fix_a_name other_names
+          | Some (vb, rest') -> recurse (StructItem.value Asttypes.Nonrecursive [vb] :: si' :: rest')
+          end
+        end
+      in
+      fix_a_name names_needed
+    | Pstr_value (Asttypes.Recursive, vbs) -> (* START HERE *)
     | Pstr_primitive _ -> (??)
     | Pstr_type (_, _) -> (??)
     | Pstr_typext _ -> (??)
