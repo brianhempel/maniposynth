@@ -152,7 +152,6 @@ and free_unqualified_names_struct_items struct_items =
     | Pstr_typext _
     | Pstr_modtype _
     | Pstr_class_type _
-    | Pstr_include _
     | Pstr_attribute _
     | Pstr_extension (_, _)
     | Pstr_exception _ ->
@@ -161,6 +160,8 @@ and free_unqualified_names_struct_items struct_items =
         free_unqualified_names_mod pmb_expr @ later_names
     | Pstr_recmodule mod_bindings ->
         (mod_bindings |>@@ (fun { pmb_expr; _ } -> free_unqualified_names_mod pmb_expr)) @ later_names
+    | Pstr_include _ ->
+        failwith "free_unqualified_names_struct_items: includes not handled"
     | Pstr_open _ ->
         failwith "free_unqualified_names_struct_items: opens not handled"
     | Pstr_class _ ->
@@ -172,64 +173,96 @@ and free_unqualified_names_struct_items struct_items =
     Need two passes.
 
     Pass 1 moves existing items upward into scope.
-    Pass 2 adds missing bindings.
+    Pass 2 adds missing bindings. (START HERE: is this true?)
 *)
 
-let rec rearrange_top_level defined_names struct_items =
-  let recurse ?(defined_names = defined_names) = rearrange_top_level defined_names in
+let rec extract_vb_with_name name struct_items =
+  match struct_items with
+  | []       -> None
+  | si::rest ->
+      begin match si.pstr_desc with
+      | Pstr_value (recflag, vbs) when List.mem name (vbs |>@@ Vb.names) ->
+          Some (recflag, vbs, rest)
+      | _ ->
+        begin match extract_vb_with_name name rest with
+        | Some (recflag, vbs, rest') -> Some (recflag, vbs, si::rest')
+        | None -> None
+        end
+      end
+
+let rec rearrange_struct_items defined_names struct_items =
+  let open Asttypes in
+  let recurse = rearrange_struct_items in
+  let recurse_exp ?(defined_names' = defined_names) = rearrange_exp defined_names' in
+  let recurse_mod ?(defined_names' = defined_names) = rearrange_mod defined_names' in
   match struct_items with
   | [] -> []
   | si::rest ->
-    begin match si.pstr_desc with
-    | Pstr_eval (exp, attrs) ->
-      let exp = rearrange_exp exp in
-      let si' = { si with pstr_desc = Pstr_eval (exp, attrs) } in
-      let names_needed = List.diff (free_unqualified_names exp) defined_names in
-      let rec fix_a_name names_needed =
+      let rec fix_a_name_and_continue defined_names' si' names_needed =
         begin match names_needed with
-        | []                -> si' :: recurse rest
+        | []                -> si' :: recurse defined_names' rest
         | name::other_names ->
           begin match extract_vb_with_name name rest with
-          | None             -> fix_a_name other_names
-          | Some (vb, rest') -> recurse (StructItem.value Asttypes.Nonrecursive [vb] :: si' :: rest')
+          | None                       -> fix_a_name_and_continue defined_names' si' other_names
+          | Some (recflag, vbs, rest') -> recurse defined_names (StructItem.value recflag vbs :: si' :: rest')
           end
         end
       in
-      fix_a_name names_needed
-    | Pstr_value (Asttypes.Nonrecursive, vbs) ->
-      let vbs = vbs |>@ Vb.map_exp rearrange_exp in
-      let si' = { si with pstr_desc = Pstr_value (Asttypes.Nonrecursive, vbs) } in
-      let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names in
-      let rec fix_a_name names_needed =
-        begin match names_needed with
-        | []                -> si' :: recurse ~defined_names:((vbs |>@@ Vb.names) @ defined_names) rest
-        | name::other_names ->
-          begin match extract_vb_with_name name rest with
-          | None             -> fix_a_name other_names
-          | Some (vb, rest') -> recurse (StructItem.value Asttypes.Nonrecursive [vb] :: si' :: rest')
-          end
-        end
-      in
-      fix_a_name names_needed
-    | Pstr_value (Asttypes.Recursive, vbs) -> (* START HERE *)
-    | Pstr_primitive _ -> (??)
-    | Pstr_type (_, _) -> (??)
-    | Pstr_typext _ -> (??)
-    | Pstr_exception _ -> (??)
-    | Pstr_module _ -> (??)
-    | Pstr_recmodule _ -> (??)
-    | Pstr_modtype _ -> (??)
-    | Pstr_open _ -> (??)
-    | Pstr_class _ -> (??)
-    | Pstr_class_type _ -> (??)
-    | Pstr_include _ -> (??)
-    | Pstr_attribute _ -> (??)
-    | Pstr_extension (_, _) -> (??)
-    end
+      begin match si.pstr_desc with
+      | Pstr_eval (exp, attrs) ->
+        let exp = recurse_exp exp in
+        let si' = { si with pstr_desc = Pstr_eval (exp, attrs) } in
+        let names_needed = List.diff (free_unqualified_names exp) defined_names in
+        fix_a_name_and_continue defined_names si' names_needed
+      | Pstr_value (Nonrecursive, vbs) ->
+        let vbs = vbs |>@ Vb.map_exp recurse_exp in
+        let si' = { si with pstr_desc = Pstr_value (Nonrecursive, vbs) } in
+        let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names in
+        let defined_names' = (vbs |>@@ Vb.names) @ defined_names in
+        fix_a_name_and_continue defined_names' si' names_needed
+      | Pstr_value (Recursive, vbs) ->
+          let defined_names' = (vbs |>@@ Vb.names) @ defined_names in
+          let vbs = vbs |>@ Vb.map_exp (recurse_exp ~defined_names') in
+          let si' = { si with pstr_desc = Pstr_value (Recursive, vbs) } in
+          let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names' in
+          fix_a_name_and_continue defined_names' si' names_needed
+      | Pstr_module mod_binding ->
+          let mod_binding' = { mod_binding with pmb_expr = recurse_mod mod_binding.pmb_expr } in
+          let si' = { si with pstr_desc = Pstr_module mod_binding' } in
+          let names_needed = List.diff (free_unqualified_names_mod mod_binding'.pmb_expr) defined_names in
+          fix_a_name_and_continue defined_names si' names_needed
+      | Pstr_recmodule mod_bindings ->
+          let mod_bindings' = mod_bindings |>@ (fun mod_binding -> { mod_binding with pmb_expr = recurse_mod mod_binding.pmb_expr }) in
+          let si' = { si with pstr_desc = Pstr_recmodule mod_bindings' } in
+          let names_needed =
+            List.diff
+              (mod_bindings' |>@@ (fun mod_binding' -> free_unqualified_names_mod mod_binding'.pmb_expr))
+              defined_names
+          in
+          fix_a_name_and_continue defined_names si' names_needed
+      | Pstr_primitive _
+      | Pstr_type (_, _)
+      | Pstr_typext _
+      | Pstr_exception _
+      | Pstr_modtype _
+      | Pstr_class_type _
+      | Pstr_attribute _
+      | Pstr_extension (_, _) ->
+          si :: recurse defined_names rest
+      | Pstr_include _ ->
+        failwith "rearrange_struct_items: includes not handled"
+      | Pstr_open _ ->
+        failwith "rearrange_struct_items: opens not handled"
+      | Pstr_class _ ->
+          failwith "rearrange_struct_items: classes not handled"
+      end
+
+and rearrange_exp _defined_names exp = exp
+and rearrange_mod _defined_names modl = modl
 
 
 let fixup prog =
-  fixup_top_level [] prog
+  rearrange_struct_items [] prog
 
 
 let _ =

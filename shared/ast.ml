@@ -533,6 +533,7 @@ module Vb = struct
   let names_loced         = pat %> Pat.names_loced
   let names               = names_loced %>@ Loc_.txt
 
+  let map_pat f vb = { vb with pvb_pat = f vb.pvb_pat }
   let map_exp f vb = { vb with pvb_expr = f vb.pvb_expr }
 
   (* Resolve as many names to associated expressions as possible. *)
