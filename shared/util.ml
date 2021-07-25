@@ -38,8 +38,8 @@ module List = struct
   include List
 
   (* List.for_all2 but returns false when lists have different lengths *)
-  let for_all2_safe pred list1 list2 =
-    try for_all2 pred list1 list2
+  let for_all2_safe pred xs ys =
+    try for_all2 pred xs ys
     with Invalid_argument _ -> false
 
   let hd_opt = function
@@ -72,8 +72,15 @@ module List = struct
       if pred k then Some v
       else assoc_by_opt pred rest
 
-  let diff list1 items_to_remove =
-    list1 |> filter (fun x -> not (mem x items_to_remove))
+  let diff xs items_to_remove =
+    xs |> filter (fun x -> not (mem x items_to_remove))
+
+  (* Intersection *)
+  let inter xs ys =
+    xs |> filter (fun x -> mem x ys)
+
+  let any_overlap xs ys =
+    xs |> exists (fun x -> mem x ys)
 
   (* List already has sort_uniq *)
   (* This preserves order. *)

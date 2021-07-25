@@ -113,7 +113,7 @@ let move_vb_before_vb before_vb_loc vb_loc old =
   1. Search the value trace for locations where the value is bound to a name.
   2. See if any of those bindings can be moved up/down to the location indicated by the user.
 *)
-let move_value_before_vb vb_loc { vtrace; _ } old : Shared.Ast.program list =
+let move_value_before_vb vb_loc (vtrace : vtrace) old : Shared.Ast.program list =
   (* 1. Search the value trace for locations where the value is let-bound to a name. *)
   let all_vbs = Vb.all old in
   vtrace
@@ -127,7 +127,7 @@ let move_value_before_vb vb_loc { vtrace; _ } old : Shared.Ast.program list =
   1. Search the value trace for locations where the value flows through an expression.
   2. Replace that expression with a variable and plop a new binding before the indicated vb.
 *)
-let insert_value_before vb_loc { vtrace; _ } old =
+let insert_value_before vb_loc (vtrace : vtrace) old =
   let all_exps = Exp.all old in
   vtrace
   |>@@ (fun ((_, loc), _) -> all_exps |>@? (Exp.loc %> (=) loc))
@@ -149,7 +149,7 @@ Strategy 2: Insert a new binding
   2. Move the associated expression into a new binding at the location indicated by the user
   3. Replace the expression with a reference to the variable
 *)
-let drop_value_before vb_loc (value : value) old =
+let drop_value_before vb_loc (vtrace : vtrace) old =
   let print_locs locs prog =
     locs |> List.iter (Loc.name_of_origin prog %> print_endline) in
   let print_uses uses prog =
@@ -162,10 +162,10 @@ let drop_value_before vb_loc (value : value) old =
   print_endline "Free before:";
   print_locs old_free old;
   let new_prog =
-    match move_value_before_vb vb_loc value old with
+    match move_value_before_vb vb_loc vtrace old with
     | new_prog::_ -> new_prog
     | []          ->
-    begin match insert_value_before vb_loc value old with
+    begin match insert_value_before vb_loc vtrace old with
       | new_prog::_ -> new_prog
       | []          -> old
     end in
@@ -175,27 +175,7 @@ let drop_value_before vb_loc (value : value) old =
   print_endline "Free after:";
   print_locs new_free new_prog;
   new_prog
-
-let insert_binding name exp old =
-  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
-  let inserted = ref false in
-  let new_prog =
-    old
-    |> List.rev
-    |> List.map begin fun struct_item ->
-      match struct_item.pstr_desc with
-      | Pstr_value (Asttypes.Recursive, vbs) when not !inserted ->
-        inserted := true;
-        { struct_item with pstr_desc = Pstr_value (Asttypes.Recursive, vbs @ [vb'])}
-      | _ -> struct_item
-    end
-    |> List.rev
-  in
-  if !inserted then
-    new_prog
-  else
-    (* Program doesn't have any recursive top-level bindings yet *)
-    old @ [Ast_helper.Str.value Asttypes.Recursive [vb']]
+  |> Bindings.fixup
 
 let add_vis_to_loc loc vis_str old =
   old
@@ -211,34 +191,37 @@ let remove_vis_from_loc loc vis_str old =
   end
 
 let replace_loc_code loc code old =
+  (* Preserve old attrs and loc. *)
   old
-  |> Exp.map_by_loc loc begin fun exp -> { (Exp.from_string code) with pexp_loc = exp.pexp_loc } end
-  |> Pat.map_by_loc loc begin fun pat -> { (Pat.from_string code) with ppat_loc = pat.ppat_loc } end
+  |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
+  |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end
+  |> Bindings.fixup
 
 let add_assert_before_loc loc lhs_code rhs_code old =
   let assert_exp = Exp.assert_ @@ Exp.from_string @@ "(" ^ lhs_code ^ ") = (" ^ rhs_code ^ ")" in
   old
   (* |> Exp.map_by_loc loc (Exp.let_ Nonrecursive [Vb.mk (Pat.any ()) assert_exp]) *)
   |> Exp.map_by_loc loc (Exp.sequence assert_exp)
+  |> Bindings.fixup
 
-(* Add to last vb *)
 let insert_code code old =
   let exp = Exp.from_string code in
   let name = Name.gen_from_exp exp old in
-  insert_binding name exp old
+  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
+  old @ [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
   |> Bindings.fixup
 
 let set_pos loc x y old =
   old
-  |> Vb.map_by_loc loc (Pos.set_vb_pos x y)
-  (* |> Exp.map_by_loc loc (fun exp -> { exp with pexp_attributes = Pos.set_pos_attr x y exp.pexp_attributes } ) *)
+  |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
+  |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
 
 
 let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
-  | DropValueBeforeVb (vb_loc_str, value_str) ->
+  | DropValueBeforeVb (vb_loc_str, vtrace_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
-    let value = Serialize.value_of_string value_str in
-    drop_value_before vb_loc value
+    let vtrace = Serialize.vtrace_of_string vtrace_str in
+    drop_value_before vb_loc vtrace
   | AddVis (loc_str, vis_str) ->
     let loc = Serialize.loc_of_string loc_str in
     add_vis_to_loc loc vis_str

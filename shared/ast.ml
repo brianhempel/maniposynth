@@ -495,6 +495,10 @@ module Pat = struct
     | Ppat_var name_loced        -> Some name_loced
     | Ppat_alias (_, name_loced) -> Some name_loced
     | _                          -> None
+  let single_name (pat : pattern) =
+    match pat.ppat_desc with
+    | Ppat_var { txt; _ } -> Some txt
+    | _                   -> None
 
   let ctor_lid_loced (pat : pattern) =
     match pat.ppat_desc with
@@ -511,11 +515,11 @@ module Vb = struct
     type t = value_binding
     let loc { pvb_loc; _ } = pvb_loc
     let iter f struct_items =
-      let iter_vb iter e = dflt_iter.value_binding iter e; f e in
+      let iter_vb iter vb = dflt_iter.value_binding iter vb; f vb in
       let iter = { dflt_iter with value_binding = iter_vb } in
       iter.structure iter struct_items
     let map f struct_items =
-      let map_vb mapper e = f (dflt_mapper.value_binding mapper e) in
+      let map_vb mapper vb = f (dflt_mapper.value_binding mapper vb) in
       let mapper = { dflt_mapper with value_binding = map_vb } in
       mapper.structure mapper struct_items
   end)
@@ -562,6 +566,28 @@ module Vb = struct
       | Ppat_open (_, _) -> (??)
     in
     bind vb.pvb_pat vb.pvb_expr *)
+end
+
+module VbGroups = struct
+  let map f struct_items =
+    let map_si mapper si =
+      let si' = dflt_mapper.structure_item mapper si in
+      match si'.pstr_desc with
+      | Pstr_value (recflag, vbs) ->
+        let recflag', vbs' = f (recflag, vbs) in
+        { si' with pstr_desc = Pstr_value (recflag', vbs') }
+      | _ -> si'
+    in
+    let map_exp mapper e =
+      let e' = dflt_mapper.expr mapper e in
+      match e'.pexp_desc with
+      | Pexp_let (recflag, vbs, body) ->
+        let recflag', vbs' = f (recflag, vbs) in
+        { e' with pexp_desc = Pexp_let (recflag', vbs', body) }
+      | _ -> e'
+    in
+    let mapper = { dflt_mapper with structure_item = map_si; expr = map_exp } in
+    mapper.structure mapper struct_items
 end
 
 (* Structure Item (i.e. top-level clauses) *)

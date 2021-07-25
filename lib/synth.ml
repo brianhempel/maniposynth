@@ -32,7 +32,7 @@ let rec apply_fillings fillings prog =
 type req = Data.env * expression * value
 
 let string_of_req (_env, exp, value) =
-  Exp.to_string exp ^ " = " ^ Formatter_to_stringifier.f pp_print_value value
+  Exp.to_string exp ^ " = " ^ value_to_string value
 
 
 let dont_care = new_vtrace ExDontCare
@@ -770,6 +770,7 @@ let e_guess fillings size_limit prog file_name : fillings Seq.t =
 
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
+(* If lambda is rhs of a lone binding, make the binding recursive. *)
 let refine prog fillings reqs file_name next =
   let reqs'           = reqs |>@@ push_down_req fillings in
   let hole_locs       = hole_locs prog fillings in
@@ -862,17 +863,7 @@ let refine prog fillings reqs file_name next =
 
 let fill_holes prog reqs file_name : fillings option =
   Seq.concat
-    [ e_guess Loc_map.empty 5 prog file_name
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> e_guess fillings 5 prog file_name)
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 5 prog file_name))
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 5 prog file_name)))
-    ; e_guess Loc_map.empty 6 prog file_name
+    [ e_guess Loc_map.empty 6 prog file_name
     ; refine prog Loc_map.empty reqs file_name
         (fun fillings -> e_guess fillings 6 prog file_name)
     ; refine prog Loc_map.empty reqs file_name
@@ -882,16 +873,6 @@ let fill_holes prog reqs file_name : fillings option =
         (fun fillings -> refine prog fillings reqs file_name
         (fun fillings -> refine prog fillings reqs file_name
         (fun fillings -> e_guess fillings 6 prog file_name)))
-    ; e_guess Loc_map.empty 7 prog file_name
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> e_guess fillings 7 prog file_name)
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 7 prog file_name))
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 7 prog file_name)))
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
@@ -910,21 +891,50 @@ let fill_holes prog reqs file_name : fillings option =
     | Seq.Cons (fillings, _) -> Some fillings
   end
 
+let make_bindings_with_holes_recursive prog =
+  prog
+  |> VbGroups.map begin function
+      | (Nonrecursive, [vb]) ->
+        let rhs_free = Bindings.free_unqualified_names vb.pvb_expr in
+        begin match Pat.single_name vb.pvb_pat with
+        | Some name when List.mem "??" rhs_free && not (List.mem name rhs_free) ->
+          (Recursive, [vb])
+        | _ ->
+          (Nonrecursive, [vb])
+        end
+      | vb_group -> vb_group
+  end
 
-let results parsed _trace assert_results file_name =
+let remove_unnecessary_rec_flags prog =
+  prog
+  |> VbGroups.map begin function
+      | (Recursive, [vb]) ->
+        let rhs_free = Bindings.free_unqualified_names vb.pvb_expr in
+        begin match Pat.single_name vb.pvb_pat with
+        | Some name when not (List.mem name rhs_free) ->
+          (Nonrecursive, [vb])
+        | _ ->
+          (Recursive, [vb])
+        end
+      | vb_group -> vb_group
+  end
+
+let results prog _trace assert_results file_name =
+  let prog = prog |> make_bindings_with_holes_recursive in
   terms_tested_count := 0;
   let start_sec = Unix.time () in
   let reqs = assert_results |>@ req_of_assert_result in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  match fill_holes parsed reqs file_name with
+  match fill_holes prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
-  | None -> print_endline "synth failed"; [parsed]
+  | None -> print_endline "synth failed"; [prog]
   | Some fillings' ->
     print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
     (* Fill holes until fixpoint or bored. *)
-    parsed
+    prog
     |> apply_fillings fillings'
+    |> remove_unnecessary_rec_flags
     |> fun x -> [x]
 
 let try_async path =
@@ -932,6 +942,7 @@ let try_async path =
   (* Start synthesis and the synth process killer. *)
   match Unix.fork () with
   | 0 ->
+    (* START HERE need to add the rec flags here, before gathering assert results *)
     let parsed = Interp.parse path in
     (* let parsed_with_comments = Parse_unparse.parse_file path in
     let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
@@ -964,7 +975,7 @@ let try_async path =
   | pid ->
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 5;
+    Unix.sleep 15;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;

@@ -21,4 +21,5 @@ let set_pos_attr x y attrs : attributes =
   let pos_exp = Exp.tuple [Exp.int_lit x; Exp.int_lit y] in
   Attr.set_exp "pos" pos_exp attrs
 
-let set_vb_pos x y vb = { vb with pvb_attributes = set_pos_attr x y vb.pvb_attributes }
+let set_vb_pos  x y vb  = { vb  with pvb_attributes  = set_pos_attr x y vb.pvb_attributes }
+let set_exp_pos x y exp = { exp with pexp_attributes = set_pos_attr x y exp.pexp_attributes }

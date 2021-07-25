@@ -48,11 +48,15 @@ body {
   /* box-shadow: -2px 1px 5px rgba(0,0,0,0.2); */
   /* border-left: solid 1px black; */
   /* display: inline-block; */
-  margin: var(--padding);
+  /* margin: var(--padding); */
   display: block;
   position: absolute;
   max-width: 100%;
   cursor: move;
+}
+
+.box > * {
+  background-color: white;
 }
 
 .box > :last-child {
@@ -60,11 +64,14 @@ body {
   box-shadow: 0px 0px 5px rgba(0,0,0,0.15);
 }
 
-body > .box > :first-child {
+.box > span:first-child {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
-  font-size: 20px;
   color:rgb(226, 43, 144)
+}
+
+body > .box > span:first-child {
+  font-size: 20px;
 }
 
 body > .box > :last-child {
@@ -89,6 +96,14 @@ td {
   /* border: solid 1px black; */
   padding: var(--padding);
 }
+
+/* .vbs {
+  overflow: hidden;
+} */
+/* .vbs {
+  position: relative;
+  padding: 0;
+} */
 
 .hidden {
   display: none !important;

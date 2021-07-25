@@ -26,11 +26,11 @@ function doAction(action) {
   request.send(JSON.stringify(action));
 }
 
-function dropValueBeforeVb(beforeVbId, value) {
+function dropValueBeforeVb(beforeVbId, vtrace) {
   doAction([
     "DropValueBeforeVb",
     beforeVbId,
-    value
+    vtrace
   ]);
 }
 
@@ -156,7 +156,7 @@ function draggableUnhover(event) {
 // When drag starts, store information.
 function dragstart(event) {
   let node = event.target;
-  if (node.dataset.value) { event.dataTransfer.setData("application/value", node.dataset.value); }
+  if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
   // if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
 }
@@ -183,9 +183,9 @@ function dragleave(event) {
 function drop(event) {
   event.preventDefault();
   let dropTarget      = event.currentTarget;
-  let droppedValue    = event.dataTransfer.getData("application/value");
-  if (dropTarget.dataset.beforeVbId && droppedValue) {
-    dropValueBeforeVb(dropTarget.dataset.beforeVbId, droppedValue);
+  let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
+  if (dropTarget.dataset.beforeVbId && droppedVTrace) {
+    dropValueBeforeVb(dropTarget.dataset.beforeVbId, droppedVTrace);
   // let newCode         = event.dataTransfer.getData("application/new-code");
   // let destructPathStr = event.dataTransfer.getData("application/destruct-path-str");
   // if (dropTarget.dataset.scopeIdStr && dropTarget.classList.contains("bindings") && newCode) {
@@ -208,7 +208,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items draggable.
 
-  document.querySelectorAll('[data-value]').forEach(elem => {
+  document.querySelectorAll('[data-vtrace]').forEach(elem => {
     elem.draggable = true;
   });
 
@@ -295,7 +295,7 @@ function restoreSelection() {
 window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-value]').forEach(elem => {
+  document.querySelectorAll('[data-vtrace]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", toggleSelect);
   });
@@ -366,7 +366,6 @@ function updateInspector() {
     typeOfSelected.appendChild(document.createTextNode(typeStr));
     const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
     const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
-    // START HERE make this pretty, then make it do something
     activeVises.forEach(vis => visesForSelected.appendChild(makeCheck(vis, true)));
     possibleVises.forEach(vis => {
       if (!activeVises.includes(vis)) {
@@ -478,10 +477,13 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".box").forEach(elem => {
     elem.addEventListener("mousedown", event => {
       window.stuffMoving = {
-        startX : event.pageX,
-        startY : event.pageY,
-        elem   : elem,
+        startX       : event.pageX,
+        startY       : event.pageY,
+        startOffsetX : elem.offsetLeft,
+        startOffsetY : elem.offsetTop,
+        elem         : elem,
       }
+      event.stopPropagation();
     });
   });
 });
@@ -490,20 +492,23 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll("body").forEach(elem => {
     elem.addEventListener("mousemove", event => {
       if (window.stuffMoving) {
-        const dx = event.pageX - stuffMoving.startX;
-        const dy = event.pageY - stuffMoving.startY;
-        window.stuffMoving.elem.style.transform = `translate(${dx}px,${dy}px)`;
+        const dx = Math.max(event.pageX - stuffMoving.startX, -stuffMoving.startOffsetX);
+        const dy = Math.max(event.pageY - stuffMoving.startY, -stuffMoving.startOffsetY);
+        window.stuffMoving.elem.style.left = `${stuffMoving.startOffsetX + dx}px`
+        window.stuffMoving.elem.style.top  = `${stuffMoving.startOffsetY + dy}px`
+        // window.stuffMoving.elem.style.transform = `translate(${dx}px,${dy}px)`;
+        // resize_vbs_holders(document);
       }
     });
 
     elem.addEventListener("mouseup", event => {
       if (window.stuffMoving) {
-        const dx = event.pageX - stuffMoving.startX;
-        const dy = event.pageY - stuffMoving.startY;
+        const dx = Math.max(event.pageX - stuffMoving.startX, -stuffMoving.startOffsetX);
+        const dy = Math.max(event.pageY - stuffMoving.startY, -stuffMoving.startOffsetY);
         const elem = stuffMoving.elem;
         if (dx !== 0 || dy !== 0) {
-          const x = dx + parseInt(elem.style.left);
-          const y = dy + parseInt(elem.style.top);
+          const x = dx + stuffMoving.startOffsetX;
+          const y = dy + stuffMoving.startOffsetY;
           setPos(elem.dataset.loc, x, y);
         }
         window.stuffMoving = undefined;
@@ -511,6 +516,30 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+// Make sure each vbs holder has place for all the vbs
+// Resize deepest first.
+function resize_vbs_holders(elem) {
+  const vbs_holders = elem.querySelectorAll(".vbs");
+  if (vbs_holders.length > 0) {
+    vbs_holders.forEach(vbs_holder => {
+      // console.log(vbs_holder.children);
+      let maxWidth = 0;
+      let maxHeight = 0;
+      for (box of vbs_holder.children) {
+        resize_vbs_holders(box);
+        maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
+        maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
+      }
+      vbs_holder.style.width  = "" + maxWidth + "px"
+      vbs_holder.style.height = "" + maxHeight + "px"
+    });
+  }
+};
+window.addEventListener('DOMContentLoaded', () => {
+  resize_vbs_holders(document);
+});
+
 
 
 /////////////////// Example Management ///////////////////

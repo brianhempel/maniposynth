@@ -240,6 +240,8 @@ let rec pp_print_value ff { v_; _ } =
   | ExCall (v1, v2) -> Format.fprintf ff "%a -> %a" pp_print_value v1 pp_print_value v2
   | ExDontCare -> Format.fprintf ff "<ExDontCare>"
 
+let value_to_string = Shared.Formatter_to_stringifier.f pp_print_value
+
 let pp_print_unit_id ppf (Path s) =
   Format.fprintf ppf "%S" s
 

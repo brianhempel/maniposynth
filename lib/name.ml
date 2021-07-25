@@ -1,8 +1,6 @@
 open Shared.Ast
 open Shared.Util
 
-module SSet = Set.Make(String)
-
 let pervasives_names =
   Env.fold_values         (fun name _ _              list -> name      :: list) None Typing.initial_env []
   @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
