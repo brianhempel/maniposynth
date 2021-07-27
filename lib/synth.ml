@@ -920,7 +920,6 @@ let remove_unnecessary_rec_flags prog =
   end
 
 let results prog _trace assert_results file_name =
-  let prog = prog |> make_bindings_with_holes_recursive in
   terms_tested_count := 0;
   let start_sec = Unix.time () in
   let reqs = assert_results |>@ req_of_assert_result in
@@ -934,7 +933,6 @@ let results prog _trace assert_results file_name =
     (* Fill holes until fixpoint or bored. *)
     prog
     |> apply_fillings fillings'
-    |> remove_unnecessary_rec_flags
     |> fun x -> [x]
 
 let try_async path =
@@ -942,19 +940,19 @@ let try_async path =
   (* Start synthesis and the synth process killer. *)
   match Unix.fork () with
   | 0 ->
-    (* START HERE need to add the rec flags here, before gathering assert results *)
     let parsed = Interp.parse path in
+    let parsed = make_bindings_with_holes_recursive parsed in
     (* let parsed_with_comments = Parse_unparse.parse_file path in
     let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
     let callables = Read_execution_env.callables_of_file path in
     let trace = Tracing.run_with_tracing path in
     let html_str = View.html_str callables trace bindings_skels in *)
-    let lookup_exp_typed = Typing.exp_typed_lookup_of_file path in
+    let lookup_exp_typed = Typing.exp_typed_lookup_of_parsed parsed path in
     let (trace, assert_results) =
       Eval.with_gather_asserts begin fun () ->
-        Interp.run_files lookup_exp_typed [path]
+        Interp.run_parsed lookup_exp_typed parsed path
       end in
-    begin match results parsed trace assert_results path with
+    begin match results parsed trace assert_results path |>@ remove_unnecessary_rec_flags with
     | result::_ ->
       let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
       print_endline out_str;

@@ -368,6 +368,20 @@ let run_files lookup_exp_typed files =
   end;
   trace_state.trace
 
+let run_parsed lookup_exp_typed parsed file_name =
+  let trace_state = Trace.new_trace_state in
+  trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
+  let frame_no = trace_state.frame_no in
+  let fillings = Shared.Loc_map.empty in
+  let loc = Location.in_file file_name in
+  let local_env = eval_env_flag ~loc stdlib_env (Open (Longident.Lident "Stdlib")) in
+  begin try
+    ignore @@ eval_structure fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no parsed
+  with InternalException value ->
+    Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value
+  end;
+  trace_state.trace
+
 (* let _ = load_rec_units stdlib_env [stdlib_flag, "test.ml"] *)
 (* let () =
   run_files () *)
