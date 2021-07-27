@@ -47,6 +47,7 @@ setup:
 	opam switch 4.07.1 || opam switch create 4.07.1
 	opam install utop
 	opam install core
+	opam install ocamlformat
 	# opam install yojson
 	# opam install ppxlib
 	# opam install ppx_yojson_conv

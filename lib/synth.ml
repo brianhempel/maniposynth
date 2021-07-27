@@ -954,11 +954,7 @@ let try_async path =
       end in
     begin match results parsed trace assert_results path |>@ remove_unnecessary_rec_flags with
     | result::_ ->
-      let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
-      print_endline out_str;
-      let out_chan = open_out path in
-      output_string out_chan out_str;
-      close_out out_chan;
+      Pretty_code.output_code result path
     | _ -> ()
     end;
     (* |> List.iteri begin fun i result ->

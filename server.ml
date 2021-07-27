@@ -125,12 +125,7 @@ let handle_connection in_chan out_chan =
         let parsed = Camlboot_interpreter.Interp.parse path in
         let parsed' = Action.f path action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
-        let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure parsed' in
-        let in_str  = Shared.Formatter_to_stringifier.f Pprintast.structure parsed in
-        if out_str <> in_str then
-          Out_channel.with_file path ~f:begin fun out ->
-            Out_channel.output_string out out_str
-          end;
+        Pretty_code.output_code parsed' path;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan
