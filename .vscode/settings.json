@@ -1,0 +1,22 @@
+{
+  "ocaml.sandbox": {
+    "kind": "opam",
+    "switch": "4.07.1"
+  },
+  // Install the Highlight extension (fabiospampinato.vscode-highlight), and
+  // the config below will dim OCaml attribute annotations.
+  // Makes Maniposynth user code cleaner.
+  "highlight.regexes": {
+    "(\\[(@|@@|@@@)[A-Za-z0-9_]+[^\\]]*\\])": {
+        "filterFileRegex": ".*\\.ml$",
+        "decorations": [
+            {
+                "opacity": "0.13",
+                "color": "#774400"
+            }
+        ]
+    }
+  },
+  "editor.fontLigatures": true,
+  "git.ignoreLimitWarning": true
+}
