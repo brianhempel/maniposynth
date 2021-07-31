@@ -9,21 +9,22 @@ open Shared.Ast
 open Shared.Util
 
 type t =
-  | DropValueBeforeVb of string * string (* vb id str, value str *)
-  | AddVis            of string * string (* loc str, vis str *)
-  | RemoveVis         of string * string (* loc str, vis str *)
-  | EditLoc           of string * string (* loc str, code str *)
-  | NewAssert         of string * string * string (* loc str, lhs code str, rhs code str *)
+  | MoveValue  of string * string (* vb id str, vtrace str *)
+  | AddVis     of string * string (* loc str, vis str *)
+  | RemoveVis  of string * string (* loc str, vis str *)
+  | EditLoc    of string * string (* loc str, code str *)
+  | NewAssert  of string * string * string (* loc str, lhs code str, rhs code str *)
   | Undo
   | Redo
   | DoSynth
-  | InsertCode        of string (* code *)
-  | SetPos            of string * int * int (* loc str, x, y *)
+  | InsertCode of string (* code *)
+  | SetPos     of string * int * int (* loc str, x, y *)
+  | MoveVb     of string * string (* target vb loc str, mobile vb *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
   match action_yojson with
-  | `List [`String "DropValueBeforeVb"; `String vb_id_str; `String value_str]        -> DropValueBeforeVb (vb_id_str, value_str)
+  | `List [`String "MoveValue"; `String vb_id_str; `String vtrace_str]               -> MoveValue (vb_id_str, vtrace_str)
   | `List [`String "AddVis"; `String loc_str; `String vis_str]                       -> AddVis (loc_str, vis_str)
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]                    -> RemoveVis (loc_str, vis_str)
   | `List [`String "EditLoc"; `String loc_str; `String code]                         -> EditLoc (loc_str, code)
@@ -33,6 +34,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String code]                                       -> InsertCode code
   | `List [`String "SetPos"; `String loc_str; `Int x; `Int y]                        -> SetPos (loc_str, x, y)
+  | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str]         -> MoveVb (vbs_loc_str, mobile_vb_loc_str)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -41,30 +43,32 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
 3. resolve (not done yet)
 *)
 
-let remove_vb vb_loc old =
+let remove_vblike vb_loc old =
   let removed_vb = ref None in
   let remove vbs =
     if !removed_vb != None then vbs else
-    match vbs |> partition (Vb.loc %> (=) vb_loc) with
+    match vbs |> List.partition (Vb.loc %> (=) vb_loc) with
     | ([vb], vbs') -> removed_vb := Some vb; vbs'
-    | (_::_::_, _) -> failwith "remove_vb: multiple matching vbs...waaat?"
-    | _            -> vbs in
-  let old' =
-    old |> Exp.map begin fun e ->
-      match e.pexp_desc with
-      | Pexp_let (rec_flag, vbs, body) ->
-        (match remove vbs with [] -> body | vbs' -> { e with pexp_desc = Pexp_let (rec_flag, vbs', body) })
-      | _ -> e
-    end |> StructItem.map begin fun si ->
-      match si.pstr_desc with
-      | Pstr_value (rec_flag, vbs) -> { si with pstr_desc = Pstr_value (rec_flag, remove vbs) }
-      | _ -> si
-    end |> StructItems.map begin fun sis ->
-      sis |>@? (fun si -> match si.pstr_desc with Pstr_value (_, []) -> false | _ -> true)
-    end in
+    | (_::_::_, _) -> failwith "remove_vblike: multiple matching vbs...waaat?"
+    | _            -> vbs
+  in
+  let old' = old |> VbGroups.map (fun (recflag, vbs) -> (recflag, remove vbs)) in
   match !removed_vb with
   | Some vb -> (vb, old')
-  | None    -> failwith "remove_vb: Could not find vb"
+  | None    ->
+    let remove imperative_exp =
+      if !removed_vb != None then Some imperative_exp else
+      if imperative_exp.pexp_loc = vb_loc then begin
+        removed_vb := Some (Vb.mk Pat.unit imperative_exp);
+        None
+      end else
+        Some imperative_exp
+    in
+    let old' = old |> VbGroups.SequenceLike.map remove in
+    begin match !removed_vb with
+    | Some vb -> (vb, old')
+    | None    -> failwith "remove_vblike: Could not find vb"
+    end
 
 (* If before_vb_loc is the first vb in a list, inserts a new let before. *)
 (* Otherwise, inserts into the bindings list. *)
@@ -105,7 +109,7 @@ let insert_vb_before_vb before_vb_loc vb' old =
 
 let move_vb_before_vb before_vb_loc vb_loc old =
   (* let (restore_names, old) = assign_unique_names old in *)
-  let mobile_vb, old' = remove_vb vb_loc old in
+  let mobile_vb, old' = remove_vblike vb_loc old in
   print_endline @@ StructItems.to_string old';
   insert_vb_before_vb before_vb_loc mobile_vb old'
 
@@ -150,7 +154,7 @@ Strategy 2: Insert a new binding
   3. Replace the expression with a reference to the variable
 *)
 let drop_value_before vb_loc (vtrace : vtrace) old =
-  let print_locs locs prog =
+  (* let print_locs locs prog =
     locs |> List.iter (Loc.name_of_origin prog %> print_endline) in
   let print_uses uses prog =
     uses |> List.iter begin fun (def_loc, use_loc) ->
@@ -160,7 +164,7 @@ let drop_value_before vb_loc (vtrace : vtrace) old =
   print_endline "Uses before:";
   print_uses old_uses old;
   print_endline "Free before:";
-  print_locs old_free old;
+  print_locs old_free old; *)
   let new_prog =
     match move_value_before_vb vb_loc vtrace old with
     | new_prog::_ -> new_prog
@@ -169,11 +173,11 @@ let drop_value_before vb_loc (vtrace : vtrace) old =
       | new_prog::_ -> new_prog
       | []          -> old
     end in
-  let new_uses, new_free = Binding_preservation.binding_map_and_free [([], "asdf.ml", new_prog)] in
+  (* let new_uses, new_free = Binding_preservation.binding_map_and_free [([], "asdf.ml", new_prog)] in
   print_endline "Uses after:";
   print_uses new_uses new_prog;
   print_endline "Free after:";
-  print_locs new_free new_prog;
+  print_locs new_free new_prog; *)
   new_prog
   |> Bindings.fixup
 
@@ -216,9 +220,20 @@ let set_pos loc x y old =
   |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
   |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
 
+let move_vb vbs_loc mobile_vb_loc old =
+  let (vb, old') = remove_vblike mobile_vb_loc old in
+  old'
+  |> Exp.map_by_loc vbs_loc (Exp.let_ Asttypes.Nonrecursive [vb])
+  |>@@ begin fun si ->
+    if si.pstr_loc = vbs_loc
+    then [Ast_helper.Str.value Asttypes.Nonrecursive [vb]; si]
+    else [si]
+  end
+  |> VbGroups.unit_vbs_to_sequence
+  |> Bindings.fixup
 
 let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
-  | DropValueBeforeVb (vb_loc_str, vtrace_str) ->
+  | MoveValue (vb_loc_str, vtrace_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
     let vtrace = Serialize.vtrace_of_string vtrace_str in
     drop_value_before vb_loc vtrace
@@ -249,4 +264,9 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | SetPos (loc_str, x, y) ->
     let loc = Serialize.loc_of_string loc_str in
     set_pos loc x y
+  | MoveVb (vbs_loc_str, mobile_loc_str) ->
+    let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
+    let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
+    move_vb vbs_loc mobile_vb_loc
+
 

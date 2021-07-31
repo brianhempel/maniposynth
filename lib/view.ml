@@ -30,6 +30,7 @@ let script ?src ?(attrs = []) str =
   | Some src_str -> tag "script" ~attrs:(("src", src_str)::attrs) [str]
   | None         -> tag "script" ~attrs                                [str]
 
+let loc_attr loc = ("data-loc", Serialize.string_of_loc loc)
 
 let body    ?(attrs = [])       inners = tag "body" ~attrs inners
 let div     ?(attrs = [])       inners = tag "div" ~attrs inners
@@ -41,7 +42,7 @@ let td      ?(attrs = [])       inners = tag "td" ~attrs inners
 let button  ?(attrs = [])       inners = tag "button" ~attrs inners
 let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
 let box     ?(attrs = []) ?loc ?(parsetree_attrs = []) klass inners =
-  let loc_attr = ("data-loc", Serialize.string_of_loc (loc ||& Location.none)) in
+  let loc_attr = loc_attr (loc ||& Location.none) in
   let pos = Pos.from_attrs parsetree_attrs ||& { x = 0; y = 0 } in
   let pos_attr = ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;")in
   let attrs = ("class", ("box " ^ klass))::loc_attr::pos_attr::attrs in
@@ -248,6 +249,7 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     | _                     -> exp
   in
   let html_of_vb vb =
+    (* START HERE default box layout is ugly *)
     box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
       match vb.pvb_pat.ppat_desc with
       | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
@@ -271,7 +273,7 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
   | Pexp_let (_, _, _)
   | Pexp_sequence (_, _)      ->
     let (label, values_html) = label_and_values trace assert_results lookup_exp_typed (terminal_exp exp) in
-    [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs")] (gather_vbs exp |>@ html_of_vb)]
+    [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] (gather_vbs exp |>@ html_of_vb)]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
     ]
@@ -348,6 +350,7 @@ let drawing_tools tenv =
 
 
 let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_results : Data.assert_result list) lookup_exp_typed final_tenv =
+  let top_level_vbs_loc = structure_items |> List.last_opt |>& StructItem.loc ||& Location.none in
   html
     [ head
         [ title "Maniposynth"
@@ -356,7 +359,7 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
         ; script ~src:"/assets/maniposynth.js" ""
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
-    ; body begin
+    ; body ~attrs:[("class", "vbs"); loc_attr top_level_vbs_loc] begin
         [ div ~attrs:[("id", "topbar")] @@
           [ span ~attrs:[("class","undo tool")] ["Undo"]
           ; span ~attrs:[("class","redo tool")] ["Redo"]

@@ -113,11 +113,6 @@ td {
   cursor: pointer;
 }
 
-/* [draggable=true] { */
-  /* cursor: grab; */
-  /* cursor: move; */
-/* } */
-
 .draggable-hovered {
   /* background-color: rgba(200,200,200,0.5); */
   /* color: #000; */

@@ -26,10 +26,10 @@ function doAction(action) {
   request.send(JSON.stringify(action));
 }
 
-function dropValueBeforeVb(beforeVbId, vtrace) {
+function moveValue(vbId, vtrace) {
   doAction([
-    "DropValueBeforeVb",
-    beforeVbId,
+    "MoveValue",
+    vbId,
     vtrace
   ]);
 }
@@ -101,6 +101,14 @@ function setPos(loc, x, y) {
   ]);
 }
 
+function moveVb(vbs_loc, mobile_loc) {
+  doAction([
+    "MoveVb",
+    vbs_loc,
+    mobile_loc
+  ]);
+}
+
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
 //     "AddCodeToScopeBindings",
@@ -142,7 +150,7 @@ function setPos(loc, x, y) {
 //   ]);
 // }
 
-//////////////// Drag and Drop /////////////////////////////////
+//////////////// Drag and Drop of (Sub)Values /////////////////////////////////
 
 function draggableHover(event) {
   event.currentTarget.classList.add("draggable-hovered");
@@ -161,10 +169,20 @@ function dragstart(event) {
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
 }
 
+function removeDropTargetStyles() {
+  document.querySelectorAll('.current-drop-target').forEach(unhighlightDropTarget);
+}
+
+function highlightDropTarget(elem) {
+  elem.classList.add("current-drop-target");
+}
+
+function unhighlightDropTarget(elem) {
+  elem.classList.remove("current-drop-target");
+}
+
 function dragend(event) {
-  document.querySelectorAll('.current-drop-target').forEach(elem => {
-    elem.classList.remove("current-drop-target");
-  });
+  removeDropTargetStyles()
 }
 
 function dragover(event) {
@@ -172,7 +190,7 @@ function dragover(event) {
   if (event.target === event.currentTarget) {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
-    event.currentTarget.classList.add("current-drop-target");
+    highlightDropTarget(event.currentTarget);
   }
 }
 
@@ -185,7 +203,7 @@ function drop(event) {
   let dropTarget      = event.currentTarget;
   let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
   if (dropTarget.dataset.beforeVbId && droppedVTrace) {
-    dropValueBeforeVb(dropTarget.dataset.beforeVbId, droppedVTrace);
+    moveValue(dropTarget.dataset.beforeVbId, droppedVTrace);
   // let newCode         = event.dataTransfer.getData("application/new-code");
   // let destructPathStr = event.dataTransfer.getData("application/destruct-path-str");
   // if (dropTarget.dataset.scopeIdStr && dropTarget.classList.contains("bindings") && newCode) {
@@ -203,16 +221,10 @@ function drop(event) {
   }
 }
 
-// Attach event handlers on load.
 window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items draggable.
-
   document.querySelectorAll('[data-vtrace]').forEach(elem => {
-    elem.draggable = true;
-  });
-
-  document.querySelectorAll('[draggable=true]').forEach(elem => {
     // console.log(elem);
     elem.addEventListener("dragstart", dragstart);
     elem.addEventListener("dragend", dragend);
@@ -221,7 +233,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add drop zone events.
-
   document.querySelectorAll('[data-before-vb-id],[data-before-scope-id]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
@@ -472,6 +483,23 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Moving Boxes ///////////////////
 
+function isStartingVbs(vbsElem, boxElem) {
+  console.log(Array.from(vbsElem.children), boxElem);
+  return Array.from(vbsElem.children).includes(boxElem);
+}
+function vbDropTarget(event) {
+  const dropTarget = Array.from(document.querySelectorAll(".vbs")).reverse().find(elem => {
+    const rect = elem.getBoundingClientRect();
+    // console.log(rect.bottom, event.clientX, event.clientY)
+    // console.log(event.clientX >= rect.left, event.clientX <= rect.right, event.clientY >= rect.top, event.clientY <= rect.bottom)
+    return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+  });
+  if (isStartingVbs(dropTarget, window.stuffMoving.elem)) {
+    return undefined;
+  } else {
+    return dropTarget;
+  }
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".box").forEach(elem => {
@@ -488,30 +516,40 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+
 window.addEventListener('DOMContentLoaded', () => {
+
   document.querySelectorAll("body").forEach(elem => {
     elem.addEventListener("mousemove", event => {
       if (window.stuffMoving) {
-        const dx = Math.max(event.pageX - stuffMoving.startX, -stuffMoving.startOffsetX);
-        const dy = Math.max(event.pageY - stuffMoving.startY, -stuffMoving.startOffsetY);
+        const dx = event.pageX - stuffMoving.startX;
+        const dy = event.pageY - stuffMoving.startY;
         window.stuffMoving.elem.style.left = `${stuffMoving.startOffsetX + dx}px`
         window.stuffMoving.elem.style.top  = `${stuffMoving.startOffsetY + dy}px`
-        // window.stuffMoving.elem.style.transform = `translate(${dx}px,${dy}px)`;
         // resize_vbs_holders(document);
+
+        removeDropTargetStyles();
+        const dropTarget = vbDropTarget(event)
+        if (dropTarget) { highlightDropTarget(dropTarget) }
       }
+
     });
 
     elem.addEventListener("mouseup", event => {
       if (window.stuffMoving) {
-        const dx = Math.max(event.pageX - stuffMoving.startX, -stuffMoving.startOffsetX);
-        const dy = Math.max(event.pageY - stuffMoving.startY, -stuffMoving.startOffsetY);
+        const dx = event.pageX - stuffMoving.startX;
+        const dy = event.pageY - stuffMoving.startY;
         const elem = stuffMoving.elem;
-        if (dx !== 0 || dy !== 0) {
+        const dropTarget = vbDropTarget(event)
+        if ((dx !== 0 || dy !== 0) && !vbDropTarget) {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
           setPos(elem.dataset.loc, x, y);
+        } else if (dropTarget) {
+          moveVb(dropTarget.dataset.loc, elem.dataset.loc);
         }
         window.stuffMoving = undefined;
+        removeDropTargetStyles();
       }
     });
   });
@@ -520,7 +558,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
 function resize_vbs_holders(elem) {
-  const vbs_holders = elem.querySelectorAll(".vbs");
+  const vbs_holders = elem.querySelectorAll("td.vbs");
   if (vbs_holders.length > 0) {
     vbs_holders.forEach(vbs_holder => {
       // console.log(vbs_holder.children);

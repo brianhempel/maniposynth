@@ -8,15 +8,6 @@ let clamp lo hi x =
   else if x > hi then hi
   else x
 
-let concat_map f list =  List.map f list |> List.concat
-
-let partition pred list =
-  List.fold_right
-    (fun x (trues, falses) -> if pred x then (x::trues, falses) else (trues, x::falses))
-    list
-    ([], [])
-
-
 (* Default for Option, like (null || default) in other languages *)
 let (||&) opt default = match opt with Some x -> x | _ -> default
 (* Rightward compose default for Option *)
@@ -32,6 +23,20 @@ module Option = struct
     | []             -> Some []
     | None   :: _    -> None
     | Some x :: rest -> project rest |> map (List.cons x)
+end
+
+module Tup2 = struct
+  let map_fst f (x, y) = (f x, y)
+  let map_snd f (x, y) = (x, f y)
+end
+
+module Tup3 = struct
+  let fst (x, _, _) = x
+  let snd (_, x, _) = x
+  let thd (_, _, x) = x
+  let map_fst f (x, y, z) = (f x, y, z)
+  let map_snd f (x, y, z) = (x, f y, z)
+  let map_thd f (x, y, z) = (x, y, f z)
 end
 
 module List = struct
@@ -51,6 +56,11 @@ module List = struct
     | [x]     -> x
     | _::rest -> last rest
 
+  let rec last_opt = function
+    | []      -> None
+    | [x]     -> Some x
+    | _::rest -> last_opt rest
+
   let rec replace_nth i new_elem = function
     | [] -> raise (Invalid_argument "List.replace_nth called on a list that is too short")
     | x::rest ->
@@ -65,6 +75,8 @@ module List = struct
       | None   -> findmap_opt f rest
       | some_y -> some_y
       end
+
+  let concat_map f list =  map f list |> concat
 
   let rec assoc_by_opt pred = function
     | [] -> None
@@ -230,7 +242,7 @@ let (|>&&) x_opt f = x_opt |>& f |> Option.join
 let (|>@)  list f = List.map f list
 let (|>@?) list f = List.filter f list
 (* Rightward concat_map on list *)
-let (|>@@) list f = concat_map f list
+let (|>@@) list f = List.concat_map f list
 (* Rightward filter_map on list *)
 let (|>@&) list f = list |>@ f |>@@ Option.to_list
 

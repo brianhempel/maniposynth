@@ -179,10 +179,10 @@ and free_unqualified_names_struct_items struct_items =
     Need two passes.
 
     Pass 1 moves existing items upward into scope.
-    Pass 2 adds missing bindings. (START HERE: is this true?)
+    Pass 2 adds missing bindings.
 *)
 
-let rec extract_vb_with_name name struct_items =
+let rec extract_vb_group_with_name_top_level name struct_items =
   match struct_items with
   | []       -> None
   | si::rest ->
@@ -190,11 +190,21 @@ let rec extract_vb_with_name name struct_items =
     | Pstr_value (recflag, vbs) when List.mem name (vbs |>@@ Vb.names) ->
       Some (recflag, vbs, rest)
     | _ ->
-      begin match extract_vb_with_name name rest with
+      begin match extract_vb_group_with_name_top_level name rest with
       | Some (recflag, vbs, rest') -> Some (recflag, vbs, si::rest')
       | None -> None
       end
     end
+
+let rec extract_vb_group_with_name name body =
+  let recurse = extract_vb_group_with_name name in
+  match body.pexp_desc with
+  | Pexp_let (recflag, vbs, body) when List.mem name (vbs |>@@ Vb.names)  -> Some (recflag, vbs, body)
+  | Pexp_let (recflag, vbs, body)                                         -> recurse body |>& Tup3.map_thd (fun body' -> { body with pexp_desc = Pexp_let (recflag, vbs, body') })
+  | Pexp_sequence (e1, e2) (* Treat Pexp_sequence as let () = e1 in e2 *) -> recurse e2   |>& Tup3.map_thd (fun e2'   -> { body with pexp_desc = Pexp_sequence (e1, e2') })
+  | Pexp_letmodule (str_loced, mod_exp, body)                             -> recurse body |>& Tup3.map_thd (fun body' -> { body with pexp_desc = Pexp_letmodule (str_loced, mod_exp, body') })
+  | _                                                                     -> None
+
 
 let rec rearrange_struct_items defined_names struct_items =
   let open Asttypes in
@@ -208,7 +218,7 @@ let rec rearrange_struct_items defined_names struct_items =
       begin match names_needed with
       | []                -> si' :: recurse defined_names' rest
       | name::other_names ->
-        begin match extract_vb_with_name name rest with
+        begin match extract_vb_group_with_name_top_level name rest with
         | None                       -> fix_a_name_and_continue defined_names' si' other_names
         | Some (recflag, vbs, rest') -> recurse defined_names (StructItem.value recflag vbs :: si' :: rest')
         end
@@ -221,21 +231,12 @@ let rec rearrange_struct_items defined_names struct_items =
       let names_needed = List.diff (free_unqualified_names exp) defined_names in
       fix_a_name_and_continue defined_names si' names_needed
     | Pstr_value (Nonrecursive, vbs) ->
-      let vbs = vbs |>@ Vb.map_exp recurse_exp in
-      let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names in
-      (* If any of the needed names are defined here, make the binding recursive. *)
-      let names_defined_here = vbs |>@@ Vb.names in
-      let names_defined_here_needed = List.inter names_defined_here names_needed in
-      let recflag = if List.any_overlap names_needed names_defined_here_needed then Recursive else Nonrecursive in
-      let names_needed = List.diff names_needed names_defined_here_needed in
-      let si' = { si with pstr_desc = Pstr_value (recflag, vbs) } in
-      let defined_names' = names_defined_here @ defined_names in
+      let recflag', vbs', defined_names', names_needed = rearrange_nonrec_vbs defined_names vbs in
+      let si' = { si with pstr_desc = Pstr_value (recflag', vbs') } in
       fix_a_name_and_continue defined_names' si' names_needed
     | Pstr_value (Recursive, vbs) ->
-      let defined_names' = (vbs |>@@ Vb.names) @ defined_names in
-      let vbs = vbs |>@ Vb.map_exp (recurse_exp ~defined_names') in
-      let si' = { si with pstr_desc = Pstr_value (Recursive, vbs) } in
-      let names_needed = List.diff (vbs |>@ Vb.exp |>@@ free_unqualified_names) defined_names' in
+      let vbs', defined_names', names_needed = rearrange_rec_vbs defined_names vbs in
+      let si' = { si with pstr_desc = Pstr_value (Recursive, vbs') } in
       fix_a_name_and_continue defined_names' si' names_needed
     | Pstr_module mod_binding ->
       let mod_binding' = { mod_binding with pmb_expr = recurse_mod mod_binding.pmb_expr } in
@@ -268,7 +269,105 @@ let rec rearrange_struct_items defined_names struct_items =
       failwith "rearrange_struct_items: classes not handled"
     end
 
-and rearrange_exp _defined_names exp = exp
+and rearrange_nonrec_vbs defined_names vbs =
+  let vbs' = vbs |>@ Vb.map_exp (rearrange_exp defined_names) in
+  let names_needed = List.diff (vbs' |>@ Vb.exp |>@@ free_unqualified_names) defined_names in
+  (* If any of the needed names are defined here, make the binding recursive. *)
+  let names_defined_here = vbs' |>@@ Vb.names in
+  let names_defined_here_needed = List.inter names_defined_here names_needed in
+  let recflag' = if List.any_overlap names_needed names_defined_here_needed then Asttypes.Recursive else Asttypes.Nonrecursive in
+  let names_needed' = List.diff names_needed names_defined_here_needed in
+  let defined_names' = names_defined_here @ defined_names in
+  recflag', vbs', defined_names', names_needed'
+
+and rearrange_rec_vbs defined_names vbs =
+  let defined_names' = (vbs |>@@ Vb.names) @ defined_names in
+  let vbs' = vbs |>@ Vb.map_exp (rearrange_exp defined_names') in
+  let names_needed = List.diff (vbs' |>@ Vb.exp |>@@ free_unqualified_names) defined_names' in
+  vbs', defined_names', names_needed
+
+and rearrange_exp defined_names exp =
+  let continue exp =
+    let recurse ?(defined_names' = defined_names) = rearrange_exp defined_names' in
+    let recurse_case defined_names { pc_lhs; pc_guard; pc_rhs } =
+      let defined_names' = Pat.names pc_lhs @ defined_names in
+      { pc_lhs = pc_lhs; pc_guard = pc_guard |>& recurse ~defined_names'; pc_rhs = recurse ~defined_names' pc_rhs }
+    in
+    (fun desc' -> { exp with pexp_desc = desc' }) @@
+    begin match exp.pexp_desc with
+    | Pexp_ident _
+    | Pexp_new   _
+    | Pexp_constant _
+    | Pexp_extension _
+    | Pexp_unreachable                          -> exp.pexp_desc
+    | Pexp_let (recflag, vbs, body)             -> Pexp_let (recflag, vbs, recurse body)
+    | Pexp_function cases                       -> Pexp_function (cases |>@ recurse_case defined_names)
+    | Pexp_fun (arg_label, default, pat, body)  -> let defined_names' = Pat.names pat @ defined_names in Pexp_fun (arg_label, default |>& recurse, pat, recurse ~defined_names' body)
+    | Pexp_apply (e1, labeled_args)             -> Pexp_apply (recurse e1, labeled_args |>@ Tup2.map_snd recurse)
+    | Pexp_match (e, cases)                     -> Pexp_match (recurse e, cases |>@ recurse_case defined_names)
+    | Pexp_try (e, cases)                       -> Pexp_try (recurse e, cases |>@ recurse_case defined_names)
+    | Pexp_array exps                           -> Pexp_array (exps |>@ recurse)
+    | Pexp_tuple exps                           -> Pexp_tuple (exps |>@ recurse)
+    | Pexp_construct (lid_loced, e_opt)         -> Pexp_construct (lid_loced, e_opt |>& recurse)
+    | Pexp_variant (str, e_opt)                 -> Pexp_variant (str, e_opt |>& recurse)
+    | Pexp_record (fields, e_opt)               -> Pexp_record (fields |>@ Tup2.map_snd recurse, e_opt |>& recurse)
+    | Pexp_field (e, lid_loced)                 -> Pexp_field (recurse e, lid_loced)
+    | Pexp_sequence (e1, e2)                    -> Pexp_sequence (recurse e1, recurse e2)
+    | Pexp_while (e1, e2)                       -> Pexp_while (recurse e1, recurse e2)
+    | Pexp_setfield (e1, lid_loced, e2)         -> Pexp_setfield (recurse e1, lid_loced, recurse e2)
+    | Pexp_ifthenelse (e1, e2, e3_opt)          -> Pexp_ifthenelse (recurse e1, recurse e2, e3_opt |>& recurse)
+    | Pexp_for (pat, e1, e2, dirflag, body)     -> let defined_names' = Pat.names pat @ defined_names in Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse ~defined_names' body)
+    | Pexp_coerce (e, ct_opt, ct)               -> Pexp_coerce (recurse e, ct_opt, ct)
+    | Pexp_send (e, str_loced)                  -> Pexp_send (recurse e, str_loced)
+    | Pexp_setinstvar (str_loced, e)            -> Pexp_setinstvar (str_loced, recurse e)
+    | Pexp_constraint (e, ct)                   -> Pexp_constraint (recurse e, ct)
+    | Pexp_assert e                             -> Pexp_assert (recurse e)
+    | Pexp_lazy e                               -> Pexp_lazy (recurse e)
+    | Pexp_poly (e, ct_opt)                     -> Pexp_poly (recurse e, ct_opt)
+    | Pexp_newtype (str_loced, e)               -> Pexp_newtype (str_loced, recurse e)
+    | Pexp_letexception (exn_ctor, e)           -> Pexp_letexception (exn_ctor, recurse e)
+    | Pexp_override overrides                   -> Pexp_override (overrides |>@ Tup2.map_snd recurse)
+    | Pexp_letmodule (str_loced, mod_exp, body) -> Pexp_letmodule (str_loced, rearrange_mod defined_names mod_exp, recurse body)
+    | Pexp_pack mod_exp                         -> Pexp_pack (rearrange_mod defined_names mod_exp)
+    | Pexp_object _                             -> failwith "rearrange_exp: classes not handled"
+    | Pexp_open (_, _, _)                       -> failwith "rearrange_exp: local opens not handled"
+    end
+  in
+  let extract_a_name body names_needed =
+    names_needed
+    |> List.findmap_opt (fun name -> extract_vb_group_with_name name body)
+  in
+  let open Asttypes in
+  match exp.pexp_desc with
+  | Pexp_let (Nonrecursive, vbs, body) ->
+    let recflag', vbs', _, names_needed = rearrange_nonrec_vbs defined_names vbs in
+    begin match extract_a_name body names_needed with
+    | None                               -> continue                     { exp with pexp_desc = Pexp_let (recflag', vbs', body) }
+    | Some (new_recflag, new_vbs, body') -> Exp.let_ new_recflag new_vbs { exp with pexp_desc = Pexp_let (recflag', vbs', body') } |> rearrange_exp defined_names
+    end
+  | Pexp_let (Recursive, vbs, body) ->
+    let vbs', _, names_needed = rearrange_rec_vbs defined_names vbs in
+    begin match extract_a_name body names_needed with
+    | None                               -> continue                     { exp with pexp_desc = Pexp_let (Recursive, vbs', body) }
+    | Some (new_recflag, new_vbs, body') -> Exp.let_ new_recflag new_vbs { exp with pexp_desc = Pexp_let (Recursive, vbs', body') } |> rearrange_exp defined_names
+    end
+  (* Treat Pexp_sequence as let () = e1 in e2 *)
+  | Pexp_sequence (e1, e2) ->
+    let e1' = rearrange_exp defined_names e1 in
+    let names_needed = List.diff (free_unqualified_names e1') defined_names in
+    begin match extract_a_name e2 names_needed with
+    | None                             -> continue                     { exp with pexp_desc = Pexp_sequence (e1', e2) }
+    | Some (new_recflag, new_vbs, e2') -> Exp.let_ new_recflag new_vbs { exp with pexp_desc = Pexp_sequence (e1', e2') } |> rearrange_exp defined_names
+    end
+  | Pexp_letmodule (str_loced, mod_exp, body) ->
+    let mod_exp' = rearrange_mod defined_names mod_exp in
+    let names_needed = List.diff (free_unqualified_names_mod mod_exp') defined_names in
+    begin match extract_a_name body names_needed with
+    | None                               -> continue                     { exp with pexp_desc = Pexp_letmodule (str_loced, mod_exp', body) }
+    | Some (new_recflag, new_vbs, body') -> Exp.let_ new_recflag new_vbs { exp with pexp_desc = Pexp_letmodule (str_loced, mod_exp', body') } |> rearrange_exp defined_names
+    end
+  | _ ->
+    continue exp
 
 and rearrange_mod defined_names modl =
   let recurse = rearrange_mod defined_names in

@@ -330,6 +330,7 @@ module Type = struct
 
   let rec flatten typ =
     let open Types in
+    let concat_map = List.concat_map in
     let rec flatten_row_field = function
     | Rpresent (Some t)                                 -> flatten t
     | Rpresent None                                     -> []
@@ -431,6 +432,7 @@ module Exp = struct
     | args  -> Some (tuple args)
   let int_lit n = constant (Ast_helper.Const.int n)
   let string_lit str = constant (Ast_helper.Const.string str)
+  let unit = construct (Longident.lident "()") None
 
   let all prog = (everything (Sis prog)).exps
   let flatten exp = (everything (Exp exp)).exps
@@ -452,6 +454,11 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_construct (lid_loced, _) -> Some lid_loced
     | _                             -> None
+
+  let is_unit exp =
+    match ctor_lid_loced exp with
+    | Some { txt = Longident.Lident "()"; _ } -> true
+    | _                                       -> false
 
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
@@ -479,6 +486,7 @@ module Pat = struct
   let var name =
     let loc = Loc_.fresh () in
     Ast_helper.Pat.var ~loc { loc = loc; txt = name }
+  let unit = construct (Longident.lident "()") None
 
   let flatten pat = (everything (Pat pat)).pats
 
@@ -504,6 +512,11 @@ module Pat = struct
     match pat.ppat_desc with
     | Ppat_construct (lid_loced, _) -> Some lid_loced
     | _                             -> None
+
+  let is_unit pat =
+    match ctor_lid_loced pat with
+    | Some { txt = Longident.Lident "()"; _ } -> true
+    | _                                       -> false
 
   let names_loced     = flatten %>@& name_loced
   let names           = names_loced %>@ Loc_.txt
@@ -569,6 +582,21 @@ module Vb = struct
 end
 
 module VbGroups = struct
+  let clear_empty_vb_groups struct_items =
+    let map_sis mapper sis =
+      dflt_mapper.structure mapper sis
+      |>@? (fun si -> match si.pstr_desc with Pstr_value (_, []) -> false | _ -> true)
+    in
+    let map_exp mapper e =
+      let e' = dflt_mapper.expr mapper e in
+      match e'.pexp_desc with
+      | Pexp_let (_, [], body) -> body
+      | _ -> e'
+    in
+    let mapper = { dflt_mapper with structure = map_sis; expr = map_exp } in
+    mapper.structure mapper struct_items
+
+  (* Will also clear out any vb groups that become [] *)
   let map f struct_items =
     let map_si mapper si =
       let si' = dflt_mapper.structure_item mapper si in
@@ -588,6 +616,56 @@ module VbGroups = struct
     in
     let mapper = { dflt_mapper with structure_item = map_si; expr = map_exp } in
     mapper.structure mapper struct_items
+    |> clear_empty_vb_groups
+
+  let unit_vbs_to_sequence =
+    (* Top-level evals are UGLY. Keep them as unit vbs. *)
+    (* (The camlboot interpreter also tries to print top-level eval results) *)
+    Exp.map begin fun e ->
+      match e.pexp_desc with
+      | Pexp_let (_, [vb], body) when Pat.is_unit vb.pvb_pat ->
+        { e with pexp_desc = Pexp_sequence (vb.pvb_expr, body) }
+      | _ -> e
+    end
+
+  (* The user interface treat sequences as equivalent to let () = e1 in e2 *)
+  module SequenceLike = struct
+    let clear_empty_sequences struct_items =
+      let map_sis mapper sis =
+        dflt_mapper.structure mapper sis
+        |>@? (fun si -> match si.pstr_desc with Pstr_eval (e, _) when Exp.is_unit e -> false | _ -> true)
+      in
+      let map_exp mapper e =
+        let e' = dflt_mapper.expr mapper e in
+        match e'.pexp_desc with
+        | Pexp_sequence (e1, e2) when Exp.is_unit e1 -> e2
+        | _ -> e'
+      in
+      let mapper = { dflt_mapper with structure = map_sis; expr = map_exp } in
+      mapper.structure mapper struct_items
+
+    (* Return None to remove the exp *)
+    let map f struct_items =
+      let map_si mapper si =
+        let si' = dflt_mapper.structure_item mapper si in
+        match si'.pstr_desc with
+        | Pstr_eval (imperative_exp, attrs) ->
+          let e' = f imperative_exp ||& Exp.unit in
+          { si' with pstr_desc = Pstr_eval (e', attrs) }
+        | _ -> si'
+      in
+      let map_exp mapper e =
+        let e' = dflt_mapper.expr mapper e in
+        match e'.pexp_desc with
+        | Pexp_sequence (imperative_exp, e2) ->
+          let e' = f imperative_exp ||& Exp.unit in
+          { e' with pexp_desc = Pexp_sequence (e', e2) }
+        | _ -> e'
+      in
+      let mapper = { dflt_mapper with structure_item = map_si; expr = map_exp } in
+      mapper.structure mapper struct_items
+      |> clear_empty_sequences
+  end
 end
 
 (* Structure Item (i.e. top-level clauses) *)

@@ -1,7 +1,7 @@
 # Usually I run "make watch", but if it's acting goofy, "make run" is okay as well.
 # "make watch" will run "make" and then "make run" and will kill/restart "make run" on "make" success.
 
-./_build/default/server.exe: server.ml dune **/dune lib/*.ml camlboot_interpreter/*.ml
+./_build/default/server.exe: server.ml dune **/dune lib/*.ml shared/*.ml camlboot_interpreter/*.ml
 	# Maybe dune doesn't update the executable if the file has no changes, confusing Make about dirtiness. This fixes.
 	touch ./_build/default/server.exe; dune build --auto-promote server.exe
 
