@@ -315,7 +315,6 @@ function containingLoc(elem) {
 
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
-  hide(inspector);
 
   document.getElementById("add-vis-textbox").addEventListener("keydown", event => {
     let textbox = event.currentTarget;
@@ -329,6 +328,8 @@ window.addEventListener('DOMContentLoaded', () => {
       textbox.value = "";
     }
   });
+
+  updateInspector();
 });
 
 

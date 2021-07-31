@@ -251,7 +251,6 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     | _                     -> exp
   in
   let html_of_vb vb =
-    (* START HERE default box layout is ugly *)
     box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
       match vb.pvb_pat.ppat_desc with
       | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
