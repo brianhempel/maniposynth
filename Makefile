@@ -57,3 +57,6 @@ setup:
 	unzip ocaml-4.07.1.zip
 	# Need to make to create certain generated stdlib .ml files
 	cd ocaml-4.07.1 && ./configure && make world.opt
+	# Install the Highlight extension (fabiospampinato.vscode-highlight) in vscode
+	# (There's a setting in .vscode/settings.json that will dim OCaml attribute
+	# annotations, thus making Maniposynth user code a little bit less noisy.)
