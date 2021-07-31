@@ -623,8 +623,9 @@ module VbGroups = struct
     (* (The camlboot interpreter also tries to print top-level eval results) *)
     Exp.map begin fun e ->
       match e.pexp_desc with
-      | Pexp_let (_, [vb], body) when Pat.is_unit vb.pvb_pat ->
-        { e with pexp_desc = Pexp_sequence (vb.pvb_expr, body) }
+      | Pexp_let (_, [{ pvb_pat; pvb_expr; pvb_attributes; _ }], body) when Pat.is_unit pvb_pat ->
+        let e1 = { pvb_expr with pexp_attributes = pvb_attributes @ pvb_expr.pexp_attributes } in (* Copy positioning attributes from vb *)
+        { e with pexp_desc = Pexp_sequence (e1, body) }
       | _ -> e
     end
 
@@ -742,6 +743,9 @@ module Attr = struct
   (* let exp_of_payload = function
     | PStr [{ pstr_desc = Pstr_eval (exp, _); _}] -> Some exp
     | _ -> None *)
+
+  let findall target_name attrs =
+    attrs |>@? (name %> (=) target_name)
 
   let findall_exp target_name attrs =
     attrs

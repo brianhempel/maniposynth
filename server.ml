@@ -118,7 +118,7 @@ let handle_connection in_chan out_chan =
           Bytes.to_string buf
         in
         (* print_endline "bye"; *)
-        (* print_endline content_str; *)
+        print_endline content_str;
         let action_yojson = Yojson.Safe.from_string content_str in
         let action = Action.t_of_yojson action_yojson in
         let path = String.drop_prefix url 1 in

@@ -41,11 +41,13 @@ let tr      ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td      ?(attrs = [])       inners = tag "td" ~attrs inners
 let button  ?(attrs = [])       inners = tag "button" ~attrs inners
 let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
-let box     ?(attrs = []) ?loc ?(parsetree_attrs = []) klass inners =
-  let loc_attr = loc_attr (loc ||& Location.none) in
-  let pos = Pos.from_attrs parsetree_attrs ||& { x = 0; y = 0 } in
-  let pos_attr = ("style", "left:" ^ string_of_int pos.x ^ "px;top:" ^ string_of_int pos.y ^ "px;")in
-  let attrs = ("class", ("box " ^ klass))::loc_attr::pos_attr::attrs in
+let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
+  let perhaps_pos_attr =
+    match Pos.from_attrs parsetree_attrs with
+    | Some { x; y } -> [("style", "left:" ^ string_of_int x ^ "px;top:" ^ string_of_int y ^ "px;")]
+    | None          -> []
+  in
+  let attrs = ("class", ("box " ^ klass)) :: loc_attr loc:: perhaps_pos_attr @ attrs in
   div ~attrs inners
 
 let html_of_pat ?(editable = true) pat =
@@ -293,14 +295,7 @@ and html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
   table (rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp)
 
 let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb : Parsetree.value_binding) =
-  let drop_target_before_vb (vb : Parsetree.value_binding) =
-    div ~attrs:
-      [ ("data-before-vb-id", Serialize.string_of_loc vb.pvb_loc)
-      ; ("style", "height: 2em")
-      ] []
-  in
-  [ drop_target_before_vb vb
-  ; box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding"
+  [ box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding"
       @@ [ html_of_pat vb.pvb_pat ]
       @  [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
   ]
@@ -359,7 +354,7 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
         ; script ~src:"/assets/maniposynth.js" ""
         ; script ~src:"/assets/reload_on_file_changes.js" ""
         ]
-    ; body ~attrs:[("class", "vbs"); loc_attr top_level_vbs_loc] begin
+    ; body begin
         [ div ~attrs:[("id", "topbar")] @@
           [ span ~attrs:[("class","undo tool")] ["Undo"]
           ; span ~attrs:[("class","redo tool")] ["Redo"]
@@ -372,7 +367,8 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
           ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
           ]
         ; button ~attrs:[("id", "synth-button")] ["Synth"]
+        ; div  ~attrs:[("class", "top_level vbs"); loc_attr top_level_vbs_loc] @@
+          List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
         ]
-        @ List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
       end
     ]

@@ -32,6 +32,7 @@ body {
   display: none;
   position: absolute;
   margin-left: -1em;
+  z-index: 100; /* don't ask me why this is needed for the hover not to fail */
 }
 
 .tool:hover {
@@ -70,11 +71,15 @@ body {
   color:rgb(226, 43, 144)
 }
 
-body > .box > span:first-child {
+.top_level {
+  height: 100%;
+}
+
+.top_level > .box > span:first-child {
   font-size: 20px;
 }
 
-body > .box > :last-child {
+.top_level > .box > :last-child {
   /* border: solid 1px black; */
   box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }
@@ -100,10 +105,10 @@ td {
 /* .vbs {
   overflow: hidden;
 } */
-/* .vbs {
+.vbs {
   position: relative;
-  padding: 0;
-} */
+  /* padding: 0; */
+}
 
 .hidden {
   display: none !important;
@@ -156,6 +161,7 @@ td {
   width: 200px;
   min-height: 100px;
   padding: var(--padding);
+  z-index: 1000;
 }
 
 #inspector h2 {
@@ -183,4 +189,5 @@ td {
   bottom: 10px;
   font-size: 50px;
   cursor: pointer;
+  z-index: 1;
 }

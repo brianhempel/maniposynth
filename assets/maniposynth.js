@@ -101,11 +101,14 @@ function setPos(loc, x, y) {
   ]);
 }
 
-function moveVb(vbs_loc, mobile_loc) {
+function moveVb(vbs_loc, mobile_loc, new_pos) {
+  let new_pos_opt = ["None"];
+  if (new_pos) { new_pos_opt = ["Some", new_pos.x, new_pos.y] }
   doAction([
     "MoveVb",
     vbs_loc,
-    mobile_loc
+    mobile_loc,
+    new_pos_opt
   ]);
 }
 
@@ -202,23 +205,11 @@ function drop(event) {
   event.preventDefault();
   let dropTarget      = event.currentTarget;
   let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
-  if (dropTarget.dataset.beforeVbId && droppedVTrace) {
-    moveValue(dropTarget.dataset.beforeVbId, droppedVTrace);
-  // let newCode         = event.dataTransfer.getData("application/new-code");
-  // let destructPathStr = event.dataTransfer.getData("application/destruct-path-str");
-  // if (dropTarget.dataset.scopeIdStr && dropTarget.classList.contains("bindings") && newCode) {
-  //   addCodeToScopeBindings(newCode, dropTarget.dataset.scopeIdStr);
-  //   event.stopPropagation();
-  // } else if (dropTarget.dataset.exprIdStr) {
-  //   if (newCode) {
-  //     replaceCodeAtExpr(newCode, dropTarget.dataset.exprIdStr);
-  //   } else if (destructPathStr) {
-  //     destructAndReplaceCodeAtExpr(destructPathStr, dropTarget.dataset.exprIdStr);
-  //   }
-  //   event.stopPropagation();
-  } else {
-    console.warn("No valid actions for drop on ", dropTarget);
-  }
+  // if (dropTarget.dataset.beforeVbId && droppedVTrace) {
+  //   moveValue(dropTarget.dataset.beforeVbId, droppedVTrace);
+  // } else {
+  //   console.warn("No valid actions for drop on ", dropTarget);
+  // }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -233,11 +224,11 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add drop zone events.
-  document.querySelectorAll('[data-before-vb-id],[data-before-scope-id]').forEach(elem => {
-    elem.addEventListener("dragover", dragover);
-    elem.addEventListener("dragleave", dragleave);
-    elem.addEventListener("drop", drop);
-  });
+  // document.querySelectorAll('[data-before-vb-id],[data-before-scope-id]').forEach(elem => {
+  //   elem.addEventListener("dragover", dragover);
+  //   elem.addEventListener("dragleave", dragleave);
+  //   elem.addEventListener("drop", drop);
+  // });
 });
 
 
@@ -484,8 +475,12 @@ window.addEventListener('DOMContentLoaded', () => {
 /////////////////// Moving Boxes ///////////////////
 
 function isStartingVbs(vbsElem, boxElem) {
-  console.log(Array.from(vbsElem.children), boxElem);
+  // console.log(Array.from(vbsElem.children), boxElem);
   return Array.from(vbsElem.children).includes(boxElem);
+}
+function topLeftOffsetFromMouse(elem, event) {
+  const rect = elem.getBoundingClientRect();
+  return { dx: rect.left - event.clientX, dy: rect.top - event.clientY }
 }
 function vbDropTarget(event) {
   const dropTarget = Array.from(document.querySelectorAll(".vbs")).reverse().find(elem => {
@@ -505,11 +500,12 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".box").forEach(elem => {
     elem.addEventListener("mousedown", event => {
       window.stuffMoving = {
-        startX       : event.pageX,
-        startY       : event.pageY,
-        startOffsetX : elem.offsetLeft,
-        startOffsetY : elem.offsetTop,
-        elem         : elem,
+        startX          : event.pageX,
+        startY          : event.pageY,
+        startOffsetX    : elem.offsetLeft,
+        startOffsetY    : elem.offsetTop,
+        offsetFromMouse : topLeftOffsetFromMouse(elem, event),
+        elem            : elem,
       }
       event.stopPropagation();
     });
@@ -519,14 +515,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('DOMContentLoaded', () => {
 
-  document.querySelectorAll("body").forEach(elem => {
+  document.querySelectorAll(".top_level").forEach(elem => {
     elem.addEventListener("mousemove", event => {
       if (window.stuffMoving) {
         const dx = event.pageX - stuffMoving.startX;
         const dy = event.pageY - stuffMoving.startY;
         window.stuffMoving.elem.style.left = `${stuffMoving.startOffsetX + dx}px`
         window.stuffMoving.elem.style.top  = `${stuffMoving.startOffsetY + dy}px`
-        // resize_vbs_holders(document);
+        window.stuffMoving.elem.style.zIndex = 1;
+        // resizeVbHolders(document);
 
         removeDropTargetStyles();
         const dropTarget = vbDropTarget(event)
@@ -541,12 +538,17 @@ window.addEventListener('DOMContentLoaded', () => {
         const dy = event.pageY - stuffMoving.startY;
         const elem = stuffMoving.elem;
         const dropTarget = vbDropTarget(event)
-        if ((dx !== 0 || dy !== 0) && !vbDropTarget) {
+        if ((dx !== 0 || dy !== 0) && !dropTarget) {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
           setPos(elem.dataset.loc, x, y);
         } else if (dropTarget) {
-          moveVb(dropTarget.dataset.loc, elem.dataset.loc);
+          const dropTargetOffsetFromMouse = topLeftOffsetFromMouse(dropTarget, event);
+          const x = stuffMoving.offsetFromMouse.dx - dropTargetOffsetFromMouse.dx;
+          const y = stuffMoving.offsetFromMouse.dy - dropTargetOffsetFromMouse.dy;
+          moveVb(dropTarget.dataset.loc, elem.dataset.loc, { x : x, y : y });
+        } else {
+          elem.style.zIndex = "auto";
         }
         window.stuffMoving = undefined;
         removeDropTargetStyles();
@@ -557,25 +559,71 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
-function resize_vbs_holders(elem) {
-  const vbs_holders = elem.querySelectorAll("td.vbs");
-  if (vbs_holders.length > 0) {
-    vbs_holders.forEach(vbs_holder => {
-      // console.log(vbs_holder.children);
-      let maxWidth = 0;
-      let maxHeight = 0;
-      for (box of vbs_holder.children) {
-        resize_vbs_holders(box);
-        maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
-        maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
-      }
-      vbs_holder.style.width  = "" + maxWidth + "px"
-      vbs_holder.style.height = "" + maxHeight + "px"
-    });
-  }
+function resizeVbHolders(elem) {
+  const vbsHolders = elem.querySelectorAll(".vbs");
+  vbsHolders.forEach(vbsHolder => {
+    // console.log(vbsHolder.children);
+    let maxWidth = 0;
+    let maxHeight = 0;
+    for (box of vbsHolder.children) {
+      resizeVbHolders(box);
+      maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
+      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
+    }
+    if (vbsHolder.tagName === "TD") {
+      vbsHolder.style.width  = `${maxWidth + 10}px`
+      vbsHolder.style.height = `${maxHeight + 10}px`
+    } else {
+      vbsHolder.style.minWidth  = `${maxHeight + 10}px`
+      vbsHolder.style.minHeight = `${maxHeight + 10}px`
+    }
+  });
 };
+function reflowUnpositionedElems(elem) {
+  const vbsHolders = elem.querySelectorAll(".vbs");
+  function left(box)  { return box.offsetLeft; }
+  function top(box)   { return box.offsetTop; }
+  function right(box) { return box.offsetLeft + box.offsetWidth; }
+  function bot(box)   { return box.offsetTop + box.offsetHeight; }
+  function areOverlapping(box1, box2) {
+    // console.log(left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2),)
+    if (right(box1) < left(box2) || right(box2) < left(box1)) { return false; }
+    if (bot(box1)   < top(box2)  || bot(box2)   < top(box1))  { return false; }
+    return true;
+  }
+  vbsHolders.forEach(vbsHolder => {
+    const boxes = Array.from(vbsHolder.children);
+    const placedBoxes = boxes.filter(box => box.style.left); /* If box has an explicit position */
+    for (box of vbsHolder.children) {
+      if (!box.classList.contains("value_binding")) {
+        console.log("expected only value bindings in a .vbs", box);
+        continue;
+      }
+      if (!placedBoxes.includes(box)) {
+        box.style.left = `10px`
+        let top = 0;
+        box.style.top = `${top}px`
+        while (placedBoxes.find(box2 => areOverlapping(box, box2))) {
+          top += 10
+          // console.log(top);
+          box.style.top = `${top}px`
+        }
+        box.style.top = `${top + 10}px`
+        placedBoxes.push(box)
+      }
+    }
+  });
+}
 window.addEventListener('DOMContentLoaded', () => {
-  resize_vbs_holders(document);
+  resizeVbHolders(document);
+  reflowUnpositionedElems(document);
+  resizeVbHolders(document);
+  reflowUnpositionedElems(document);
+  resizeVbHolders(document);
+  reflowUnpositionedElems(document);
+  resizeVbHolders(document);
+  reflowUnpositionedElems(document);
+  resizeVbHolders(document);
 });
 
 

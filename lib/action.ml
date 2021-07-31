@@ -19,7 +19,7 @@ type t =
   | DoSynth
   | InsertCode of string (* code *)
   | SetPos     of string * int * int (* loc str, x, y *)
-  | MoveVb     of string * string (* target vb loc str, mobile vb *)
+  | MoveVb     of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -34,7 +34,10 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String code]                                       -> InsertCode code
   | `List [`String "SetPos"; `String loc_str; `Int x; `Int y]                        -> SetPos (loc_str, x, y)
-  | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str]         -> MoveVb (vbs_loc_str, mobile_vb_loc_str)
+  | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
+          ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
+  | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
+          ; `List [`String "Some"; `Int x; `Int y]]                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (x,y))
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -59,7 +62,8 @@ let remove_vblike vb_loc old =
     let remove imperative_exp =
       if !removed_vb != None then Some imperative_exp else
       if imperative_exp.pexp_loc = vb_loc then begin
-        removed_vb := Some (Vb.mk Pat.unit imperative_exp);
+        (* Copy pos attr to vb *)
+        removed_vb := Some (Vb.mk ~attrs:(Pos.exp_pos_attrs imperative_exp) Pat.unit (Pos.remove_exp_pos imperative_exp));
         None
       end else
         Some imperative_exp
@@ -211,7 +215,7 @@ let add_assert_before_loc loc lhs_code rhs_code old =
 let insert_code code old =
   let exp = Exp.from_string code in
   let name = Name.gen_from_exp exp old in
-  let vb' =  Vb.mk (Pat.var name) exp |> Pos.set_vb_pos 200 200 in
+  let vb' =  Vb.mk (Pat.var name) exp in
   old @ [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
   |> Bindings.fixup
 
@@ -220,7 +224,9 @@ let set_pos loc x y old =
   |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
   |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
 
-let move_vb vbs_loc mobile_vb_loc old =
+let move_vb vbs_loc mobile_vb_loc xy_opt old =
+  let old = match xy_opt with Some (x,y) -> set_pos mobile_vb_loc x y old | None -> old in
+  print_endline (StructItems.to_string old);
   let (vb, old') = remove_vblike mobile_vb_loc old in
   old'
   |> Exp.map_by_loc vbs_loc (Exp.let_ Asttypes.Nonrecursive [vb])
@@ -264,9 +270,9 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | SetPos (loc_str, x, y) ->
     let loc = Serialize.loc_of_string loc_str in
     set_pos loc x y
-  | MoveVb (vbs_loc_str, mobile_loc_str) ->
+  | MoveVb (vbs_loc_str, mobile_loc_str, xy_opt) ->
     let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
     let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
-    move_vb vbs_loc mobile_vb_loc
+    move_vb vbs_loc mobile_vb_loc xy_opt
 
 
