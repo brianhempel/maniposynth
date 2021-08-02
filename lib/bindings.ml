@@ -300,7 +300,7 @@ and rearrange_exp defined_names exp =
     | Pexp_constant _
     | Pexp_extension _
     | Pexp_unreachable                          -> exp.pexp_desc
-    | Pexp_let (recflag, vbs, body)             -> Pexp_let (recflag, vbs, recurse body)
+    | Pexp_let (recflag, vbs, body)             -> let defined_names' = (vbs |>@@ Vb.names) @ defined_names in Pexp_let (recflag, vbs, recurse ~defined_names' body)
     | Pexp_function cases                       -> Pexp_function (cases |>@ recurse_case defined_names)
     | Pexp_fun (arg_label, default, pat, body)  -> let defined_names' = Pat.names pat @ defined_names in Pexp_fun (arg_label, default |>& recurse, pat, recurse ~defined_names' body)
     | Pexp_apply (e1, labeled_args)             -> Pexp_apply (recurse e1, labeled_args |>@ Tup2.map_snd recurse)
@@ -395,7 +395,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
     let add_bindings_and_continue ~names_for_si ~names_after_si ~names_free_si_rhs ~make_si_desc' =
       let names_needed_si             = List.diff names_free_si_rhs names_for_si in
       let names_needed_remaining_prog = List.diff (free_unqualified_names_struct_items rest) names_after_si in
-      let names_to_define_here        = List.inter names_needed_si names_needed_remaining_prog in
+      let names_to_define_here        = List.inter names_needed_si names_needed_remaining_prog |> List.dedup in
       let new_sis                     = names_to_define_here |>@ (fun name -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) Exp.hole]) in
       let si'                         = { si with pstr_desc = make_si_desc' (names_to_define_here @ names_for_si) } in
       new_sis @ [si'] @ recurse (names_to_define_here @ names_after_si) rest
@@ -466,7 +466,7 @@ and add_missing_bindings_exp defined_names exp =
   | Pexp_fun (arg_label, default, pat, body) ->
     { exp with pexp_desc = Pexp_fun (arg_label, default, pat, add_missing_bindings_exp (Pat.names pat @ defined_names) body) }
   | _ ->
-    let names_needed = List.diff (free_unqualified_names exp) defined_names in
+    let names_needed = List.diff (free_unqualified_names exp) defined_names |> List.dedup in
     List.fold_right
       (fun name body -> Exp.let_ Asttypes.Nonrecursive [Vb.mk (Pat.var name) Exp.hole] body)
       names_needed
