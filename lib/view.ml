@@ -236,12 +236,12 @@ let rec fun_rows trace assert_results lookup_exp_typed (param_label : Asttypes.a
   ) :: rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed body_exp
 
 (* I was thinking of ensuring there's space for bindings before even simple expressions...:/ *)
-and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+and rows_ensure_vbs_canvas_of_exp ?(show_values = true) trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
   let open Parsetree in
   let rec gather_vbs exp =
     match exp.pexp_desc with
     | Pexp_let (_, vbs, e)   -> vbs @ gather_vbs e
-    | Pexp_sequence (e1, e2) -> [Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.any ()) e1] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
+    | Pexp_sequence (e1, e2) -> [Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.unit) e1] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
     | _                      -> []
   in
   let rec terminal_exp exp = (* Dual of gather_vbs *)
@@ -252,21 +252,22 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
   in
   let html_of_vb vb =
     box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
-      match vb.pvb_pat.ppat_desc with
-      | Ppat_any -> [ html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr ]
-      | _ ->
+      if Pat.is_unit vb.pvb_pat
+      then [ html_ensure_vbs_canvas_of_exp ~show_values:false trace assert_results lookup_exp_typed vb.pvb_expr ]
+      else
         [ html_of_pat vb.Parsetree.pvb_pat
         ; html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr
         ] in
   let single_exp () =
     let (label, values_html) = label_and_values trace assert_results lookup_exp_typed exp in
-    [ tr [td ~attrs:[("colspan", "2")] [""]]
+    [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] [""]]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
-    ; tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
-    ]
+    ] @ if show_values then [
+      tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
+    ] else []
   in
   let unhandled node_kind_str =
-    [ tr [td ~attrs:[("colspan", "2")] [""]]
+    [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] [""]]
     ; tr [td ~attrs:[("colspan", "2")] ["don't know how to handle nodes of kind " ^ node_kind_str]]
     ]
   in
@@ -276,8 +277,9 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
     let (label, values_html) = label_and_values trace assert_results lookup_exp_typed (terminal_exp exp) in
     [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] (gather_vbs exp |>@ html_of_vb)]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
-    ; tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
-    ]
+    ] @ if show_values then [
+      tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
+    ] else []
   | Pexp_letmodule (_, _, _)  -> unhandled "letmodule"
   | Pexp_letexception (_, _)  -> unhandled "letexception"
   | Pexp_open (_, _, _)       -> unhandled "open"
@@ -290,8 +292,8 @@ and rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : P
   | Pexp_ifthenelse (_, _, _) -> unhandled "if then else"
   | _                         -> single_exp ()
 
-and html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
-  table (rows_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp)
+and html_ensure_vbs_canvas_of_exp ?(show_values = true) trace assert_results lookup_exp_typed (exp : Parsetree.expression) =
+  table (rows_ensure_vbs_canvas_of_exp ~show_values trace assert_results lookup_exp_typed exp)
 
 let htmls_of_top_level_value_binding trace assert_results lookup_exp_typed (vb : Parsetree.value_binding) =
   [ box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding"
