@@ -33,6 +33,7 @@ let script ?src ?(attrs = []) str =
 let loc_attr loc = ("data-loc", Serialize.string_of_loc loc)
 
 let body    ?(attrs = [])       inners = tag "body" ~attrs inners
+let nav     ?(attrs = [])       inners = tag "nav" ~attrs inners
 let div     ?(attrs = [])       inners = tag "div" ~attrs inners
 let h2      ?(attrs = [])       inners = tag "h2" ~attrs inners
 let span    ?(attrs = [])       inners = tag "span" ~attrs inners
@@ -349,27 +350,26 @@ let html_str (structure_items : Parsetree.structure) (trace : Trace.t) (assert_r
   let top_level_vbs_loc = structure_items |> List.last_opt |>& StructItem.loc ||& Location.none in
   html
     [ head
-        [ title "Maniposynth"
-        ; meta [("charset", "UTF-8")]
-        ; stylesheet "/assets/maniposynth.css"
-        ; script ~src:"/assets/maniposynth.js" ""
-        ; script ~src:"/assets/reload_on_file_changes.js" ""
+      [ title "Maniposynth"
+      ; meta [("charset", "UTF-8")]
+      ; stylesheet "/assets/maniposynth.css"
+      ; script ~src:"/assets/maniposynth.js" ""
+      ; script ~src:"/assets/reload_on_file_changes.js" ""
+      ]
+    ; body @@
+      [ nav @@
+        [ span ~attrs:[("class","undo tool")] ["Undo"]
+        ; span ~attrs:[("class","redo tool")] ["Redo"]
+        ] @ [drawing_tools final_tenv]
+      ; div  ~attrs:[("class", "top_level vbs"); loc_attr top_level_vbs_loc] @@
+        List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
+      ; div ~attrs:[("id", "inspector")]
+        [ h2 ["Type"]
+        ; div ~attrs:[("id", "type-of-selected")] []
+        ; h2 ["Visualize"]
+        ; div ~attrs:[("id", "vises-for-selected")] []
+        ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
         ]
-    ; body begin
-        [ div ~attrs:[("id", "topbar")] @@
-          [ span ~attrs:[("class","undo tool")] ["Undo"]
-          ; span ~attrs:[("class","redo tool")] ["Redo"]
-          ] @ [drawing_tools final_tenv]
-        ; div ~attrs:[("id", "inspector")]
-          [ h2 ["Type"]
-          ; div ~attrs:[("id", "type-of-selected")] []
-          ; h2 ["Visualize"]
-          ; div ~attrs:[("id", "vises-for-selected")] []
-          ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
-          ]
-        ; button ~attrs:[("id", "synth-button")] ["Synth"]
-        ; div  ~attrs:[("class", "top_level vbs"); loc_attr top_level_vbs_loc] @@
-          List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
-        ]
-      end
+      ; button ~attrs:[("id", "synth-button")] ["Synth"]
+      ]
     ]
