@@ -484,11 +484,13 @@ function topLeftOffsetFromMouse(elem, event) {
   return { dx: rect.left - event.clientX, dy: rect.top - event.clientY }
 }
 function vbDropTarget(event) {
+  const descendentVbs = Array.from(window.stuffMoving.elem.querySelectorAll(".vbs"));
   const dropTarget = Array.from(document.querySelectorAll(".vbs")).reverse().find(elem => {
     const rect = elem.getBoundingClientRect();
     // console.log(rect.bottom, event.clientX, event.clientY)
     // console.log(event.clientX >= rect.left, event.clientX <= rect.right, event.clientY >= rect.top, event.clientY <= rect.bottom)
-    return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    const isDescendentVbs = descendentVbs.includes(elem);
+    return !isDescendentVbs && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
   });
   if (isStartingVbs(dropTarget, window.stuffMoving.elem)) {
     return undefined;

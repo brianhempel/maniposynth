@@ -271,7 +271,6 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
     let loc = Serialize.loc_of_string loc_str in
     set_pos loc x y
   | MoveVb (vbs_loc_str, mobile_loc_str, xy_opt) ->
-    (* START HERE clicking inside the int_list vbs area causes it to be removed from the program *)
     let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
     let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
     move_vb vbs_loc mobile_vb_loc xy_opt
