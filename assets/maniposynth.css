@@ -113,6 +113,12 @@ td {
   /* border: solid 1px black; */
   padding: var(--padding);
 }
+td.multiple-returns {
+  padding: 0;
+}
+td.multiple-returns table {
+  width: 100%;
+}
 
 /* .vbs {
   overflow: hidden;
@@ -126,8 +132,17 @@ td {
   display: none !important;
 }
 
+.root-value-holder {
+  display: inline-block;
+  margin-right: 1.2em;
+}
+
 .value {
   cursor: pointer;
+}
+
+.not-in-active-frame {
+  opacity: 0.14;
 }
 
 .draggable-hovered {

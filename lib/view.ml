@@ -200,13 +200,16 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc trace assert_results type_env visualizers loc =
+let html_of_values_for_loc (trace : Trace.t) assert_results type_env visualizers loc =
   span
     ~attrs:[ ("data-loc", Serialize.string_of_loc loc) ] (* View root for visualizers, also for determining where to place new asserts before *)
     begin
       trace
       |> Trace.entries_for_loc loc
-      |> List.map begin fun (_, _, value, env) -> html_of_value assert_results visualizers env type_env value end
+      |> List.sort_by (fun (_, frame_no, _, _) -> frame_no)
+      |> List.map begin fun (_, frame_no, value, env) ->
+        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value assert_results visualizers env type_env value]
+      end
     end
 
 (* Labels and values may be displayed in different ways (standalone box, or as table cells) *)
@@ -228,7 +231,7 @@ let rec fun_rows trace assert_results lookup_exp_typed (param_label : Asttypes.a
     | None             -> ""
     | Some default_exp -> " = " ^ html_of_exp default_exp
   in
-  ( tr
+  ( tr ~attrs:[("class","fun")]
     [ td
         ~attrs:[("class", "label")]
         [string_of_arg_label param_label ^ html_of_pat param_pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
@@ -259,8 +262,9 @@ and rows_ensure_vbs_canvas_of_exp ?(show_values = true) trace assert_results loo
         [ html_of_pat vb.Parsetree.pvb_pat
         ; html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed vb.pvb_expr
         ] in
+  let labels_and_values = label_and_values trace assert_results lookup_exp_typed in
   let single_exp () =
-    let (label, values_html) = label_and_values trace assert_results lookup_exp_typed exp in
+    let (label, values_html) = labels_and_values exp in
     [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] [""]]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
     ] @ if show_values then [
@@ -275,12 +279,31 @@ and rows_ensure_vbs_canvas_of_exp ?(show_values = true) trace assert_results loo
   match exp.pexp_desc with
   | Pexp_let (_, _, _)
   | Pexp_sequence (_, _)      ->
-    let (label, values_html) = label_and_values trace assert_results lookup_exp_typed (terminal_exp exp) in
+    let (label, values_html) = labels_and_values (terminal_exp exp) in
     [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] (gather_vbs exp |>@ html_of_vb)]
     ; tr [td ~attrs:[("colspan", "2"); ("class", "label")] [label]]
     ] @ if show_values then [
       tr [td ~attrs:[("colspan", "2"); ("class", "values")] [values_html]]
     ] else []
+  | Pexp_match (_, cases) ->
+    let (labels, values_htmls) =
+      cases
+      |>@ (fun { pc_rhs; _ } -> labels_and_values (terminal_exp pc_rhs))
+      |> List.split
+    in
+    let vbs = cases |>@@ fun { pc_rhs; _ } -> gather_vbs pc_rhs in
+    let returns_table =
+      table begin [
+          tr (labels |>@ fun label -> td ~attrs:[("class", "label")] [label])
+        ] @ if show_values then [
+          tr (values_htmls |>@ fun values_html -> td ~attrs:[("class", "values")] [values_html])
+        ] else []
+      end
+    in
+    [ tr [td ~attrs:[("colspan", "2"); ("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)]
+    ; tr [td ~attrs:[("colspan", "2"); ("class", "multiple-returns")] [returns_table]]
+    ]
+
   | Pexp_letmodule (_, _, _)  -> unhandled "letmodule"
   | Pexp_letexception (_, _)  -> unhandled "letexception"
   | Pexp_open (_, _, _)       -> unhandled "open"
@@ -289,7 +312,6 @@ and rows_ensure_vbs_canvas_of_exp ?(show_values = true) trace assert_results loo
              , param_exp_opt
              , param_pat
              , body_exp)      -> fun_rows trace assert_results lookup_exp_typed param_label param_exp_opt param_pat body_exp
-  | Pexp_match (_, _)         -> unhandled "match"
   | Pexp_ifthenelse (_, _, _) -> unhandled "if then else"
   | _                         -> single_exp ()
 
