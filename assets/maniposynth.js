@@ -573,11 +573,12 @@ function resizeVbHolders(elem) {
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
       maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
     }
+    console.log(vbsHolder, maxWidth, maxHeight);
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
       vbsHolder.style.height = `${maxHeight + 10}px`
     } else {
-      vbsHolder.style.minWidth  = `${maxHeight + 10}px`
+      vbsHolder.style.minWidth  = `${maxWidth + 10}px`
       vbsHolder.style.minHeight = `${maxHeight + 10}px`
     }
   });
@@ -634,65 +635,33 @@ window.addEventListener('DOMContentLoaded', () => {
 /////////////////// Frame Number Handling ///////////////////
 
 
-// The below code is wonkey because nested fun exps are not nested in the HTML, but instead are
-// sibling rows (so that arguments line up in the display).
-//
-// So there's a bit of finagling to "find the first fun-exp" on which to place the frame number,
-// and then to find is "children" (actually, later siblings and their children) to propogate
-// the styling.
-
 function findFrameNoElem(elem) {
-  // console.log(elem)
-  if ("activeFrameNo" in elem.dataset) {
-    return elem;
-  } else if (elem.parentElement) {
-    let firstFunSibling = Array.from(elem.parentElement.children).find(elem => elem.classList.contains("fun"));
-    if (firstFunSibling) {
-      return firstFunSibling
-    } else {
-      return findFrameNoElem(elem.parentElement);
-    }
-  } else {
-    return undefined
-  }
+  return elem.closest(".fun");
 }
 
 function setFrameNo(frameRootElem, frameNo) {
   frameRootElem.dataset.activeFrameNo = frameNo;
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
-  const siblings = Array.from(frameRootElem.parentElement.children);
-  while (siblings[0] !== frameRootElem) { siblings.shift() }
-  siblings.shift()
-  const laterSiblings = siblings;
-  for (sibling of laterSiblings) { updateActiveValues(sibling, frameNo) }
 }
 
 function updateActiveValues(elem, frameNo) {
-  if ("frameNo" in elem.dataset) {
+  if (elem.classList.contains("fun")) {
+    // Stop recursing, new set of nested lambdas
+  } else if ("frameNo" in elem.dataset) {
     if (parseInt(elem.dataset.frameNo) === parseInt(frameNo)) {
       elem.classList.remove("not-in-active-frame");
     } else {
       elem.classList.add("not-in-active-frame");
     }
-  } else if (Array.from(elem.children).find(child => child.classList.contains("fun"))) {
-    // Stop recursing, new set of nested lambdas
   } else {
     for (child of elem.children) { updateActiveValues(child, frameNo) }
   }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Set an initial frame-no
-  // document.querySelectorAll("tr.fun").forEach(elem => {
-  //   if (elem.activeFrameNo === undefined) {
-
-  //   }
-  // });
-
   document.querySelectorAll("[data-frame-no]").forEach(elem => {
     elem.addEventListener("mouseenter", event => {
       const frameNoElem = findFrameNoElem(elem);
-      // console.log(frameNoElem, elem.dataset.frameNo);
       if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo) }
     });
   })

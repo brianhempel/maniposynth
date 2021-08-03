@@ -459,12 +459,16 @@ module Exp = struct
     match ctor_lid_loced exp with
     | Some { txt = Longident.Lident "()"; _ } -> true
     | _                                       -> false
+  let is_fun         = function { pexp_desc = Pexp_fun _; _ }      -> true | _ -> false
+  let is_function    = function { pexp_desc = Pexp_function _; _ } -> true | _ -> false
+  let is_funlike exp = is_fun exp || is_function exp
+  let is_constant    = function { pexp_desc = Pexp_constant _; _ } -> true | _ -> false
+  let is_match       = function { pexp_desc = Pexp_match _; _ }    -> true | _ -> false
 
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
     mapper.expr mapper exp
 end
-
 
 module Pat = struct
   include Common(struct
@@ -522,6 +526,20 @@ module Pat = struct
   let names           = names_loced %>@ Loc_.txt
   let ctor_lids_loced = flatten %>@& ctor_lid_loced
 end
+
+
+module Case = struct
+  type t = case
+
+  let rhs       { pc_rhs;   _ } = pc_rhs
+  let lhs       { pc_lhs;   _ } = pc_lhs
+  let pat       { pc_lhs;   _ } = pc_lhs
+  let guard_opt { pc_guard; _ } = pc_guard
+
+  let names_loced     = pat %> Pat.names_loced
+  let names           = names_loced %>@ Loc_.txt
+end
+
 
 module Vb = struct
   include Common(struct

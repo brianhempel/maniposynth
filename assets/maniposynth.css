@@ -98,6 +98,12 @@ nav {
 
 .label {
   background-color: var(--color);
+  padding: var(--padding);
+}
+.root-value-holder {
+  padding: var(--padding);
+  display: inline-block;
+  margin-right: 1.2em;
 }
 
 .label,
@@ -110,13 +116,9 @@ table {
 }
 
 td {
-  /* border: solid 1px black; */
-  padding: var(--padding);
-}
-td.multiple-returns {
   padding: 0;
 }
-td.multiple-returns table {
+table.returns {
   width: 100%;
 }
 
@@ -130,11 +132,6 @@ td.multiple-returns table {
 
 .hidden {
   display: none !important;
-}
-
-.root-value-holder {
-  display: inline-block;
-  margin-right: 1.2em;
 }
 
 .value {
