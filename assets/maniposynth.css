@@ -83,15 +83,15 @@ nav {
   color:rgb(226, 43, 144)
 }
 
-.top_level {
+.top-level {
   overflow: auto;
 }
 
-.top_level > .box > span:first-child {
+.top-level > .box > span:first-child {
   font-size: 20px;
 }
 
-.top_level > .box > :last-child {
+.top-level > .box > :last-child {
   /* border: solid 1px black; */
   box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }

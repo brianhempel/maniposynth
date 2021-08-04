@@ -112,6 +112,13 @@ function moveVb(vbs_loc, mobile_loc, new_pos) {
   ]);
 }
 
+function deleteVb(vb_loc) {
+  doAction([
+    "DeleteVb",
+    vb_loc
+  ]);
+}
+
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
 //     "AddCodeToScopeBindings",
@@ -252,7 +259,7 @@ function deselectAll() {
 
 // Selectable element clicked...
 function toggleSelect(event) {
-  const elem = event.target;
+  const elem = event.currentTarget;
   event.stopPropagation();
   if (elem.classList.contains("selected")) {
     deselectAll();
@@ -296,10 +303,28 @@ function restoreSelection() {
 
 window.addEventListener('DOMContentLoaded', () => {
 
+  function globalEscape() {
+    const transientTextboxes = document.querySelectorAll(".transient-textbox");
+    if (transientTextboxes.length > 0) {
+      transientTextboxes.forEach(abortTextEdit);
+    } else {
+      deselectAll();
+    }
+  }
+
+  document.querySelectorAll('.top-level, .top-level *').forEach(elem => {
+    elem.addEventListener("click", globalEscape);
+  });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-vtrace]').forEach(elem => {
+  document.querySelectorAll('[data-vtrace],.value-binding').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", toggleSelect);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Esc" || event.key === "Escape") {
+      globalEscape();
+      event.stopPropagation();
+    }
   });
 
   restoreSelection();
@@ -324,8 +349,12 @@ window.addEventListener('DOMContentLoaded', () => {
         const vis = textbox.value;
         addVis(containingLoc(elem), vis);
       }
-    } else if (event.key === "Escape") {
+      event.stopPropagation();
+    } else if (event.key === "Esc" || event.key === "Escape") {
       textbox.value = "";
+      textbox.blur();
+      // document.querySelector(".top-level").focus(); // I don't think this works :/
+      event.stopPropagation();
     }
   });
 
@@ -337,7 +366,8 @@ function updateInspector() {
   const inspector        = window.inspector;
   const typeOfSelected   = document.getElementById("type-of-selected");
   const visesForSelected = document.getElementById("vises-for-selected");
-  const addVisTextbox    = document.getElementById("add-vis-textbox");
+  const visPane          = document.getElementById("vis-pane");
+  // const addVisTextbox    = document.getElementById("add-vis-textbox");
 
   const elem = document.querySelector('.selected');
 
@@ -367,14 +397,19 @@ function updateInspector() {
     typeOfSelected.innerHTML = "";
     visesForSelected.innerHTML = "";
     typeOfSelected.appendChild(document.createTextNode(typeStr));
-    const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
-    const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
-    activeVises.forEach(vis => visesForSelected.appendChild(makeCheck(vis, true)));
-    possibleVises.forEach(vis => {
-      if (!activeVises.includes(vis)) {
-        visesForSelected.appendChild(makeCheck(vis, false));
-      }
-    });
+    if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
+      show(visPane);
+      const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
+      const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
+      activeVises.forEach(vis => visesForSelected.appendChild(makeCheck(vis, true)));
+      possibleVises.forEach(vis => {
+        if (!activeVises.includes(vis)) {
+          visesForSelected.appendChild(makeCheck(vis, false));
+        }
+      });
+    } else {
+      hide(visPane);
+    }
   } else {
     hide(inspector);
   }
@@ -391,6 +426,11 @@ function show(originalElem) {
   originalElem.classList.remove("hidden");
 }
 
+function abortTextEdit(textbox) {
+  show(textbox.originalElem);
+  textbox.remove();
+}
+
 function beginEditCallback(editType) {
   return function (event) {
     const originalElem = event.currentTarget;
@@ -399,6 +439,8 @@ function beginEditCallback(editType) {
     const input = document.createElement("input");
     input.type = "text";
     input.value = originalElem.innerText;
+    input.classList.add("transient-textbox");
+    input.originalElem = originalElem;
     // originalElem.appendChild(input);
     originalElem.insertAdjacentElement("afterend", input);
     hide(originalElem);
@@ -406,7 +448,7 @@ function beginEditCallback(editType) {
     input.select();
 
     input.addEventListener('keyup', event => {
-      console.log(event.key);
+      // console.log(event.key);
       if (event.key === "Enter") {
         if (editType === "in-place") {
           editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
@@ -415,9 +457,10 @@ function beginEditCallback(editType) {
         } else {
           console.warn("Unknown edit type " + editType)
         }
+        event.stopPropagation();
       } else if (event.key === "Esc" || event.key === "Escape") {
-        input.remove();
-        show(originalElem);
+        abortTextEdit(input);
+        event.stopPropagation();
       }
     });
   }
@@ -518,7 +561,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('DOMContentLoaded', () => {
 
-  document.querySelectorAll(".top_level").forEach(elem => {
+  document.querySelectorAll(".top-level").forEach(elem => {
     elem.addEventListener("mousemove", event => {
       if (window.stuffMoving) {
         const dx = event.pageX - stuffMoving.startX;
@@ -573,7 +616,6 @@ function resizeVbHolders(elem) {
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
       maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
     }
-    console.log(vbsHolder, maxWidth, maxHeight);
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
       vbsHolder.style.height = `${maxHeight + 10}px`
@@ -599,7 +641,7 @@ function reflowUnpositionedElems(elem) {
     const boxes = Array.from(vbsHolder.children);
     const placedBoxes = boxes.filter(box => box.style.left); /* If box has an explicit position */
     for (box of vbsHolder.children) {
-      if (!box.classList.contains("value_binding")) {
+      if (!box.classList.contains("value-binding")) {
         console.log("expected only value bindings in a .vbs", box);
         continue;
       }
@@ -666,6 +708,22 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   })
 });
+
+
+
+/////////////////// Deletion ///////////////////
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Backspace" || event.key === "Delete") {
+    const elem = document.querySelector('.value-binding.selected')
+    if (elem) {
+      deleteVb(elem.dataset.loc);
+      event.stopPropagation();
+    }
+  }
+});
+
+
 
 
 /////////////////// Example Management ///////////////////
@@ -746,39 +804,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-
-
-/////////////////// Deletion ///////////////////
-
-// function toggleSelect(event) {
-//   if (event.currentTarget.classList.contains("selected")) {
-//     event.currentTarget.classList.remove("selected");
-//   } else {
-//     document.querySelectorAll('.selected').forEach(elem => {
-//       elem.classList.remove("selected");
-//     });
-//     event.currentTarget.classList.add("selected");
-//   }
-//   event.stopPropagation();
-// }
-
-// // Attach event handlers on load.
-// window.addEventListener('DOMContentLoaded', () => {
-//   document.querySelectorAll('[data-expr-id-str]').forEach(elem => {
-//     elem.addEventListener("click", toggleSelect);
-//   });
-// });
-
-// document.addEventListener("keydown", function(event) {
-//   if (event.key === "Backspace" || event.key === "Delete") {
-//     let elem = document.querySelector('[data-expr-id-str].selected')
-//     if (elem) {
-//       deleteExpr(elem.dataset.exprIdStr);
-//       event.stopPropagation();
-//     }
-//   }
-// });
 
 
 

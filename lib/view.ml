@@ -236,7 +236,7 @@ let rec html_of_vb trace assert_results lookup_exp_typed vb =
   let show_pat = not (Pat.is_unit vb.pvb_pat) in
   (* let show_results = show_pat && not (Exp.is_funlike (terminal_exp vb.pvb_expr) || Exp.is_constant (terminal_exp vb.pvb_expr) || Exp.is_match (terminal_exp vb.pvb_expr)) in *)
   let exp_with_vbs_html = render_exp_ensure_vbs trace assert_results lookup_exp_typed vb.pvb_expr in
-  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value_binding" @@
+  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value-binding" @@
     (if show_pat then [html_of_pat vb.pvb_pat] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results lookup_exp_typed (terminal_exp vb.pvb_expr)] else []) *)
@@ -341,14 +341,16 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         [ span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv]
-      ; div ~attrs:[("class", "top_level vbs"); loc_attr top_level_vbs_loc] @@
+      ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
         List.map (html_of_structure_item trace assert_results lookup_exp_typed) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ h2 ["Type"]
         ; div ~attrs:[("id", "type-of-selected")] []
-        ; h2 ["Visualize"]
-        ; div ~attrs:[("id", "vises-for-selected")] []
-        ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
+        ; div ~attrs:[("id", "vis-pane")]
+          [ h2 ["Visualize"]
+          ; div ~attrs:[("id", "vises-for-selected")] []
+          ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
+          ]
         ]
       ; button ~attrs:[("id", "synth-button")] ["Synth"]
       ]

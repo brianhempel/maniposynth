@@ -59,7 +59,12 @@ let gen ?(avoid = []) ?(base_name = "var") prog =
   done;
   !name
 
-let gen_from_exp ?(avoid = []) ?(type_env = Typing.initial_env) exp prog =
+let gen_from_exp ?(avoid = []) ?type_env exp prog =
+  let type_env =
+    match type_env with
+    | Some type_env -> type_env
+    | None          -> Typing.typedtree_sig_env_of_parsed prog "unknown.ml" |> Tup3.thd
+  in
   Type.of_exp_opt ~type_env exp
   |>& from_type
   |>& (fun base_name -> gen ~avoid ~base_name prog)

@@ -20,6 +20,7 @@ type t =
   | InsertCode of string (* code *)
   | SetPos     of string * int * int (* loc str, x, y *)
   | MoveVb     of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
+  | DeleteVb   of string (* vb loc str *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -38,6 +39,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "Some"; `Int x; `Int y]]                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (x,y))
+  | `List [`String "DeleteVb"; `String vb_loc_str]                                   -> DeleteVb vb_loc_str
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -274,5 +276,9 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
     let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
     let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
     move_vb vbs_loc mobile_vb_loc xy_opt
+  | DeleteVb vb_loc_str ->
+    let vb_loc = Serialize.loc_of_string vb_loc_str in
+    remove_vblike vb_loc %> snd
+
 
 
