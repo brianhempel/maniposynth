@@ -125,7 +125,7 @@ let handle_connection in_chan out_chan =
         let parsed = Camlboot_interpreter.Interp.parse path in
         let parsed' = Action.f path action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
-        Pretty_code.output_code parsed' path;
+        if parsed <> parsed' then Pretty_code.output_code parsed' path; (* This was overwriting synth results! :o *)
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan
