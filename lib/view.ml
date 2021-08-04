@@ -233,27 +233,26 @@ let rec gather_vbs exp = (* Dual of terminal_exp *)
   | _                      -> []
 
 let rec html_of_vb trace assert_results lookup_exp_typed vb =
-  let show_pat = not (Pat.is_unit vb.pvb_pat) in
-  (* let show_results = show_pat && not (Exp.is_funlike (terminal_exp vb.pvb_expr) || Exp.is_constant (terminal_exp vb.pvb_expr) || Exp.is_match (terminal_exp vb.pvb_expr)) in *)
-  let exp_with_vbs_html = render_exp_ensure_vbs trace assert_results lookup_exp_typed vb.pvb_expr in
+  let show_pat    = not (Pat.is_unit vb.pvb_pat) in
+  let show_output = show_pat && not (Exp.is_funlike vb.pvb_expr) in
+  let exp_with_vbs_html = render_exp_ensure_vbs ~show_output trace assert_results lookup_exp_typed vb.pvb_expr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value-binding" @@
     (if show_pat then [html_of_pat vb.pvb_pat] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results lookup_exp_typed (terminal_exp vb.pvb_expr)] else []) *)
 
-and render_exp_ensure_vbs trace assert_results lookup_exp_typed exp =
+and render_exp_ensure_vbs ?(show_output = true) trace assert_results lookup_exp_typed exp =
   let html_of_vb = html_of_vb trace assert_results lookup_exp_typed in
   let vbs = gather_vbs exp in
   let terminal_exps = terminal_exps exp in
   let show_vbs_box = vbs <> [] || not (Exp.is_fun exp) in
-  let ret_exp_htmls = terminal_exps |>@ (render_exp trace assert_results lookup_exp_typed) in
-  let values_htmls  = terminal_exps |>@ (html_of_values_for_exp trace assert_results lookup_exp_typed) in
+  let ret_exp_htmls   = terminal_exps |>@ (render_exp trace assert_results lookup_exp_typed) in
+  let values_htmls () = terminal_exps |>@ (html_of_values_for_exp trace assert_results lookup_exp_typed) in
   div begin
     (if show_vbs_box then [div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)] else []) @
     [table ~attrs:[("class", "returns")] begin
-      [ tr (ret_exp_htmls |>@ fun exp_html    -> td [exp_html])
-      ; tr (values_htmls  |>@ fun values_html -> td [values_html])
-      ]
+      [ tr (ret_exp_htmls |>@ fun exp_html    -> td [exp_html]) ] @
+      (if show_output then [tr (values_htmls () |>@ fun values_html -> td [values_html])] else [])
     end]
   end
 

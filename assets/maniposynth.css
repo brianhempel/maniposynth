@@ -66,6 +66,10 @@ nav {
   position: absolute;
   max-width: 100%;
   cursor: move;
+  border: solid 10px transparent; /* Makes edges grabbable for relocating. */
+}
+.box > * {
+  cursor: auto;
 }
 
 .box > * {
@@ -106,6 +110,9 @@ nav {
   margin-right: 1.2em;
 }
 
+[data-in-place-edit-loc] {
+  cursor: text;
+}
 .label,
 .derived-vis-values {
   font-size: 0.8em;

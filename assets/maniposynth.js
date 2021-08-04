@@ -224,6 +224,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Make appropriate items draggable.
   document.querySelectorAll('[data-vtrace]').forEach(elem => {
     // console.log(elem);
+    elem.draggable = true;
     elem.addEventListener("dragstart", dragstart);
     elem.addEventListener("dragend", dragend);
     elem.addEventListener("mouseover", draggableHover);
@@ -349,13 +350,12 @@ window.addEventListener('DOMContentLoaded', () => {
         const vis = textbox.value;
         addVis(containingLoc(elem), vis);
       }
-      event.stopPropagation();
     } else if (event.key === "Esc" || event.key === "Escape") {
       textbox.value = "";
       textbox.blur();
       // document.querySelector(".top-level").focus(); // I don't think this works :/
-      event.stopPropagation();
     }
+    event.stopPropagation();
   });
 
   updateInspector();
@@ -447,7 +447,7 @@ function beginEditCallback(editType) {
     // input.focus();
     input.select();
 
-    input.addEventListener('keyup', event => {
+    input.addEventListener('keydown', event => {
       // console.log(event.key);
       if (event.key === "Enter") {
         if (editType === "in-place") {
@@ -457,11 +457,10 @@ function beginEditCallback(editType) {
         } else {
           console.warn("Unknown edit type " + editType)
         }
-        event.stopPropagation();
       } else if (event.key === "Esc" || event.key === "Escape") {
         abortTextEdit(input);
-        event.stopPropagation();
       }
+      event.stopPropagation();
     });
   }
 }
@@ -545,15 +544,17 @@ function vbDropTarget(event) {
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".box").forEach(elem => {
     elem.addEventListener("mousedown", event => {
-      window.stuffMoving = {
-        startX          : event.pageX,
-        startY          : event.pageY,
-        startOffsetX    : elem.offsetLeft,
-        startOffsetY    : elem.offsetTop,
-        offsetFromMouse : topLeftOffsetFromMouse(elem, event),
-        elem            : elem,
+      if (event.target === elem) {
+        window.stuffMoving = {
+          startX          : event.pageX,
+          startY          : event.pageY,
+          startOffsetX    : elem.offsetLeft,
+          startOffsetY    : elem.offsetTop,
+          offsetFromMouse : topLeftOffsetFromMouse(elem, event),
+          elem            : elem,
+        }
+        event.stopPropagation();
       }
-      event.stopPropagation();
     });
   });
 });

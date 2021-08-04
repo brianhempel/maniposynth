@@ -278,7 +278,7 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
     move_vb vbs_loc mobile_vb_loc xy_opt
   | DeleteVb vb_loc_str ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
-    remove_vblike vb_loc %> snd
+    remove_vblike vb_loc %> snd %> Bindings.fixup
 
 
 
