@@ -174,7 +174,7 @@ exception InternalException of value
 (* So no need to store the environment yet (f's closure environment is sufficient) *)
 type assert_result =
   { env          : env
-  ; rhs_exp      : expression
+  ; lhs_exp      : expression
   ; f            : value
   ; arg          : value
   ; expected     : value

@@ -73,7 +73,7 @@ let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrut
 
 (* Fillings might only be used in pat "with" clauses here *)
 let req_of_assert_result (assert_result : assert_result) : req =
-  (assert_result.env, assert_result.rhs_exp, assert_result.expected)
+  (assert_result.env, assert_result.lhs_exp, assert_result.expected)
 
 (*
   If I know that name should have value, and pat looks
@@ -737,7 +737,7 @@ let hole_fillings_seq fillings size_limit hole_loc static_hole_type tenv _reqs_o
   end
 
 let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false
-let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? is_hole |>@ Exp.loc
+let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? Exp.is_hole |>@ Exp.loc
 
 let e_guess fillings size_limit prog file_name : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)

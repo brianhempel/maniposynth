@@ -67,6 +67,7 @@ nav {
   max-width: 100%;
   cursor: move;
   border: solid 10px transparent; /* Makes edges grabbable for relocating. */
+  /* background-color: rgba(200,200,200,0.2); */
 }
 .box > * {
   cursor: auto;

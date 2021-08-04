@@ -25,7 +25,22 @@ let with_gather_asserts f =
 let add_assert_result assert_result assert_results =
   assert_results := assert_result :: !assert_results
 
-let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] ((f x)[@rhs]) y"
+let f_x_equals_y_pattern = Shared.Ast.Exp.from_string "[%VAR (=)] ((f x)[@lhs]) y"
+
+let parse_assert exp =
+  let open Shared.Ast_match in
+  try
+    let match_       = match_exp_ f_x_equals_y_pattern exp in
+    let lhs_exp      = SMap.find "lhs" match_.exps in
+    let fexp         = SMap.find "f" match_.exps in
+    let argexp       = SMap.find "x" match_.exps in
+    let expected_exp = SMap.find "y" match_.exps in
+    Some (lhs_exp, fexp, argexp, expected_exp)
+  with Match_fail ->
+    None
+
+
+
 
 exception No_fuel
 let fuel = ref max_int
@@ -475,13 +490,8 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
           (InternalException
             (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
     | Gather assert_results ->
-      let open Shared.Ast_match in
-      begin try
-        let match_       = match_exp_ f_x_equals_y_pattern e in
-        let rhs_exp      = SMap.find "rhs" match_.exps in
-        let fexp         = SMap.find "f" match_.exps in
-        let argexp       = SMap.find "x" match_.exps in
-        let expected_exp = SMap.find "y" match_.exps in
+      begin match parse_assert e with
+      | Some (lhs_exp, fexp, argexp, expected_exp) ->
         begin match eval_expr fillings prims env lookup_exp_typed trace_state frame_no fexp with
         | { v_ = Fexpr fexpr; _ } ->
           handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no expr.pexp_loc fexpr [(Nolabel, argexp)]
@@ -496,7 +506,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
             end in
           assert_results :=
             { env          = env
-            ; rhs_exp      = rhs_exp
+            ; lhs_exp      = lhs_exp
             ; f            = fval
             ; arg          = argval
             ; expected     = expected
@@ -506,7 +516,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
             } :: !assert_results;
           unit
         end
-      with Match_fail ->
+      | None ->
         print_endline "TODO: handle asserts that are not f x = y";
         unit
       end

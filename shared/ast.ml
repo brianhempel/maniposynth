@@ -115,8 +115,8 @@ module Type = struct
   let of_exp ?(type_env = Env.empty) exp = (Typecore.type_exp type_env exp).exp_type
   let of_exp_opt ?(type_env = Env.empty) exp =
     try Some (of_exp ~type_env exp)
-    with Typetexp.Error (_loc, type_env, err) ->
-      Typetexp.report_error type_env Format.std_formatter err;
+    with Typecore.Error (_loc, type_env, err) ->
+      Typecore.report_error type_env Format.std_formatter err;
       None
 
   let copy (t : t) : t = Btype.cleanup_abbrev (); Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
@@ -459,6 +459,10 @@ module Exp = struct
     match ctor_lid_loced exp with
     | Some { txt = Longident.Lident "()"; _ } -> true
     | _                                       -> false
+  let is_hole exp =
+    match exp.pexp_desc with
+    | Pexp_ident { txt = Longident.Lident "??"; _ } -> true
+    | _                                             -> false
   let is_fun         = function { pexp_desc = Pexp_fun _; _ }      -> true | _ -> false
   let is_function    = function { pexp_desc = Pexp_function _; _ } -> true | _ -> false
   let is_funlike exp = is_fun exp || is_function exp

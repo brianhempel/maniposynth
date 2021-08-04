@@ -58,6 +58,13 @@ function editLoc(loc, code) {
   ]);
 }
 
+function deleteLoc(loc) {
+  doAction([
+    "DeleteLoc",
+    loc
+  ]);
+}
+
 function newAssert(locToAssertBefore, codeToAssertOn, expectedCode) {
   doAction([
     "NewAssert",
@@ -109,13 +116,6 @@ function moveVb(vbs_loc, mobile_loc, new_pos) {
     vbs_loc,
     mobile_loc,
     new_pos_opt
-  ]);
-}
-
-function deleteVb(vb_loc) {
-  doAction([
-    "DeleteVb",
-    vb_loc
   ]);
 }
 
@@ -334,7 +334,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Inspector ///////////////////
 
-// Visualizers root, also for determining where to place new asserts.
+// Visualizers root, also for determining where to place asserts.
 function containingLoc(elem) {
   return elem.closest("[data-loc]").dataset.loc;
 }
@@ -451,9 +451,15 @@ function beginEditCallback(editType) {
       // console.log(event.key);
       if (event.key === "Enter") {
         if (editType === "in-place") {
-          editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+          if (input.value.length > 0) {
+            editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+          } else {
+            deleteLoc(originalElem.dataset.inPlaceEditLoc);
+          }
         } else if (editType === "new assert") {
-          newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
+          if (input.value.length > 0) {
+            newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
+          }
         } else {
           console.warn("Unknown edit type " + editType)
         }
@@ -718,7 +724,7 @@ document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
     const elem = document.querySelector('.value-binding.selected')
     if (elem) {
-      deleteVb(elem.dataset.loc);
+      deleteLoc(elem.dataset.loc);
       event.stopPropagation();
     }
   }

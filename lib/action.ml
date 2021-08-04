@@ -13,6 +13,7 @@ type t =
   | AddVis     of string * string (* loc str, vis str *)
   | RemoveVis  of string * string (* loc str, vis str *)
   | EditLoc    of string * string (* loc str, code str *)
+  | DeleteLoc  of string (* loc str *)
   | NewAssert  of string * string * string (* loc str, lhs code str, rhs code str *)
   | Undo
   | Redo
@@ -20,7 +21,6 @@ type t =
   | InsertCode of string (* code *)
   | SetPos     of string * int * int (* loc str, x, y *)
   | MoveVb     of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
-  | DeleteVb   of string (* vb loc str *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -29,6 +29,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "AddVis"; `String loc_str; `String vis_str]                       -> AddVis (loc_str, vis_str)
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]                    -> RemoveVis (loc_str, vis_str)
   | `List [`String "EditLoc"; `String loc_str; `String code]                         -> EditLoc (loc_str, code)
+  | `List [`String "DeleteLoc"; `String loc_str]                                     -> DeleteLoc loc_str
   | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code] -> NewAssert (loc_str, lhs_code, rhs_code)
   | `List [`String "DoSynth"]                                                        -> DoSynth
   | `List [`String "Undo"]                                                           -> Undo
@@ -39,7 +40,6 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "Some"; `Int x; `Int y]]                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (x,y))
-  | `List [`String "DeleteVb"; `String vb_loc_str]                                   -> DeleteVb vb_loc_str
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -48,7 +48,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
 3. resolve (not done yet)
 *)
 
-let remove_vblike vb_loc old =
+let remove_vblike_opt vb_loc old =
   let removed_vb = ref None in
   let remove vbs =
     if !removed_vb != None then vbs else
@@ -59,7 +59,7 @@ let remove_vblike vb_loc old =
   in
   let old' = old |> VbGroups.map (fun (recflag, vbs) -> (recflag, remove vbs)) in
   match !removed_vb with
-  | Some vb -> (vb, old')
+  | Some vb -> Some (vb, old')
   | None    ->
     let remove imperative_exp =
       if !removed_vb != None then Some imperative_exp else
@@ -72,9 +72,20 @@ let remove_vblike vb_loc old =
     in
     let old' = old |> VbGroups.SequenceLike.map remove in
     begin match !removed_vb with
-    | Some vb -> (vb, old')
-    | None    -> failwith "remove_vblike: Could not find vb"
+    | Some vb -> Some (vb, old')
+    | None    -> None
     end
+
+(* Fail if not found *)
+let remove_vblike vb_loc old =
+  match remove_vblike_opt vb_loc old with
+  | Some (vb, old') -> (vb, old')
+  | None            -> failwith "remove_vblike: Could not find vb"
+
+(* Silent if not found *)
+let delete_vblike vb_loc old =
+  remove_vblike_opt vb_loc old |>& snd ||& old
+
 
 (* If before_vb_loc is the first vb in a list, inserts a new let before. *)
 (* Otherwise, inserts into the bindings list. *)
@@ -240,6 +251,22 @@ let move_vb vbs_loc mobile_vb_loc xy_opt old =
   |> VbGroups.unit_vbs_to_sequence
   |> Bindings.fixup
 
+let clear_asserts_with_hole_rhs old =
+  let locs_to_remove = ref [] in
+  old
+  |> Exp.iter begin fun exp ->
+    match exp.pexp_desc with
+    | Pexp_assert e ->
+      begin match Camlboot_interpreter.Eval.parse_assert e with
+      | Some (_rhs_exp, _fexp, _argexp, expected_exp) when Exp.is_hole expected_exp -> locs_to_remove := exp.pexp_loc :: !locs_to_remove
+      | _ -> ()
+      end
+    | _ -> ()
+  end;
+  List.fold_right (fun loc -> delete_vblike loc %> Exp.replace loc Exp.hole)
+    !locs_to_remove
+    old
+
 let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | MoveValue (vb_loc_str, vtrace_str) ->
     let vb_loc = Serialize.loc_of_string vb_loc_str in
@@ -254,6 +281,12 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
   | EditLoc (loc_str, code) ->
     let loc = Serialize.loc_of_string loc_str in
     replace_loc_code loc code
+  | DeleteLoc loc_str ->
+    let loc = Serialize.loc_of_string loc_str in
+    delete_vblike loc
+    %> Exp.replace loc Exp.hole
+    %> clear_asserts_with_hole_rhs (* The above step may produce e.g. assert (x = (??)) which is a sign to delete the whole assert. *)
+    %> Bindings.fixup
   | NewAssert (loc_str, lhs_code, rhs_code) ->
     let loc = Serialize.loc_of_string loc_str in
     add_assert_before_loc loc lhs_code rhs_code
@@ -276,9 +309,3 @@ let f path : t -> Shared.Ast.program -> Shared.Ast.program = function
     let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
     let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
     move_vb vbs_loc mobile_vb_loc xy_opt
-  | DeleteVb vb_loc_str ->
-    let vb_loc = Serialize.loc_of_string vb_loc_str in
-    remove_vblike vb_loc %> snd %> Bindings.fixup
-
-
-
