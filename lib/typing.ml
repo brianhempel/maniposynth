@@ -21,7 +21,7 @@ let initial_env =
   in
   env_with_hole
 
-let typedtree_sig_env_of_parsed parsed file_name =
+let rec typedtree_sig_env_of_parsed parsed file_name =
   Env.set_unit_name @@ Compenv.module_of_filename formatter file_name file_name;
   (* print_endline @@ Compenv.module_of_filename formatter path path; *)
   let old_warning_printer = !Location.warning_printer in
@@ -30,11 +30,12 @@ let typedtree_sig_env_of_parsed parsed file_name =
     let out = Typemod.type_structure initial_env parsed (Location.in_file file_name) in
     Location.warning_printer := old_warning_printer;
     out
-  with Typetexp.Error (_loc, env, err) ->
+  with Typecore.Error (loc, _env, _err) ->
     Location.warning_printer := old_warning_printer;
-    Typetexp.report_error env formatter err;
-    print_endline "";
-    failwith "typedtree conversion failed"
+    (* Typecore.report_error env formatter err; *)
+    typedtree_sig_env_of_parsed (Exp.replace loc Exp.hole parsed) file_name
+    (* print_endline "";
+    failwith "typedtree conversion failed" *)
 
 (* Returns (typedtree_structure, signature, env) *)
 let typedtree_sig_env_of_file path =
