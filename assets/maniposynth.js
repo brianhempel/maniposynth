@@ -569,8 +569,9 @@ function gratuitousLamdas(event) {
   const particleLife  = 5  * 1000;
   const generatorLife = 15 * 1000;
   const generatorStart = new Date();
+  let synthTimeout = false;
   function makeLambda() {
-    if (new Date() - generatorStart > generatorLife) { return; }
+    if (new Date() - generatorStart > generatorLife) { synthTimeout = true; return; }
     const particleStart = new Date();
     const particle = document.createElement("div");
     particle.classList.add("gratuitous-lambda");
@@ -585,22 +586,20 @@ function gratuitousLamdas(event) {
     let r = 360 * Math.random();
     let lastTime = new Date();
     const moveParticle = _ => {
-      particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg)`
       const t = new Date();
+      if (t - particleStart > particleLife) { particle.remove(); return; }
+      particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg)`
+      if (synthTimeout) { particle.innerText = "😞" }
       const dt = (t - lastTime) * 0.001;
       lastTime = t;
       x += vx * dt;
       y += vy * dt;
       r += vr * dt;
       vy += g * dt;
-      if (new Date() - particleStart > particleLife) {
-        particle.remove();
-      } else {
-        requestAnimationFrame(moveParticle);
-      }
+      requestAnimationFrame(moveParticle);
     };
+    moveParticle();
     document.body.appendChild(particle);
-    requestAnimationFrame(moveParticle);
     requestAnimationFrame(makeLambda);
   }
   makeLambda();
