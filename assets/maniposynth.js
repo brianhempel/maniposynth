@@ -18,11 +18,12 @@ Array.prototype.removeAsSet = function(elem) {
   return this;
 };
 
-function doAction(action) {
+function doAction(action, reload) {
+  if (reload === undefined) { reload = true };
   let request = new XMLHttpRequest();
   request.open("PATCH", document.location.href);
   request.setRequestHeader("Content-type", "application/json");
-  request.addEventListener("loadend", () => document.location.reload() );
+  request.addEventListener("loadend", () => { reload && document.location.reload() });
   request.send(JSON.stringify(action));
 }
 
@@ -77,7 +78,7 @@ function newAssert(locToAssertBefore, codeToAssertOn, expectedCode) {
 function doSynth() {
   doAction([
     "DoSynth"
-  ]);
+  ], false);
 }
 
 function undo() {
@@ -164,7 +165,7 @@ function moveVb(vbs_loc, mobile_loc, new_pos) {
 
 function draggableHover(event) {
   event.currentTarget.classList.add("draggable-hovered");
-  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function draggableUnhover(event) {
@@ -261,7 +262,7 @@ function deselectAll() {
 // Selectable element clicked...
 function toggleSelect(event) {
   const elem = event.currentTarget;
-  event.stopPropagation();
+  event.stopImmediatePropagation();
   if (elem.classList.contains("selected")) {
     deselectAll();
   } else {
@@ -382,7 +383,7 @@ window.addEventListener('DOMContentLoaded', () => {
       textbox.blur();
       // document.querySelector(".top-level").focus(); // I don't think this works :/
     }
-    event.stopPropagation();
+    event.stopImmediatePropagation();
   });
 
   updateInspector();
@@ -511,7 +512,33 @@ function beginEditCallback(editType) {
       } else if (event.key === "Esc" || event.key === "Escape") {
         abortTextEdit(input);
       }
-      event.stopPropagation();
+      event.stopImmediatePropagation();
+    });
+  }
+}
+
+function beginNewCodeEdit(vbs_holder) {
+  return function (event) {
+    if (event.target !== vbs_holder) { return; }
+    event.stopImmediatePropagation();
+    const input = document.createElement("input");
+    input.type = "text";
+    input.classList.add("transient-textbox");
+    input.style.position = "absolute";
+    const { dx, dy } = topLeftOffsetFromMouse(vbs_holder, event)
+    input.style.left = `${-dx - 5}px`;
+    input.style.top  = `${-dy - 10}px`;
+    vbs_holder.appendChild(input);
+    input.select();
+
+    input.addEventListener('keydown', event => {
+      // console.log(event.key);
+      if (event.key === "Enter") {
+        if (input.value.length > 0) { insertCode(input.value); }
+      } else if (event.key === "Esc" || event.key === "Escape") {
+        abortTextEdit(input);
+      }
+      event.stopImmediatePropagation();
     });
   }
 }
@@ -535,10 +562,49 @@ window.addEventListener('DOMContentLoaded', () => {
 /////////////////// Synth Button ///////////////////
 
 window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById("synth-button").addEventListener("click", _ => doSynth());
+  document.getElementById("synth-button").addEventListener("click", event => { gratuitousLamdas(event); doSynth() });
 });
 
-
+function gratuitousLamdas(event) {
+  const particleLife  = 5  * 1000;
+  const generatorLife = 15 * 1000;
+  const generatorStart = new Date();
+  function makeLambda() {
+    if (new Date() - generatorStart > generatorLife) { return; }
+    const particleStart = new Date();
+    const particle = document.createElement("div");
+    particle.classList.add("gratuitous-lambda");
+    particle.style.color = `rgb(${Math.floor(256*Math.random())},${Math.floor(256*Math.random())},${Math.floor(256*Math.random())})`;
+    particle.innerText = "λ";
+    const vx = 20 * (Math.random() - 0.5) * 60;
+    let   vy = 20 * -Math.random() * 60;
+    const vr = 20 * (Math.random() - 0.5) * 60;
+    const g = 0.1 * 60 * 60;
+    let x = event.clientX - 10;
+    let y = event.clientY - 20;
+    let r = 360 * Math.random();
+    let lastTime = new Date();
+    const moveParticle = _ => {
+      particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg)`
+      const t = new Date();
+      const dt = (t - lastTime) * 0.001;
+      lastTime = t;
+      x += vx * dt;
+      y += vy * dt;
+      r += vr * dt;
+      vy += g * dt;
+      if (new Date() - particleStart > particleLife) {
+        particle.remove();
+      } else {
+        requestAnimationFrame(moveParticle);
+      }
+    };
+    document.body.appendChild(particle);
+    requestAnimationFrame(moveParticle);
+    requestAnimationFrame(makeLambda);
+  }
+  makeLambda();
+}
 
 /////////////////// Undo/Redo ///////////////////
 
@@ -608,7 +674,7 @@ window.addEventListener('DOMContentLoaded', () => {
           offsetFromMouse : topLeftOffsetFromMouse(elem, event),
           elem            : elem,
         }
-        event.stopPropagation();
+        event.stopImmediatePropagation();
       }
     });
   });

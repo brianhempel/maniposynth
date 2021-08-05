@@ -221,10 +221,24 @@ table.returns {
 }
 
 #synth-button {
+  font-family: 'SignPainter', 'Brush Script MT', cursive;
+  font-weight: bold;
   position: fixed;
   right: 10px;
   bottom: 10px;
   font-size: 50px;
   cursor: pointer;
   z-index: 1;
+  border-radius: 15px;
+  border: solid 4px gray;
+}
+#synth-button:hover {
+  background-color: white;
+  box-shadow: 0 0 5px yellow;
+  text-shadow: 0 0 10px yellow;
+}
+.gratuitous-lambda {
+  position: fixed;
+  z-index: 2;
+  font-size: 40px;
 }
