@@ -3,6 +3,16 @@
 open Shared
 open Shared.Ast
 
+type lookups =
+  { lookup_exp : Location.t -> Typedtree.expression option
+  ; lookup_pat : Location.t -> Typedtree.pattern option
+  }
+
+let empty_lookups =
+  { lookup_exp = (fun _ -> None)
+  ; lookup_pat = (fun _ -> None)
+  }
+
 let formatter = Format.std_formatter
 
 let initial_env =
@@ -55,42 +65,55 @@ module ExpFinder = TypedtreeIter.MakeIterator(struct
   let enter_expression exp =
     if exp.Typedtree.exp_loc = !target_loc then raise (Found_exp exp)
 end)
-let find_node_by_loc loc typed_struct =
+let find_exp_by_loc loc typed_struct =
   target_loc := loc;
   try ExpFinder.iter_structure typed_struct; None
   with Found_exp exp -> Some exp
 
 (* Creates a function that given a loc might return a Typedtree.expression node *)
-let exp_typed_lookup_of_typed_structure typed_struct =
-  let locmap = ref Loc_map.empty in
+let type_lookups_of_typed_structure typed_struct : lookups =
+  let exp_locmap = ref Loc_map.empty in
+  let pat_locmap = ref Loc_map.empty in
   let module Iter = TypedtreeIter.MakeIterator(struct
     include TypedtreeIter.DefaultIteratorArgument
     let enter_expression exp =
-      locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
+      exp_locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !exp_locmap
+    let enter_pattern pat =
+      pat_locmap := Loc_map.add_to_loc pat.Typedtree.pat_loc pat !pat_locmap
   end) in
   Iter.iter_structure typed_struct;
-  let locmap = !locmap in
-  begin fun loc ->
-    match Loc_map.all_at_loc loc locmap with
-    | []       -> None
-    | [tt_exp] -> Some tt_exp
-    | _        -> print_endline @@ "multiple typedtree nodes at loc " ^ Loc.to_string loc; None
-  end
+  let exp_locmap = !exp_locmap in
+  let pat_locmap = !pat_locmap in
+  { lookup_exp =
+      begin fun loc ->
+        match Loc_map.all_at_loc loc exp_locmap with
+        | []       -> None
+        | [tt_exp] -> Some tt_exp
+        | _        -> print_endline @@ "multiple exp typedtree nodes at loc " ^ Loc.to_string loc; None
+      end
+  ; lookup_pat =
+      begin fun loc ->
+        match Loc_map.all_at_loc loc pat_locmap with
+        | []       -> None
+        | [tt_pat] -> Some tt_pat
+        | _        -> print_endline @@ "multiple pat typedtree nodes at loc " ^ Loc.to_string loc; None
+      end
+  }
 
-let exp_typed_lookup_of_file path =
+(* let exp_typed_lookup_of_file path =
   let (typed_struct, _, _) = typedtree_sig_env_of_file path in
-  exp_typed_lookup_of_typed_structure typed_struct
+  exp_typed_lookup_of_typed_structure typed_struct *)
 
 let exp_typed_lookup_of_parsed parsed file_name =
   let (typed_struct, _, _) = typedtree_sig_env_of_parsed parsed file_name in
-  exp_typed_lookup_of_typed_structure typed_struct
+  (type_lookups_of_typed_structure typed_struct).lookup_exp
 
-let type_expression_opt ?(type_env = initial_env) exp =
+(* let type_expression_opt ?(type_env = initial_env) exp =
   try Some (Typecore.type_expression type_env exp).exp_type
-  with _ -> None
+  with _ -> None *)
 
 (* Types the expression and creates a map that given a loc returns the corresponding Typedtree.expression nodes *)
-let loc_to_type_of_expression type_env exp =
+(* let loc_to_type_of_expression type_env exp =
   let typed_exp = Typecore.type_expression type_env exp in
   let locmap = ref Loc_map.empty in
   let module Iter = TypedtreeIter.MakeIterator(struct
@@ -99,4 +122,4 @@ let loc_to_type_of_expression type_env exp =
       locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
   end) in
   Iter.iter_expression typed_exp;
-  !locmap
+  !locmap *)

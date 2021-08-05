@@ -47,12 +47,8 @@ let rec free_unqualified_names exp =
   let recurse = free_unqualified_names in
   let free_unqualified_names_case { pc_lhs; pc_guard; pc_rhs } =
     List.diff
-      ((pc_guard |>& recurse ||& []) @ recurse pc_rhs)
+      (free_unqualified_names_pat pc_lhs @ (pc_guard |>& recurse ||& []) @ recurse pc_rhs)
       (Pat.names pc_lhs)
-  in
-  let names_in_vis_attrs attrs =
-    Vis.all_from_attrs attrs
-    |>@@ fun { exp } -> free_unqualified_names exp
   in
   names_in_vis_attrs exp.pexp_attributes @
   match exp.pexp_desc with
@@ -66,17 +62,19 @@ let rec free_unqualified_names exp =
   | Pexp_unreachable ->
     []
   | Pexp_let (Asttypes.Nonrecursive, vbs, body) ->
+    (vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @
     (vbs |>@ Vb.exp |>@@ recurse) @
     List.diff
       (recurse body)
       (vbs |>@@ Vb.names)
   | Pexp_let (Asttypes.Recursive, vbs, body) ->
     List.diff
-      ((vbs |>@ Vb.exp |>@@ recurse) @ recurse body)
+      ((vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @ (vbs |>@ Vb.exp |>@@ recurse) @ recurse body)
       (vbs |>@@ Vb.names)
   | Pexp_function cases ->
     cases |>@@ free_unqualified_names_case
   | Pexp_fun (_, default, pat, body) ->
+    free_unqualified_names_pat pat @
     (default |>& recurse ||& []) @
     List.diff (recurse body) (Pat.names pat)
   | Pexp_apply (e1, labeled_args) ->
@@ -100,6 +98,7 @@ let rec free_unqualified_names exp =
     [e1; e2] |>@@ recurse
   | Pexp_ifthenelse (e1, e2, e3_opt) -> ([e1; e2] @ Option.to_list e3_opt) |>@@ recurse
   | Pexp_for (pat, e1, e2, _, body) ->
+    free_unqualified_names_pat pat @
     ([e1; e2] |>@@ recurse) @
     List.diff (recurse body) (Pat.names pat)
   | Pexp_coerce (e, _, _)
@@ -145,13 +144,14 @@ and free_unqualified_names_struct_items struct_items =
     | Pstr_eval (exp, _) ->
       free_unqualified_names exp @ later_names
     | Pstr_value (Asttypes.Nonrecursive, vbs) ->
+      (vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @
       (vbs |>@ Vb.exp |>@@ recurse_exp) @
       List.diff
         later_names
         (vbs |>@@ Vb.names)
     | Pstr_value (Asttypes.Recursive, vbs) ->
       List.diff
-        ((vbs |>@ Vb.exp |>@@ recurse_exp) @ later_names)
+        ((vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @ (vbs |>@ Vb.exp |>@@ recurse_exp) @ later_names)
         (vbs |>@@ Vb.names)
     | Pstr_primitive _
     | Pstr_type (_, _)
@@ -173,6 +173,16 @@ and free_unqualified_names_struct_items struct_items =
     | Pstr_class _ ->
       failwith "free_unqualified_names_struct_items: classes not handled"
     end
+
+and free_unqualified_names_pat pat =
+  (* Any Ppat_open will make this wrong. Don't use them. *)
+  pat
+  |> Pat.flatten
+  |>@@ fun pat -> names_in_vis_attrs pat.ppat_attributes
+
+and names_in_vis_attrs attrs =
+  Vis.all_from_attrs attrs
+  |>@@ fun { exp } -> free_unqualified_names exp
 
 
 (*

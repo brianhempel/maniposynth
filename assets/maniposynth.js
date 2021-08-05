@@ -838,7 +838,7 @@ document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
     const elem = document.querySelector('.vb.selected,.exp.selected')
     if (elem) {
-      deleteLoc(elem.dataset.loc);
+      deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
       event.stopImmediatePropagation();
     }
   }

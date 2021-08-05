@@ -754,7 +754,7 @@ let e_guess fillings size_limit prog file_name : fillings Seq.t =
           try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
           with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
         in
-        begin match Typing.find_node_by_loc hole_loc typed_prog with
+        begin match Typing.find_exp_by_loc hole_loc typed_prog with
         | None ->
           (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
           Seq.empty

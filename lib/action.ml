@@ -203,12 +203,18 @@ let add_vis_to_loc loc vis_str old =
   |> Exp.map_by_loc loc begin fun exp ->
     { exp with pexp_attributes = Vis.add_vis_str_to_attrs vis_str exp.pexp_attributes }
   end
+  |> Pat.map_by_loc loc begin fun pat ->
+    { pat with ppat_attributes = Vis.add_vis_str_to_attrs vis_str pat.ppat_attributes }
+  end
   |> Bindings.fixup
 
 let remove_vis_from_loc loc vis_str old =
   old
   |> Exp.map_by_loc loc begin fun exp ->
     { exp with pexp_attributes = Vis.remove_vis_str_from_attrs vis_str exp.pexp_attributes }
+  end
+  |> Pat.map_by_loc loc begin fun pat ->
+    { pat with ppat_attributes = Vis.remove_vis_str_from_attrs vis_str pat.ppat_attributes }
   end
 
 let replace_loc_code loc code old =
