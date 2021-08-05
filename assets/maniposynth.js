@@ -317,18 +317,45 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-vtrace],.value-binding').forEach(elem => {
+  document.querySelectorAll('[data-vtrace],.vb,.exp').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", toggleSelect);
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Esc" || event.key === "Escape") {
       globalEscape();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
     }
   });
 
   restoreSelection();
+});
+
+
+/////////////////// Suggestions ///////////////////
+
+// The Inspector code later also displays suggestions.
+
+function elemSuggestions(elem) {
+  return elem.dataset.suggestions?.split("  ") || [];
+}
+
+function useSuggestionNumber(elem, i) {
+  editLoc(elem.dataset.inPlaceEditLoc, elemSuggestions(elem)[i-1]);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener("keydown", event => {
+    const elem = document.querySelector('.selected[data-suggestions]');
+    if (elem) {
+      const suggestions = elemSuggestions(elem);
+      const i = parseInt(event.key);
+      if (!isNaN(i) && i >= 1 && i <= suggestions.length) {
+        useSuggestionNumber(elem, i);
+        event.stopImmediatePropagation();
+      }
+    }
+  });
 });
 
 
@@ -363,10 +390,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 function updateInspector() {
-  const inspector        = window.inspector;
-  const typeOfSelected   = document.getElementById("type-of-selected");
-  const visesForSelected = document.getElementById("vises-for-selected");
-  const visPane          = document.getElementById("vis-pane");
+  const inspector              = window.inspector;
+  const typeOfSelected         = document.getElementById("type-of-selected");
+  const visesForSelected       = document.getElementById("vises-for-selected");
+  const suggestionsForSelected = document.getElementById("suggestions-for-selected");
+  const visPane                = document.getElementById("vis-pane");
+  const suggestionsPane        = document.getElementById("suggestions-pane");
   // const addVisTextbox    = document.getElementById("add-vis-textbox");
 
   const elem = document.querySelector('.selected');
@@ -395,8 +424,23 @@ function updateInspector() {
     show(inspector);
     const typeStr = elem.dataset.type || "Unknown";
     typeOfSelected.innerHTML = "";
+    suggestionsForSelected.innerHTML = "";
     visesForSelected.innerHTML = "";
     typeOfSelected.appendChild(document.createTextNode(typeStr));
+    const suggestions = elemSuggestions(elem);
+    if (suggestions.length > 0) {
+      show(suggestionsPane);
+      let i = 1;
+      suggestions.forEach(code => {
+        const suggestion = document.createElement("button");
+        suggestion.classList.add("suggestion");
+        suggestion.innerHTML = `${i}. ${code}`;
+        suggestion.addEventListener("click", _ => { useSuggestionNumber(elem, i) });
+        suggestionsForSelected.appendChild(suggestion);
+      });
+    } else {
+      hide(suggestionsPane);
+    }
     if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
       show(visPane);
       const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
@@ -427,12 +471,13 @@ function show(originalElem) {
 }
 
 function abortTextEdit(textbox) {
-  show(textbox.originalElem);
+  if (textbox.originalElem) { show(textbox.originalElem) };
   textbox.remove();
 }
 
 function beginEditCallback(editType) {
   return function (event) {
+    event.stopImmediatePropagation();
     const originalElem = event.currentTarget;
     // const parent = originalElem.parentElement;
     console.log(originalElem);
@@ -478,6 +523,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
     elem.addEventListener("dblclick", beginEditCallback("new assert"));
+  });
+
+  document.querySelectorAll('.vbs').forEach(elem => {
+    elem.addEventListener("dblclick", beginNewCodeEdit(elem));
   });
 });
 
@@ -648,7 +697,7 @@ function reflowUnpositionedElems(elem) {
     const boxes = Array.from(vbsHolder.children);
     const placedBoxes = boxes.filter(box => box.style.left); /* If box has an explicit position */
     for (box of vbsHolder.children) {
-      if (!box.classList.contains("value-binding")) {
+      if (!box.classList.contains("vb")) {
         console.log("expected only value bindings in a .vbs", box);
         continue;
       }
@@ -722,10 +771,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
-    const elem = document.querySelector('.value-binding.selected')
+    const elem = document.querySelector('.vb.selected,.exp.selected')
     if (elem) {
       deleteLoc(elem.dataset.loc);
-      event.stopPropagation();
+      event.stopImmediatePropagation();
     }
   }
 });

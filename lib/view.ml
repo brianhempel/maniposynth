@@ -36,8 +36,10 @@ let loc_attr loc = ("data-loc", Serialize.string_of_loc loc)
 let body    ?(attrs = [])       inners = tag "body" ~attrs inners
 let nav     ?(attrs = [])       inners = tag "nav" ~attrs inners
 let div     ?(attrs = [])       inners = tag "div" ~attrs inners
+let h1      ?(attrs = [])       inners = tag "h1" ~attrs inners
 let h2      ?(attrs = [])       inners = tag "h2" ~attrs inners
 let span    ?(attrs = [])       inners = tag "span" ~attrs inners
+let img     ~attrs                     = tag "img" ~attrs []
 let table   ?(attrs = [])       inners = tag "table" ~attrs inners
 let tr      ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td      ?(attrs = [])       inners = tag "td" ~attrs inners
@@ -55,12 +57,15 @@ let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
 let html_of_pat ?(editable = true) pat =
   let code = Pat.to_string pat in
   if editable
-  then span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc)] [code]
+  then span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] [code]
   else code
-let html_of_exp ?(editable = true) exp =
+let html_of_exp ?(editable = true) ?(lookup_exp_typed = (fun _ -> None)) exp =
   let code = Exp.to_string { exp with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
   if editable
-  then span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)] [code]
+  then
+    let perhaps_type_attr = lookup_exp_typed exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
+    let perhaps_suggestions_attr = if Exp.is_hole exp then [("data-suggestions", String.concat "  " Hole_suggestions.suggestions)] else [] in
+    span ~attrs:([("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc);("class","exp")] @ perhaps_type_attr @ perhaps_suggestions_attr) [code]
   else code
 
 let string_of_arg_label =
@@ -120,6 +125,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
           let env = Envir.env_set_value "teeeeeeeeeeeeeeempf" fval env in
           let env = Envir.env_set_value "teeeeeeeeeeeeeeemp" value env in
           let (result_value, _) =
+            (* "with_gather_asserts" so failed asserts don't crash execution *)
             Eval.with_gather_asserts begin fun () ->
               Eval.eval_expr Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
@@ -159,7 +165,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
     match value.type_opt with
     | Some val_typ -> Vis.possible_vises_for_type val_typ type_env |>@ Vis.to_string
     | None -> [] in
-  let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Shared.Ast.Type.to_string typ)]  | _ -> [] in
+  let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let wrap_value str =
     span
@@ -180,7 +186,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
   | Int32 int32                              -> Int32.to_string int32
   | Int64 int64                              -> Int64.to_string int64
   | Nativeint nativeint                      -> Nativeint.to_string nativeint
-  | Fun (_, _, _, _, _)                      -> "func"
+  | Fun (arg_label, e_opt, pat, body, _)     -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
   | Function (_, _)                          -> "func"
   | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
@@ -236,7 +242,7 @@ let rec html_of_vb trace assert_results lookup_exp_typed vb =
   let show_pat    = not (Pat.is_unit vb.pvb_pat) in
   let show_output = show_pat && not (Exp.is_funlike vb.pvb_expr) in
   let exp_with_vbs_html = render_exp_ensure_vbs ~show_output trace assert_results lookup_exp_typed vb.pvb_expr in
-  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "value-binding" @@
+  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "vb" @@
     (if show_pat then [html_of_pat vb.pvb_pat] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results lookup_exp_typed (terminal_exp vb.pvb_expr)] else []) *)
@@ -264,7 +270,7 @@ and render_exp trace assert_results lookup_exp_typed exp =
       match exp.pexp_desc with
       | Pexp_fun (label, default_opt, pat, body) ->
         let later_rows, final_body = get_param_rows_and_body body in
-        let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp default_exp) ||& "" in
+        let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp ~lookup_exp_typed default_exp) ||& "" in
         let row =
           tr
             [ td ~attrs:[("class", "label")] [string_of_arg_label label ^ html_of_pat pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
@@ -280,11 +286,11 @@ and render_exp trace assert_results lookup_exp_typed exp =
       ; render_exp_ensure_vbs trace assert_results lookup_exp_typed body
       ]
   | _ ->
-    div ~attrs:[("class", "label")] [html_of_exp exp]
+    div ~attrs:[("class", "label")] [html_of_exp ~lookup_exp_typed exp]
 
 let html_of_structure_item trace assert_results lookup_exp_typed (item : structure_item) =
   match item.pstr_desc with
-  | Pstr_eval (_exp, _)         -> failwith "can't handle Pstr_eval" (* html_ensure_vbs_canvas_of_exp trace assert_results lookup_exp_typed exp *)
+  | Pstr_eval (_exp, _)         -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
   | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.map (html_of_vb trace assert_results lookup_exp_typed) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
@@ -337,7 +343,8 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ]
     ; body @@
       [ nav @@
-        [ span ~attrs:[("class","undo tool")] ["Undo"]
+        [ h1 [img ~attrs:[("src", "/assets/maniposynth.svg")]]
+        ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv]
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
@@ -345,6 +352,10 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ; div ~attrs:[("id", "inspector")]
         [ h2 ["Type"]
         ; div ~attrs:[("id", "type-of-selected")] []
+        ; div ~attrs:[("id", "suggestions-pane")]
+          [ h2 ["Suggestions"]
+          ; div ~attrs:[("id", "suggestions-for-selected")] []
+          ]
         ; div ~attrs:[("id", "vis-pane")]
           [ h2 ["Visualize"]
           ; div ~attrs:[("id", "vises-for-selected")] []
