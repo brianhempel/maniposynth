@@ -1,6 +1,7 @@
 :root {
   --padding: 4px;
   --color: rgb(163, 255, 174);
+  --pat-color: rgb(226, 43, 144);
 }
 
 body {
@@ -92,10 +93,13 @@ h1 img {
   box-shadow: 0px 0px 5px rgba(0,0,0,0.15);
 }
 
-.box > span:first-child {
+.box > span:first-child,
+.pat_label {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
-  color:rgb(226, 43, 144)
+}
+.box > span:first-child {
+  color: var(--pat-color);
 }
 
 .top-level {
@@ -111,8 +115,21 @@ h1 img {
   box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }
 
-.label {
+
+.exp_label {
   background-color: var(--color);
+}
+.pat_label {
+  color: white;
+  background-color: var(--pat-color);
+  /* background-color: #ddd; */
+}
+.pat_label,
+.pat_label + td {
+  border: solid 1px var(--pat-color);
+}
+.exp_label,
+.pat_label {
   padding: var(--padding);
 }
 .root-value-holder {
@@ -124,7 +141,8 @@ h1 img {
 [data-in-place-edit-loc] {
   cursor: text;
 }
-.label,
+.exp_label,
+/* .pat_label, */
 .derived-vis-values {
   font-size: 0.8em;
 }

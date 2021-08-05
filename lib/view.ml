@@ -75,14 +75,6 @@ let string_of_arg_label =
   | Optional label -> "?" ^ label ^ ":"
 
 
-let html_box ?(attrs = []) label content =
-  table
-    ~attrs
-    [ tr [td ~attrs:[("class", "label")] [label]]
-    ; tr [td ~attrs:[("class", "values")] [content]]
-    ]
-
-
 
 
 
@@ -278,7 +270,7 @@ and render_exp trace assert_results type_lookups exp =
         let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp ~type_lookups default_exp) ||& "" in
         let row =
           tr
-            [ td ~attrs:[("class", "label")] [string_of_arg_label label ^ html_of_pat pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
+            [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
             ; td [html_of_values_for_pat trace assert_results type_lookups pat]
             ]
         in
@@ -291,7 +283,7 @@ and render_exp trace assert_results type_lookups exp =
       ; render_exp_ensure_vbs trace assert_results type_lookups body
       ]
   | _ ->
-    div ~attrs:[("class", "label")] [html_of_exp ~type_lookups exp]
+    div ~attrs:[("class", "exp_label")] [html_of_exp ~type_lookups exp]
 
 let html_of_structure_item trace assert_results type_lookups (item : structure_item) =
   match item.pstr_desc with
