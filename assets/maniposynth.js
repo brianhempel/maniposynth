@@ -27,10 +27,18 @@ function doAction(action, reload) {
   request.send(JSON.stringify(action));
 }
 
-function moveValue(vbId, vtrace) {
+function dropValueIntoVbs(loc, vtrace) {
   doAction([
-    "MoveValue",
-    vbId,
+    "DropValueIntoVbs",
+    loc,
+    vtrace
+  ]);
+}
+
+function dropValueIntoExp(loc, vtrace) {
+  doAction([
+    "DropValueIntoExp",
+    loc,
     vtrace
   ]);
 }
@@ -174,10 +182,11 @@ function draggableUnhover(event) {
 
 // When drag starts, store information.
 function dragstart(event) {
-  let node = event.target;
+  let node = event.currentTarget;
   if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
   // if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
+  event.stopImmediatePropagation();
 }
 
 function removeDropTargetStyles() {
@@ -194,6 +203,7 @@ function unhighlightDropTarget(elem) {
 
 function dragend(event) {
   removeDropTargetStyles()
+  event.stopImmediatePropagation();
 }
 
 function dragover(event) {
@@ -203,21 +213,27 @@ function dragover(event) {
     event.dataTransfer.dropEffect = "copy";
     highlightDropTarget(event.currentTarget);
   }
+  event.stopImmediatePropagation();
 }
 
 function dragleave(event) {
   event.currentTarget.classList.remove("current-drop-target");
+  event.stopImmediatePropagation();
 }
 
 function drop(event) {
   event.preventDefault();
   let dropTarget      = event.currentTarget;
   let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
-  // if (dropTarget.dataset.beforeVbId && droppedVTrace) {
-  //   moveValue(dropTarget.dataset.beforeVbId, droppedVTrace);
-  // } else {
-  //   console.warn("No valid actions for drop on ", dropTarget);
-  // }
+  console.log(dropTarget, droppedVTrace);
+  if (dropTarget.classList.contains("vbs") && droppedVTrace) {
+    dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
+  } else if (dropTarget.classList.contains("exp") && droppedVTrace) {
+    dropValueIntoExp(dropTarget.dataset.inPlaceEditLoc, droppedVTrace);
+  } else {
+    console.warn("No valid actions for drop on ", dropTarget);
+  }
+  event.stopImmediatePropagation();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -233,11 +249,11 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add drop zone events.
-  // document.querySelectorAll('[data-before-vb-id],[data-before-scope-id]').forEach(elem => {
-  //   elem.addEventListener("dragover", dragover);
-  //   elem.addEventListener("dragleave", dragleave);
-  //   elem.addEventListener("drop", drop);
-  // });
+  document.querySelectorAll('.vbs,.exp[data-in-place-edit-loc]').forEach(elem => {
+    elem.addEventListener("dragover", dragover);
+    elem.addEventListener("dragleave", dragleave);
+    elem.addEventListener("drop", drop);
+  });
 });
 
 

@@ -223,17 +223,19 @@ let html_of_values_for_pat trace assert_results type_lookups pat =
 
 let rec terminal_exps exp = (* Dual of gather_vbs *)
   match exp.pexp_desc with
-  | Pexp_let (_, _, e)    -> terminal_exps e
-  | Pexp_sequence (_, e2) -> terminal_exps e2
-  | Pexp_match (_, cases) -> cases |>@ Case.rhs |>@@ terminal_exps
-  | _                     -> [exp]
+  | Pexp_let (_, _, e)       -> terminal_exps e
+  | Pexp_sequence (_, e2)    -> terminal_exps e2
+  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
+  | Pexp_letmodule (_, _, e) -> terminal_exps e
+  | _                        -> [exp]
 
 let rec gather_vbs exp = (* Dual of terminal_exp *)
   match exp.pexp_desc with
-  | Pexp_let (_, vbs, e)   -> vbs @ gather_vbs e
-  | Pexp_sequence (e1, e2) -> [Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.unit) e1] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
-  | Pexp_match (_, cases)  -> cases |>@ Case.rhs |>@@ gather_vbs
-  | _                      -> []
+  | Pexp_let (_, vbs, e)     -> vbs @ gather_vbs e
+  | Pexp_sequence (e1, e2)   -> [Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.unit) e1] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
+  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ gather_vbs
+  | Pexp_letmodule (_, _, e) -> gather_vbs e
+  | _                        -> []
 
 let rec html_of_vb trace assert_results type_lookups vb =
   let show_pat    = not (Pat.is_unit vb.pvb_pat) in

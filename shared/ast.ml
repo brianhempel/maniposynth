@@ -364,6 +364,7 @@ module Common
     val loc : t -> Location.t
     val iter : (t -> unit) -> program -> unit
     val map : (t -> t) -> program -> program
+    val iter_dflt : Ast_iterator.iterator -> t -> unit
   end) = struct
 
   (* type t = Node.t *)
@@ -398,6 +399,20 @@ module Common
     )
 
   let extract target_loc = extract_by (loc %> (=) target_loc)
+
+  let child_exps t =
+    let children = ref [] in
+    let iter_exp_no_recurse _ e = children := e :: !children in
+    let iter_once = { dflt_iter with expr = iter_exp_no_recurse } in
+    Node.iter_dflt iter_once t;
+    List.rev !children (* Return the children left-to-right. *)
+
+  let child_pats t =
+    let children = ref [] in
+    let iter_pat_no_recurse _ p = children := p :: !children in
+    let iter_once = { dflt_iter with pat = iter_pat_no_recurse } in
+    Node.iter_dflt iter_once t;
+    List.rev !children (* Return the children left-to-right. *)
 end
 
 (* module Const = Ast_helper.Const *)
@@ -414,6 +429,7 @@ module Exp = struct
       let map_exp mapper e = f (dflt_mapper.expr mapper e) in
       let mapper = { dflt_mapper with expr = map_exp } in
       mapper.structure mapper struct_items
+    let iter_dflt = dflt_iter.expr
   end)
 
   include Ast_helper.Exp (* Exp builders *)
@@ -472,6 +488,7 @@ module Exp = struct
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
     mapper.expr mapper exp
+
 end
 
 module Pat = struct
@@ -486,6 +503,7 @@ module Pat = struct
       let map_pat mapper p = f (dflt_mapper.pat mapper p) in
       let mapper = { dflt_mapper with pat = map_pat } in
       mapper.structure mapper struct_items
+    let iter_dflt = dflt_iter.pat
   end)
 
   let all prog = (everything (Sis prog)).pats
@@ -525,7 +543,10 @@ module Pat = struct
     match ctor_lid_loced pat with
     | Some { txt = Longident.Lident "()"; _ } -> true
     | _                                       -> false
+  let is_name        = name_loced %> (<>) None
+  let is_single_name = single_name %> (<>) None
 
+  let name            = name_loced %>& Loc_.txt
   let names_loced     = flatten %>@& name_loced
   let names           = names_loced %>@ Loc_.txt
   let ctor_lids_loced = flatten %>@& ctor_lid_loced
@@ -557,6 +578,7 @@ module Vb = struct
       let map_vb mapper vb = f (dflt_mapper.value_binding mapper vb) in
       let mapper = { dflt_mapper with value_binding = map_vb } in
       mapper.structure mapper struct_items
+    let iter_dflt = dflt_iter.value_binding
   end)
 
   let all prog = (everything (Sis prog)).vbs
@@ -700,6 +722,7 @@ module StructItem = struct
   include Ast_helper.Str (* Structure item builders *)
 
   let value_opt { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
+  let vbs_opt                    = value_opt %>& snd
 
   (* let name_loced { pstr_desc; _ } =
     match pstr_desc with

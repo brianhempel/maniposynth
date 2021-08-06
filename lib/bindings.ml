@@ -42,6 +42,7 @@ open Shared.Util
   C. Not concerned with constructor names, field labels, or moving modules around.
 *)
 
+
 (* Also searches in [@vis] attributes. *)
 let rec free_unqualified_names exp =
   let recurse = free_unqualified_names in
@@ -501,6 +502,125 @@ let fixup prog =
   |> add_missing_bindings_struct_items defined_names
 
 
-let _ =
+
+
+
+(* Pats_in_scope_* assumes a fixup happens. *)
+
+exception Found of pattern list
+
+(* Does *not* include patterns outside the program *)
+let rec pats_in_scope_struct loc pats struct_items =
+  let pats =
+    (struct_items |>@& StructItem.vbs_opt |> List.concat |>@ Vb.pat |>@@ Pat.flatten)
+    @ pats
+  in
+  struct_items |> List.iter begin fun si ->
+    if si.pstr_loc = loc then raise (Found pats) else
+    match si.pstr_desc with
+    | Pstr_eval (exp, _)          -> pats_in_scope_exp loc pats exp
+    | Pstr_value (_, vbs)         -> pats_in_scope_vbs loc pats vbs
+    | Pstr_module mod_binding     -> pats_in_scope_mod loc pats mod_binding.pmb_expr
+    | Pstr_recmodule mod_bindings -> mod_bindings |> List.iter (fun { pmb_expr; _ } -> pats_in_scope_mod loc pats pmb_expr)
+    | Pstr_primitive _
+    | Pstr_type (_, _)
+    | Pstr_typext _
+    | Pstr_exception _
+    | Pstr_modtype _
+    | Pstr_class_type _
+    | Pstr_attribute _
+    | Pstr_extension (_, _) -> ()
+    | Pstr_include _ ->
+      failwith "rearrange_struct_items: includes not handled"
+    | Pstr_open _ ->
+      failwith "rearrange_struct_items: opens not handled"
+    | Pstr_class _ ->
+      failwith "rearrange_struct_items: classes not handled"
+  end
+
+and pats_in_scope_exp loc pats exp =
+  if exp.pexp_loc = loc then raise (Found pats) else
+  let recurse = pats_in_scope_exp loc in
+  let pats_in_scope_case { pc_lhs; pc_guard; pc_rhs } =
+    let pats = Pat.flatten pc_lhs @ pats in
+    Option.iter (recurse pats) pc_guard;
+    recurse pats pc_rhs
+  in
+  match exp.pexp_desc with
+  | Pexp_function cases -> (* don't plan to handle rearranging function cases *)
+    List.iter pats_in_scope_case cases
+  | Pexp_fun (_, default, pat, body) ->
+    Option.iter (recurse pats) default;
+    recurse (Pat.flatten pat @ pats) body
+  | Pexp_try (e, cases) -> (* don't plan to handle rearranging try cases *)
+    recurse pats e;
+    List.iter pats_in_scope_case cases
+  | _ ->
+    let rec gather_vbs exp = (* Only for testing their locs *)
+      match exp.pexp_desc with
+      | Pexp_let (_, vbs, e)     -> vbs @ gather_vbs e
+      | Pexp_sequence (_, e2)    -> gather_vbs e2
+      | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ gather_vbs
+      | Pexp_letmodule (_, _, e) -> gather_vbs e
+      | _                        -> []
+    in
+    let rec gather_pats exp =
+      match exp.pexp_desc with
+      | Pexp_let (_, vbs, e)     -> (vbs |>@ Vb.pat |>@@ Pat.flatten) @ gather_pats e
+      | Pexp_sequence (_, e2)    -> gather_pats e2
+      | Pexp_match (_, cases)    -> (cases |>@ Case.lhs |>@@ Pat.flatten) @ (cases |>@ Case.rhs |>@@ gather_pats)
+      | Pexp_letmodule (_, _, e) -> gather_pats e
+      | _                        -> []
+    in
+    let rec intermediate_exps exp = (* A chunk of the trunk of our walk *)
+      match exp.pexp_desc with
+      | Pexp_let (_, _, e)       -> exp :: intermediate_exps e
+      | Pexp_sequence (_, e2)    -> exp :: intermediate_exps e2
+      | Pexp_match (_, cases)    -> exp :: (cases |>@ Case.rhs |>@@ intermediate_exps)
+      | Pexp_letmodule (_, _, e) -> exp :: intermediate_exps e
+      | _                        -> [exp]
+    in
+    let rec next_exps exp = (* Where to go after the chunk of the trunk *)
+      match exp.pexp_desc with
+      | Pexp_let (_, vbs, e)     -> (vbs |>@ Vb.exp) @ next_exps e
+      | Pexp_sequence (e1, e2)   -> e1 :: next_exps e2
+      | Pexp_match (e, cases)    -> e :: (cases |>@& Case.guard_opt) @ (cases |>@ Case.rhs |>@@ next_exps)
+      | Pexp_letmodule (_, _, e) -> next_exps e
+      | _                        -> Exp.child_exps exp
+    in
+    let pats = gather_pats exp @ pats in
+    gather_vbs exp |> List.iter begin fun vb ->
+      if vb.pvb_loc = loc then raise (Found pats)
+    end;
+    intermediate_exps exp |> List.iter begin fun exp ->  (* Will include this exp. *)
+      if exp.pexp_loc = loc then raise (Found pats)
+    end;
+    next_exps exp |> List.iter (recurse pats)
+
+and pats_in_scope_vbs loc pats vbs = (* pats already includes all other vbs at this level *)
+  vbs |> List.iter begin fun vb ->
+    if vb.pvb_loc = loc then raise (Found pats)
+  end;
+  vbs |>@ Vb.exp |> List.iter (pats_in_scope_exp loc pats)
+
+and pats_in_scope_mod loc pats modl =
+  match modl.pmod_desc with
+  | Pmod_extension _
+  | Pmod_ident _                                 -> ()
+  | Pmod_structure struct_items                  -> pats_in_scope_struct loc pats struct_items
+  | Pmod_unpack exp                              -> pats_in_scope_exp loc pats exp
+  | Pmod_constraint (mod_exp, _mod_type)         -> pats_in_scope_mod loc pats mod_exp
+  | Pmod_functor (_name, _mod_type_opt, mod_exp) -> pats_in_scope_mod loc pats mod_exp
+  | Pmod_apply (m1, m2)                          -> pats_in_scope_mod loc pats m1; pats_in_scope_mod loc pats m2
+
+
+
+(* Checks locs of struct_items, vbs, and exps. (Not pats). *)
+let pats_in_scope_at loc prog =
+  try pats_in_scope_struct loc [] prog; failwith @@ "pats_in_scope_at: Could not find loc " ^ Loc.to_string loc
+  with Found pats -> pats
+
+
+(* let _ =
   let prog = StructItems.from_string "let x = y\nlet y = 10\nlet z = length" in
-  fixup prog |> StructItems.to_string |> print_endline
+  fixup prog |> StructItems.to_string |> print_endline *)

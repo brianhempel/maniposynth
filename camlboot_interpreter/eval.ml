@@ -604,20 +604,21 @@ and eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recfl
 and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val path pat ({ v_; _ } as v : value) =
   (* frame_no is passed in here because pattern matches can execute code, which will change the lookup_exp_typed trace_state frame_no for later calls to pattern_bind *)
   (* (namely the str = "Format" case) *)
-  let attach_trace value env =
-    let trace_entry = (pat.ppat_loc, frame_no, value, env) in
+  let intro          v = { v with vtrace = ((frame_no, pat.ppat_loc), Intro)                     :: v.vtrace } in
+  let pat_match path v = { v with vtrace = ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: v.vtrace } in
+  let v = pat_match path v in
+  let attach_trace env =
+    let trace_entry = (pat.ppat_loc, frame_no, v, env) in
     trace_state.trace <- Trace.add trace_entry trace_state.trace;
     env
   in
-  let intro          v = { v with vtrace = ((frame_no, pat.ppat_loc), Intro)                     :: v.vtrace } in
-  let pat_match path v = { v with vtrace = ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: v.vtrace } in
-  attach_trace v @@
+  attach_trace @@
   match pat.ppat_desc with
   | Ppat_any -> env
-  | Ppat_var s -> env_set_value s.txt (pat_match path v) env
+  | Ppat_var s -> env_set_value s.txt v env
   | Ppat_alias (p, s) ->
     env_set_value s.txt
-      (pat_match path v)
+      v
       (pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val path p v)
   | Ppat_constant c ->
     if value_equal (value_of_constant c) v then env else raise Match_fail

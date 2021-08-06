@@ -16,6 +16,7 @@ let (%||&) f default = fun x -> match f x with Some x -> x | _ -> default
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
   let map f = function Some x -> Some (f x) | None -> None
+  let iter f = function Some x -> f x | None -> ()
   let join = function Some (Some x) -> Some x | _ -> None
   let to_list = function Some x -> [x] | None -> []
 
