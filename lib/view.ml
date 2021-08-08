@@ -342,7 +342,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ]
     ; body @@
       [ nav @@
-        [ h1 [img ~attrs:[("src", "/assets/maniposynth.svg")]]
+        [ img ~attrs:[("src", "/assets/maniposynth.svg")]
         ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv]

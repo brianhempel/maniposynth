@@ -13,36 +13,33 @@ body {
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
   /* color: #3a3a3a; */
-/* } */
-
-/* main { */
-  position: absolute;
-  display: grid;
-  width: 100%;
-  height: 100%;
-  grid-template-rows: min-content auto;
-  grid-template-columns: auto 200px;
 }
 
 nav {
+  top: 0;
+  left: 0;
+  position: fixed;
+  width: 10000vw;
+  height: 2.75rem;
+  overflow: visible;
   border-bottom: solid 1px black;
   background-color: white;
-  grid-row: 1;
-  grid-column: 1 / 3;
+  z-index: 2;
+}
+.top-level {
+  margin-top: 2.75rem
 }
 
-h1 {
+nav img {
   margin: 0 0.4rem 0 0.5rem;
-  padding: 0;
-  display: inline-block;
-}
-h1 img {
   height: 3.8rem;
   margin-bottom: -1.3em;
+  vertical-align: top;
 }
 
 .tool {
-  line-height: 2.5rem;
+  vertical-align: top;
+  line-height: 2.75rem;
   border: none;
   background: none;
   display: inline-block;
@@ -102,9 +99,6 @@ h1 img {
   color: var(--pat-color);
 }
 
-.top-level {
-  overflow: auto;
-}
 
 .top-level > .box > span:first-child {
   font-size: 20px;
@@ -214,9 +208,11 @@ table.returns {
 }
 
 #inspector {
-  border-left: solid 1px black;
+  position: fixed;
+  border: solid 1px black;
   padding: var(--padding);
   background-color: white;
+  z-index: 2;
 }
 
 #inspector h2 {
