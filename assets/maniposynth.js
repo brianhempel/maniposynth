@@ -402,6 +402,9 @@ window.addEventListener('DOMContentLoaded', () => {
     event.stopImmediatePropagation();
   });
 
+  window.addEventListener("resize", updateInspector);
+  window.addEventListener("scroll", updateInspector);
+
   updateInspector();
 });
 
@@ -438,6 +441,17 @@ function updateInspector() {
   }
 
   if (elem) {
+    const rect = elem.getBoundingClientRect();
+    const viewWidth =
+    inspector.style.width = 280;
+    // Position to the right or below.
+    if (rect.right + 300 < document.body.clientWidth) {
+      inspector.style.left = rect.right
+      inspector.style.top  = rect.top
+    } else {
+      inspector.style.left  = Math.min(rect.left, document.body.clientWidth - 300);
+      inspector.style.top   = rect.bottom;
+    }
     show(inspector);
     const typeStr = elem.dataset.type || "Unknown";
     typeOfSelected.innerHTML = "";
@@ -670,7 +684,7 @@ function vbDropTarget(event) {
     const isDescendentVbs = descendentVbs.includes(elem);
     return !isDescendentVbs && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
   });
-  if (isStartingVbs(dropTarget, window.stuffMoving.elem)) {
+  if (dropTarget && isStartingVbs(dropTarget, window.stuffMoving.elem)) {
     return undefined;
   } else {
     return dropTarget;
@@ -701,6 +715,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".top-level").forEach(elem => {
     elem.addEventListener("mousemove", event => {
       if (window.stuffMoving) {
+        hide(window.inspector);
         const dx = event.pageX - stuffMoving.startX;
         const dy = event.pageY - stuffMoving.startY;
         window.stuffMoving.elem.style.left = `${stuffMoving.startOffsetX + dx}px`

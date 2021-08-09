@@ -5,14 +5,9 @@
 }
 
 body {
-  /* margin: var(--body-margin); */
-  /* margin-top: 88px; */
-  /* padding: 0; */
   margin: 0;
-  /* width: calc(100% - 3*var(--body-margin) - var(--toolbox-width)); */
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
-  /* color: #3a3a3a; */
 }
 
 nav {
@@ -24,7 +19,7 @@ nav {
   overflow: visible;
   border-bottom: solid 1px black;
   background-color: white;
-  z-index: 2;
+  z-index: 3;
 }
 .top-level {
   margin-top: 2.75rem
@@ -253,6 +248,6 @@ table.returns {
 }
 .gratuitous-lambda {
   position: fixed;
-  z-index: 2;
+  z-index: 10;
   font-size: 40px;
 }
