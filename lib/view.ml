@@ -133,12 +133,12 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
             matching_asserts
             |>@ begin fun Data.{ expected; expected_exp; _} ->
               span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
-                [html_of_value [] [] Envir.empty_env Env.empty expected]
+                [html_of_value [] [] Envir.empty_env Env.empty (fun p -> p) expected]
             end in
           let code_to_assert_on = Exp.apply exp [(Nolabel, exp_of_value value)] |> Exp.to_string in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
-              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty result_value]
+              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty (fun p -> p) result_value]
           ]
         end else
           []
@@ -149,7 +149,7 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ v_ = value_; _} as value : Data.value) =
+and html_of_value ?code_to_assert_on assert_results visualizers env type_env (make_extraction_pat : pattern -> pattern) ({ v_ = value_; _} as value : Data.value) =
   let recurse = html_of_value assert_results visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
@@ -164,6 +164,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
         [("data-possible-vises", String.concat "  " possible_vises)] @
+        [("data-extraction-pat", Pat.to_string @@ make_extraction_pat (Pat.var "v"))] @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
         [("class", "value"); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
@@ -182,17 +183,42 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env ({ 
   | Function (_, _)                          -> "func"
   | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
-  | Tuple values                             -> "(" ^ String.concat ", " (List.map recurse values) ^ ")"
+  | Tuple values                             ->
+    let make_extraction_pat_i i deeper =
+      make_extraction_pat @@
+      Pat.tuple begin
+        List.init (List.length values) (fun _ -> Pat.any ())
+        |> List.replace_nth i deeper
+      end
+    in
+    let recurse_i i v = recurse (make_extraction_pat_i i) v in
+    "(" ^ String.concat ", " (List.mapi recurse_i values) ^ ")"
   | Constructor (ctor_name, _, None)         -> ctor_name
-  | Constructor (ctor_name, _, Some arg_val) -> ctor_name ^ " " ^ recurse arg_val
+  | Constructor (ctor_name, _, Some arg_val) ->
+    let ctor_pat_name = if ctor_name = "::" then "(::)" else ctor_name in (* otherwise Pat.to_string loops forever *)
+    ctor_name ^ " " ^ recurse (fun deeper -> make_extraction_pat @@ Pat.construct_unqualified ctor_pat_name (Some deeper)) arg_val
   | Prim _                                   -> "prim"
   | Fexpr _                                  -> "fexpr"
   | ModVal _                                 -> "modval"
   | InChannel _                              -> "inchannel"
   | OutChannel _                             -> "outchannel"
-  | Record entry_map                         -> entry_map |> SMap.bindings |> List.map (fun (field_name, value_ref) -> field_name ^ " = " ^ recurse !value_ref) |> String.concat "; " |> (fun entries_str -> "{ " ^ entries_str ^ " }")
+  | Record entry_map                         ->
+    let make_extraction_pat_for_field field_name deeper = make_extraction_pat @@ Pat.record [(Longident.lident field_name, deeper)] Asttypes.Open in
+    entry_map
+    |> SMap.bindings
+    |> List.map (fun (field_name, value_ref) -> field_name ^ " = " ^ recurse (make_extraction_pat_for_field field_name) !value_ref)
+    |> String.concat "; " |> (fun entries_str -> "{ " ^ entries_str ^ " }")
   | Lz _                                     -> "lazy"
-  | Array values_arr                         -> "[! " ^ (values_arr |> Array.to_list |> List.map recurse |> String.concat "; ") ^ " !]"
+  | Array values_arr                         ->
+    let make_extraction_pat_i i deeper =
+      make_extraction_pat @@
+      Pat.array begin
+        List.init (Array.length values_arr) (fun _ -> Pat.any ())
+        |> List.replace_nth i deeper
+      end
+    in
+    let recurse_i i v = recurse (make_extraction_pat_i i) v in
+    "[! " ^ (values_arr |> Array.to_list |> List.mapi recurse_i |> String.concat "; ") ^ " !]"
   | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
   | Object _                                 -> "object"
   | ExCall _                                 -> "ExCall ShouldntSeeThis"
@@ -207,7 +233,7 @@ let html_of_values_for_loc (trace : Trace.t) assert_results type_env visualizers
       |> Trace.entries_for_loc loc
       |> List.sort_by (fun (_, frame_no, _, _) -> frame_no)
       |> List.map begin fun (_, frame_no, value, env) ->
-        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value assert_results visualizers env type_env value]
+        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value assert_results visualizers env type_env (fun p -> p) value]
       end
     end
 
@@ -349,16 +375,14 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
         List.map (html_of_structure_item trace assert_results type_lookups) structure_items
       ; div ~attrs:[("id", "inspector")]
-        [ h2 ["Type"]
-        ; div ~attrs:[("id", "type-of-selected")] []
+        [ div ~attrs:[("id", "type-of-selected")] []
         ; div ~attrs:[("id", "suggestions-pane")]
           [ h2 ["Suggestions"]
           ; div ~attrs:[("id", "suggestions-for-selected")] []
           ]
-        ; div ~attrs:[("id", "vis-pane")]
-          [ h2 ["Visualize"]
-          ; div ~attrs:[("id", "vises-for-selected")] []
-          ; div ["Custom: "; textbox ~attrs:[("id", "add-vis-textbox")] []]
+        ; div ~attrs:[("id", "exps-pane")]
+          [ textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []
+          ; div ~attrs:[("id", "exps-list")] []
           ]
         ]
       ; button ~attrs:[("id", "synth-button")] ["Synth"]

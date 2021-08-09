@@ -512,7 +512,8 @@ module Pat = struct
   let var name =
     let loc = Loc_.fresh () in
     Ast_helper.Pat.var ~loc { loc = loc; txt = name }
-  let unit = construct (Longident.lident "()") None
+  let construct_unqualified ctor_name arg = construct (Longident.lident ctor_name) arg
+  let unit = construct_unqualified "()" None
 
   let flatten pat = (everything (Pat pat)).pats
 

@@ -9,6 +9,11 @@ body {
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
 }
+input[type=text] {
+  padding: var(--padding);
+  font-size: 16px;
+  font-family: Avenir Next, Avenir, sans-serif;
+}
 
 nav {
   top: 0;
@@ -205,29 +210,53 @@ table.returns {
 #inspector {
   position: fixed;
   border: solid 1px black;
-  padding: var(--padding);
   background-color: white;
   z-index: 2;
 }
 
-#inspector h2 {
+#inspector #type-of-selected {
+  padding: var(--padding);
+  font-weight: bold;
+}
+
+#inspector #exps-textbox {
+  width: 100%;
+  /* border: none; */
+  border: inset 2px lightgray;
+}
+
+/* #inspector h2 {
   margin: var(--padding) 0;
   font-size: 20px;
-  /* color: var(--color); */
-}
+} */
 
 #inspector label,
 #inspector input[type=checkbox] {
   cursor: pointer;
 }
 
-#inspector label {
+
+#inspector .exp-row {
+  padding: var(--padding);
+  border-top: 1px solid gray;
+}
+
+#inspector .exp-row button {
+  float: right;
+  /* margin:var(--padding); */
+}
+#inspector .exp-row label {
+  float: right;
+}
+
+
+/* #inspector label {
   display: inline-block;
   border: solid 1px black;
   border-radius: 1em;
   padding: 0 4px;
   margin: 3px;
-}
+} */
 
 #synth-button {
   font-family: 'SignPainter', 'Brush Script MT', cursive;

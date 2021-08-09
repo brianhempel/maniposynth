@@ -263,6 +263,7 @@ function select(elem) {
   elem.classList.add("selected");
   saveSelection();
   updateInspector();
+  document.getElementById("exps-textbox").focus();
 }
 
 function deselect(elem) {
@@ -322,9 +323,8 @@ function restoreSelection() {
 window.addEventListener('DOMContentLoaded', () => {
 
   function globalEscape() {
-    const transientTextboxes = document.querySelectorAll(".transient-textbox");
-    if (transientTextboxes.length > 0) {
-      transientTextboxes.forEach(abortTextEdit);
+    if (transientTextboxes().length > 0) {
+      transientTextboxes().forEach(abortTextEdit);
     } else {
       deselectAll();
     }
@@ -351,7 +351,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Suggestions ///////////////////
 
-// The Inspector code later also displays suggestions.
+// The Inspector code later also displays filling suggestions.
 
 function elemSuggestions(elem) {
   return elem.dataset.suggestions?.split("  ") || [];
@@ -386,7 +386,7 @@ function containingLoc(elem) {
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
 
-  document.getElementById("add-vis-textbox").addEventListener("keydown", event => {
+  document.getElementById("exps-textbox").addEventListener("keydown", event => {
     let textbox = event.currentTarget;
     if (event.key === "Enter" && textbox.value) {
       const elem = document.querySelector('.selected');
@@ -412,13 +412,43 @@ window.addEventListener('DOMContentLoaded', () => {
 function updateInspector() {
   const inspector              = window.inspector;
   const typeOfSelected         = document.getElementById("type-of-selected");
-  const visesForSelected       = document.getElementById("vises-for-selected");
+  const expsList               = document.getElementById("exps-list");
   const suggestionsForSelected = document.getElementById("suggestions-for-selected");
-  const visPane                = document.getElementById("vis-pane");
+  const expsPane               = document.getElementById("exps-pane");
   const suggestionsPane        = document.getElementById("suggestions-pane");
-  // const addVisTextbox    = document.getElementById("add-vis-textbox");
+  // const addVisTextbox    = document.getElementById("exps-textbox");
 
   const elem = document.querySelector('.selected');
+
+  const makeExpRow = (code, isVised) => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = isVised;
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode("Visualize"));
+    checkbox.addEventListener("change", ev => {
+      const loc = containingLoc(elem);
+      if (checkbox.checked) {
+        addVis(loc, code);
+      } else {
+        removeVis(loc, code);
+      }
+    });
+
+    const row = document.createElement("div");
+    row.classList.add("exp-row");
+    row.appendChild(document.createTextNode(code));
+    row.appendChild(label);
+    const addButton = document.createElement("button");
+    addButton.innerText = "Add"
+    addButton.addEventListener("click", ev => {
+      const checkbox = ev.target;
+      insertCode(code + "TODO")
+    });
+    row.appendChild(addButton);
+    return row;
+  }
 
   const makeCheck = (vis, isChecked) => {
     const label = document.createElement("label");
@@ -440,7 +470,7 @@ function updateInspector() {
     return label;
   }
 
-  if (elem) {
+  if (elem && transientTextboxes().length === 0) {
     const rect = elem.getBoundingClientRect();
     const viewWidth =
     inspector.style.width = 280;
@@ -456,7 +486,7 @@ function updateInspector() {
     const typeStr = elem.dataset.type || "Unknown";
     typeOfSelected.innerHTML = "";
     suggestionsForSelected.innerHTML = "";
-    visesForSelected.innerHTML = "";
+    expsList.innerHTML = "";
     typeOfSelected.appendChild(document.createTextNode(typeStr));
     const suggestions = elemSuggestions(elem);
     if (suggestions.length > 0) {
@@ -473,17 +503,17 @@ function updateInspector() {
       hide(suggestionsPane);
     }
     if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
-      show(visPane);
+      show(expsPane);
       const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
       const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
-      activeVises.forEach(vis => visesForSelected.appendChild(makeCheck(vis, true)));
+      activeVises.forEach(vis => expsList.appendChild(makeExpRow(vis, true)));
       possibleVises.forEach(vis => {
         if (!activeVises.includes(vis)) {
-          visesForSelected.appendChild(makeCheck(vis, false));
+          expsList.appendChild(makeExpRow(vis, false));
         }
       });
     } else {
-      hide(visPane);
+      hide(expsPane);
     }
   } else {
     hide(inspector);
@@ -504,6 +534,11 @@ function show(originalElem) {
 function abortTextEdit(textbox) {
   if (textbox.originalElem) { show(textbox.originalElem) };
   textbox.remove();
+  updateInspector();
+}
+
+function transientTextboxes() {
+  return document.querySelectorAll(".transient-textbox");
 }
 
 function beginEditCallback(editType) {
@@ -521,6 +556,7 @@ function beginEditCallback(editType) {
     originalElem.insertAdjacentElement("afterend", input);
     hide(originalElem);
     // input.focus();
+    updateInspector();
     input.select();
 
     input.addEventListener('keydown', event => {
@@ -607,6 +643,8 @@ function gratuitousLamdas(event) {
     particle.classList.add("gratuitous-lambda");
     particle.style.color = `rgb(${Math.floor(256*Math.random())},${Math.floor(256*Math.random())},${Math.floor(256*Math.random())})`;
     particle.innerText = "λ";
+    particle.style.left = 0;
+    particle.style.top = 0;
     const vx = 20 * (Math.random() - 0.5) * 60;
     let   vy = 20 * -Math.random() * 60;
     const vr = 20 * (Math.random() - 0.5) * 60;
