@@ -27,21 +27,21 @@ function doAction(action, reload) {
   request.send(JSON.stringify(action));
 }
 
-function dropValueIntoVbs(loc, vtrace) {
-  doAction([
-    "DropValueIntoVbs",
-    loc,
-    vtrace
-  ]);
-}
+// function dropValueIntoVbs(loc, vtrace) {
+//   doAction([
+//     "DropValueIntoVbs",
+//     loc,
+//     vtrace
+//   ]);
+// }
 
-function dropValueIntoExp(loc, vtrace) {
-  doAction([
-    "DropValueIntoExp",
-    loc,
-    vtrace
-  ]);
-}
+// function dropValueIntoExp(loc, vtrace) {
+//   doAction([
+//     "DropValueIntoExp",
+//     loc,
+//     vtrace
+//   ]);
+// }
 
 function addVis(loc, vis) {
   doAction([
@@ -59,9 +59,9 @@ function removeVis(loc, vis) {
   ]);
 }
 
-function editLoc(loc, code) {
+function replaceLoc(loc, code) {
   doAction([
-    "EditLoc",
+    "ReplaceLoc",
     loc,
     code
   ]);
@@ -101,9 +101,10 @@ function redo() {
   ]);
 }
 
-function insertCode(code) {
+function insertCode(loc, code) {
   doAction([
     "InsertCode",
+    loc,
     code
   ]);
 }
@@ -183,7 +184,8 @@ function draggableUnhover(event) {
 // When drag starts, store information.
 function dragstart(event) {
   let node = event.currentTarget;
-  if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
+  // if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
+  if (node.dataset.extractionCode) { event.dataTransfer.setData("application/extractionCode", node.dataset.extractionCode); }
   // if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
   event.stopImmediatePropagation();
@@ -224,12 +226,17 @@ function dragleave(event) {
 function drop(event) {
   event.preventDefault();
   let dropTarget      = event.currentTarget;
-  let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
-  console.log(dropTarget, droppedVTrace);
-  if (dropTarget.classList.contains("vbs") && droppedVTrace) {
-    dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
-  } else if (dropTarget.classList.contains("exp") && droppedVTrace) {
-    dropValueIntoExp(dropTarget.dataset.inPlaceEditLoc, droppedVTrace);
+  // let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
+  let droppedExtractionCode = event.dataTransfer.getData("application/extractionCode");
+  // console.log(dropTarget, droppedVTrace);
+  // if (dropTarget.classList.contains("vbs") && droppedVTrace) {
+  //   dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
+  // } else if (dropTarget.classList.contains("exp") && droppedVTrace) {
+  //   dropValueIntoExp(dropTarget.dataset.inPlaceEditLoc, droppedVTrace);
+  if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
+    insertCode(dropTarget.dataset.loc, droppedExtractionCode);
+  } else if (dropTarget.classList.contains("exp") && droppedExtractionCode) {
+    replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
   } else {
     console.warn("No valid actions for drop on ", dropTarget);
   }
@@ -239,7 +246,8 @@ function drop(event) {
 window.addEventListener('DOMContentLoaded', () => {
 
   // Make appropriate items draggable.
-  document.querySelectorAll('[data-vtrace]').forEach(elem => {
+  // document.querySelectorAll('[data-vtrace]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]').forEach(elem => {
     // console.log(elem);
     elem.draggable = true;
     elem.addEventListener("dragstart", dragstart);
@@ -259,6 +267,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 //////////////// Selection /////////////////////////////////
 
+function selectedElems() {
+  return document.querySelectorAll('.selected');
+}
+
 function select(elem) {
   elem.classList.add("selected");
   saveSelection();
@@ -273,7 +285,7 @@ function deselect(elem) {
 }
 
 function deselectAll() {
-  document.querySelectorAll('.selected').forEach(deselect);
+  selectedElems().forEach(deselect);
 }
 
 // Selectable element clicked...
@@ -334,7 +346,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-vtrace],.vb,.exp').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code],.vb,.exp[data-in-place-edit-loc]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", toggleSelect);
   });
@@ -358,7 +370,7 @@ function elemSuggestions(elem) {
 }
 
 function useSuggestionNumber(elem, i) {
-  editLoc(elem.dataset.inPlaceEditLoc, elemSuggestions(elem)[i-1]);
+  replaceLoc(elem.dataset.inPlaceEditLoc, elemSuggestions(elem)[i-1]);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -389,7 +401,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById("exps-textbox").addEventListener("keydown", event => {
     let textbox = event.currentTarget;
     if (event.key === "Enter" && textbox.value) {
-      const elem = document.querySelector('.selected');
+      const elem = selectedElems()[0];
       if (elem) {
         const vis = textbox.value;
         addVis(containingLoc(elem), vis);
@@ -418,9 +430,9 @@ function updateInspector() {
   const suggestionsPane        = document.getElementById("suggestions-pane");
   // const addVisTextbox    = document.getElementById("exps-textbox");
 
-  const elem = document.querySelector('.selected');
+  const elem = selectedElems()[0];
 
-  const makeExpRow = (code, isVised) => {
+  const makeExpRow = (vis, isVised) => {
     const label = document.createElement("label");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -430,21 +442,22 @@ function updateInspector() {
     checkbox.addEventListener("change", ev => {
       const loc = containingLoc(elem);
       if (checkbox.checked) {
-        addVis(loc, code);
+        addVis(loc, vis);
       } else {
-        removeVis(loc, code);
+        removeVis(loc, vis);
       }
     });
 
     const row = document.createElement("div");
     row.classList.add("exp-row");
-    row.appendChild(document.createTextNode(code));
+    row.appendChild(document.createTextNode(vis));
     row.appendChild(label);
     const addButton = document.createElement("button");
     addButton.innerText = "Add"
     addButton.addEventListener("click", ev => {
-      const checkbox = ev.target;
-      insertCode(code + "TODO")
+      const vbsHolder = vbsHolderForInsert(elem);
+      const code = `${vis} (${elem.dataset.extractionCode})`;
+      insertCode(vbsHolder.dataset.loc, code);
     });
     row.appendChild(addButton);
     return row;
@@ -564,7 +577,7 @@ function beginEditCallback(editType) {
       if (event.key === "Enter") {
         if (editType === "in-place") {
           if (input.value.length > 0) {
-            editLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+            replaceLoc(originalElem.dataset.inPlaceEditLoc, input.value);
           } else {
             deleteLoc(originalElem.dataset.inPlaceEditLoc);
           }
@@ -583,24 +596,26 @@ function beginEditCallback(editType) {
   }
 }
 
-function beginNewCodeEdit(vbs_holder) {
+function beginNewCodeEdit(vbsHolder) {
   return function (event) {
-    if (event.target !== vbs_holder) { return; }
+    if (event.target !== vbsHolder) { return; }
     event.stopImmediatePropagation();
     const input = document.createElement("input");
     input.type = "text";
     input.classList.add("transient-textbox");
     input.style.position = "absolute";
-    const { dx, dy } = topLeftOffsetFromMouse(vbs_holder, event)
+    const { dx, dy } = topLeftOffsetFromMouse(vbsHolder, event)
     input.style.left = `${-dx - 5}px`;
     input.style.top  = `${-dy - 10}px`;
-    vbs_holder.appendChild(input);
+    vbsHolder.appendChild(input);
     input.select();
 
     input.addEventListener('keydown', event => {
       // console.log(event.key);
       if (event.key === "Enter") {
-        if (input.value.length > 0) { insertCode(input.value); }
+        if (input.value.length > 0) {
+          insertCode(vbsHolder.dataset.loc, input.value);
+        }
       } else if (event.key === "Esc" || event.key === "Escape") {
         abortTextEdit(input);
       }
@@ -693,10 +708,22 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Topbar Tools ///////////////////
 
+function vbsHolderForInsert(elem) {
+  let scopeElem = elem.closest(".vbs, .exp.fun");
+  if (scopeElem.classList.contains("vbs")) {
+    return scopeElem;
+  } else {
+    return scopeElem.querySelector(".vbs");
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll("[data-insert-code]").forEach(elem => {
     elem.addEventListener("click", _ => {
-      insertCode(elem.dataset.insertCode);
+      const selected = selectedElems()[0] || document.querySelector(".top-level");
+      console.log(selected);
+      console.log(vbsHolderForInsert(selected));
+      insertCode(vbsHolderForInsert(selected).dataset.loc, elem.dataset.insertCode);
     });
   });
 });
@@ -862,6 +889,44 @@ window.addEventListener('DOMContentLoaded', () => {
   resizeVbHolders(document);
 });
 
+
+
+/////////////////// What Am I ///////////////////
+
+// // Self is first, root is last.
+// // Based on https://developer.mozilla.org/en-US/docs/Web/API/Element/closest#polyfill
+// function selfAndParents(elem) {
+//   const out = [];
+//   while (elem !== null && elem.nodeType === 1) {
+//     out.push(elem);
+//     elem = elem.parentElement || elem.parentNode;
+//   }
+//   return out;
+// }
+
+// // .exp .vb and .pat are littered around the HTML
+// // Messy because Maniposynth's canvas is deliberately not 1-to-1 with the code.
+// // An invariant: A .vb elem is always a child of a .vbs, and all .vbs immediat children are a .vb (no exceptions)
+// function isInPatternPosition(elem) {
+//   for (const el of selfAndParents(elem)) {
+//     if (el.classList.contains("pat")) {
+//       return true;
+//     } else if (el.classList.contains("vb")) {
+//       return false;
+//     } else if (el.classList.contains("exp")) {
+//       return false;
+//     }
+//   }
+//   return false;
+// }
+
+// function containingVb(elem) {
+//   return elem.closest(".vb");
+// }
+
+// function childVbsHolder(elem) {
+
+// }
 
 
 /////////////////// Frame Number Handling ///////////////////

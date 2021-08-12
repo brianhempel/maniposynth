@@ -123,7 +123,8 @@ let handle_connection in_chan out_chan =
         let action = Action.t_of_yojson action_yojson in
         let path = String.drop_prefix url 1 in
         let parsed = Camlboot_interpreter.Interp.parse path in
-        let parsed' = Action.f path action parsed in
+        let (_, _, final_tenv) = Typing.typedtree_sig_env_of_parsed parsed path in
+        let parsed' = Action.f path final_tenv action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
         if parsed <> parsed' then Pretty_code.output_code parsed' path; (* This was overwriting synth results! :o *)
         respond ~content_type:"text/plain" out_chan "Done."

@@ -13,6 +13,12 @@ let (||&) opt default = match opt with Some x -> x | _ -> default
 (* Rightward compose default for Option *)
 let (%||&) f default = fun x -> match f x with Some x -> x | _ -> default
 
+(* Lazy default *)
+let (||&~) opt default_f = match opt with Some x -> x | _ -> default_f ()
+(* Rightward compose lazy default for Option *)
+let (%||&~) f default_f = fun x -> match f x with Some x -> x | _ -> default_f ()
+
+
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
   let map f = function Some x -> Some (f x) | None -> None
@@ -99,11 +105,12 @@ module List = struct
   (* This preserves order. *)
   let dedup list =
     let rec dedup_ out = function
-    | [] -> rev out
-    | x::rest ->
-      if List.mem x out
-      then dedup_ out rest
-      else dedup_ (x :: out) rest in
+      | [] -> rev out
+      | x::rest ->
+        if List.mem x out
+        then dedup_ out rest
+        else dedup_ (x :: out) rest
+    in
     dedup_ [] list
 
   let sort_by f list =
@@ -111,6 +118,29 @@ module List = struct
     |> map (fun elem -> (f elem, elem))
     |> sort (fun (a, _) (b, _) -> compare a b)
     |> map snd
+
+  (* returns (stuff, replacement_func) option *)
+  (* replacement_func takes a list to insert at the extraction location *)
+  let extractmap_opt f list =
+    let rec loop before_rev = function
+      | [] -> None
+      | x::rest ->
+        begin match f x with
+        | Some stuff -> Some (stuff, fun sublist -> List.rev before_rev @ sublist @ rest)
+        | None -> loop (x::before_rev) rest
+        end
+    in
+    loop [] list
+
+  (* returns (elem, replacement_func) option *)
+  (* replacement_func takes a list to insert at the extraction location *)
+  let extract_by_opt pred list =
+    extractmap_opt (fun x -> if pred x then Some x else None) list
+
+  (* returns (elem, replacement_func) option *)
+  (* replacement_func takes a list to insert at the extraction location *)
+  let extract_opt target list =
+    extract_by_opt ((=) target) list
 end
 
 module Seq = struct

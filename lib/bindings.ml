@@ -495,9 +495,146 @@ and add_missing_bindings_exp defined_names exp =
   | Pmod_apply (m1, m2)                        -> { modl with pmod_desc = Pmod_apply (recurse m1, recurse m2) }
 
 
-let fixup prog =
+
+(* Naive extraction produces e.g. `f (match x with y -> y)` *)
+(* Turn that into `match x with y -> f y` *)
+let move_matches_outside prog =
+  let rec move exp =
+    let ret match_exp scrutinee cases make_branch_desc =
+      let cases' = cases |>@ Case.map_rhs (fun branch -> move { exp with pexp_desc = make_branch_desc branch }) in
+      { match_exp with pexp_desc = Pexp_match (scrutinee, cases') }
+    in
+    match exp.pexp_desc with
+    (* let x = match y with p -> e1 in e2 *)
+    (* Single case in match means means match was just inserted and should be moved. *)
+    | Pexp_let (recflag, [{ pvb_expr = { pexp_desc = Pexp_match (scrutinee, ([_] as cases)); _ } as match_exp; _} as vb], body) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_let (recflag, [{ vb with pvb_expr = branch }], body))
+    (* match in function position *)
+    | Pexp_apply ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp, args) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_apply (branch, args))
+    (* match in an arg position *)
+    | Pexp_apply (fexp, args) ->
+      args
+      |> List.extractmap_opt begin fun (arg_label, arg_exp) ->
+        begin match arg_exp.pexp_desc with
+        | Pexp_match (scrutinee, cases) -> Some (arg_label, arg_exp, scrutinee, cases)
+        | _                             -> None
+        end
+      end
+      |>& begin fun ((arg_label, match_exp, scrutinee, cases), remake_args) ->
+        ret match_exp scrutinee cases (fun branch -> Pexp_apply (fexp, remake_args [(arg_label, branch)]))
+      end
+      ||& exp
+    (* match in scrutinee postion...this is common because it's how we represent subvalue extractions in the HTML *)
+    | Pexp_match ({ pexp_desc = Pexp_match (scrutinee, ([_] as cases)); _ } as match_exp, cases2) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_match (branch, cases2))
+    | Pexp_tuple elems ->
+      elems
+      |> List.extractmap_opt begin fun elem ->
+        begin match elem.pexp_desc with
+        | Pexp_match (scrutinee, cases) -> Some (elem, scrutinee, cases)
+        | _ -> None
+        end
+      end
+      |>& begin fun ((match_exp, scrutinee, cases), remake_elems) ->
+        ret match_exp scrutinee cases (fun branch -> Pexp_tuple (remake_elems [branch]))
+      end
+      ||& exp
+    | Pexp_array elems ->
+      elems
+      |> List.extractmap_opt begin fun elem ->
+        begin match elem.pexp_desc with
+        | Pexp_match (scrutinee, cases) -> Some (elem, scrutinee, cases)
+        | _ -> None
+        end
+      end
+      |>& begin fun ((match_exp, scrutinee, cases), remake_elems) ->
+        ret match_exp scrutinee cases (fun branch -> Pexp_array (remake_elems [branch]))
+      end
+      ||& exp
+    | Pexp_construct (lid_loced, Some ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp)) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_construct (lid_loced, Some branch))
+    | Pexp_variant (str, Some ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp)) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_variant (str, Some branch))
+    (* in base position *)
+    | Pexp_record (fields, Some ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp)) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_record (fields, Some branch))
+    (* in field position *)
+    | Pexp_record (fields, base_opt) ->
+      fields
+      |> List.extractmap_opt begin fun (lid_loced, field_exp) ->
+        begin match field_exp.pexp_desc with
+        | Pexp_match (scrutinee, cases) -> Some (lid_loced, field_exp, scrutinee, cases)
+        | _                             -> None
+        end
+      end
+      |>& begin fun ((lid_loced, match_exp, scrutinee, cases), remake_fields) ->
+        ret match_exp scrutinee cases (fun branch -> Pexp_record (remake_fields [(lid_loced, branch)], base_opt))
+      end
+      ||& exp
+    | Pexp_field ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp, lid_loced) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_field (branch, lid_loced))
+    (* on lhs *)
+    | Pexp_setfield ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp, lid_loced, rhs) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_setfield (branch, lid_loced, rhs))
+    (* on rhs *)
+    | Pexp_setfield (lhs, lid_loced, ({ pexp_desc = Pexp_match (scrutinee, cases); _ } as match_exp)) ->
+      ret match_exp scrutinee cases (fun branch -> Pexp_setfield (lhs, lid_loced, branch))
+    | _ -> exp
+  in
+  prog
+  |> Exp.map move
+
+(* Need final tenv to know what constructors exist *)
+let add_missing_cases final_tenv prog =
+  let avoid_names = StructItems.deep_names prog in
+  (* At this point, the program may not type b/c of missing bindings or missing cases. *)
+  (* So, best effort. *)
+  prog
+  |> Exp.map begin fun exp ->
+    match exp.pexp_desc with
+    (* first pattern is a ctor *)
+    | Pexp_match (scrutinee, (({ pc_lhs = { ppat_desc = Ppat_construct ({ txt = Longident.Lident ctor_name; _ }, _); _}; _}::_) as existing_cases)) ->
+      let all_ctor_cases = Case_gen.gen_ctor_cases_from_ctor_name ~avoid_names ctor_name final_tenv in
+      (* Conservative, may generate unreachable cases. *)
+      let needed_cases =
+        (* Is there a catchall? *)
+        if List.exists (fun case -> Pat.is_catchall case.pc_lhs && case.pc_guard = None) existing_cases then [] else
+        all_ctor_cases
+        |>@? begin fun new_case ->
+          (* Keep cases that do not appear in existing_cases *)
+          match Pat.ctor_lid_loced new_case.pc_lhs with
+          | Some { txt = ctor_lid; _ } ->
+            not @@ List.exists begin fun existing_case ->
+              existing_case.pc_guard = None &&
+              match existing_case.pc_lhs.ppat_desc with
+              (* C         *)
+              | Ppat_construct ({ txt = ctor_lid'; _}, None)                                    when ctor_lid = ctor_lid'                                      -> true
+              (* C x       *)
+              | Ppat_construct ({ txt = ctor_lid'; _}, Some pat)                                when ctor_lid = ctor_lid' && Pat.is_catchall pat               -> true
+              (* C (x,y,z) *)
+              | Ppat_construct ({ txt = ctor_lid'; _}, Some { ppat_desc = Ppat_tuple pats; _ }) when ctor_lid = ctor_lid' && List.for_all Pat.is_catchall pats -> true
+              | _                                                                                                                                              -> false
+            end existing_cases
+          | None -> failwith "unreachable"
+        end
+      in
+      { exp with pexp_desc = Pexp_match (scrutinee, existing_cases @ needed_cases) }
+    | _ ->
+      exp
+  end
+
+let fixup_matches final_tenv prog =
+  prog
+  |> move_matches_outside
+  |> add_missing_cases final_tenv
+  (* |> consolidate_cases *)
+
+(* Need final tenv to know what constructors exist *)
+let fixup final_tenv prog =
   let defined_names = SSet.elements Name.pervasives_names in
   prog
+  |> fixup_matches final_tenv
   |> rearrange_struct_items defined_names
   |> add_missing_bindings_struct_items defined_names
 
@@ -507,10 +644,10 @@ let fixup prog =
 
 (* Pats_in_scope_* assumes a fixup happens. *)
 
-exception Found of pattern list
+(* exception Found of pattern list *)
 
 (* Does *not* include patterns outside the program *)
-let rec pats_in_scope_struct loc pats struct_items =
+(* let rec pats_in_scope_struct loc pats struct_items =
   let pats =
     (struct_items |>@& StructItem.vbs_opt |> List.concat |>@ Vb.pat |>@@ Pat.flatten)
     @ pats
@@ -612,13 +749,13 @@ and pats_in_scope_mod loc pats modl =
   | Pmod_constraint (mod_exp, _mod_type)         -> pats_in_scope_mod loc pats mod_exp
   | Pmod_functor (_name, _mod_type_opt, mod_exp) -> pats_in_scope_mod loc pats mod_exp
   | Pmod_apply (m1, m2)                          -> pats_in_scope_mod loc pats m1; pats_in_scope_mod loc pats m2
-
+ *)
 
 
 (* Checks locs of struct_items, vbs, and exps. (Not pats). *)
-let pats_in_scope_at loc prog =
+(* let pats_in_scope_at loc prog =
   try pats_in_scope_struct loc [] prog; failwith @@ "pats_in_scope_at: Could not find loc " ^ Loc.to_string loc
-  with Found pats -> pats
+  with Found pats -> pats *)
 
 
 (* let _ =

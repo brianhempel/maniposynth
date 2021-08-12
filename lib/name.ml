@@ -49,8 +49,8 @@ let rec from_val ?(type_env = Typing.initial_env) v =
   | ExCall _                      -> "var"
   | ExDontCare                    -> "var"
 
-let gen ?(avoid = []) ?(base_name = "var") prog =
-  let avoid = avoid @ StructItems.names prog in
+
+let gen_ ~avoid ~base_name =
   let n     = ref 2 in
   let name  = ref base_name in
   while List.mem !name avoid || SSet.mem !name pervasives_names  do
@@ -58,6 +58,10 @@ let gen ?(avoid = []) ?(base_name = "var") prog =
     incr n
   done;
   !name
+
+let gen ?(avoid = []) ?(base_name = "var") prog =
+  let avoid = avoid @ StructItems.deep_names prog in
+  gen_ ~avoid ~base_name
 
 let gen_from_exp ?(avoid = []) ?type_env exp prog =
   let type_env =

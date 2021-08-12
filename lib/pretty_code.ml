@@ -7,5 +7,7 @@ let output_code parsed path =
     let out_chan = open_out path in
     output_string out_chan code;
     close_out out_chan;
-    ignore @@ Unix.system @@ "ocamlformat --inplace --enable-outside-detected-project '" ^ path ^ "'"
+    ignore @@ Unix.system @@ "ocamlformat --inplace --enable-outside-detected-project '" ^ path ^ "'";
+    (* Turn ( ?? ) in (??) *)
+    ignore @@ Unix.system @@ "ruby -e \"File.write(ARGV[0], File.read(ARGV[0]).gsub(/\\(\\s*\\?\\?\\s*\\)/m, '(??)'))\" '" ^ path ^ "'"
   end

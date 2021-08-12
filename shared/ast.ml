@@ -470,6 +470,7 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_construct (lid_loced, _) -> Some lid_loced
     | _                             -> None
+  let everything exp = everything (Exp exp)
 
   let is_unit exp =
     match ctor_lid_loced exp with
@@ -488,7 +489,6 @@ module Exp = struct
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
     mapper.expr mapper exp
-
 end
 
 module Pat = struct
@@ -544,6 +544,11 @@ module Pat = struct
     match ctor_lid_loced pat with
     | Some { txt = Longident.Lident "()"; _ } -> true
     | _                                       -> false
+  let is_catchall pat =
+    match pat.ppat_desc with
+    | Ppat_var _ -> true
+    | Ppat_any   -> true
+    | _          -> false
   let is_name        = name_loced %> (<>) None
   let is_single_name = single_name %> (<>) None
 
@@ -551,19 +556,25 @@ module Pat = struct
   let names_loced     = flatten %>@& name_loced
   let names           = names_loced %>@ Loc_.txt
   let ctor_lids_loced = flatten %>@& ctor_lid_loced
+  let everything pat = everything (Pat pat)
 end
 
 
 module Case = struct
   type t = case
 
-  let rhs       { pc_rhs;   _ } = pc_rhs
   let lhs       { pc_lhs;   _ } = pc_lhs
   let pat       { pc_lhs;   _ } = pc_lhs
   let guard_opt { pc_guard; _ } = pc_guard
+  let rhs       { pc_rhs;   _ } = pc_rhs
 
   let names_loced     = pat %> Pat.names_loced
   let names           = names_loced %>@ Loc_.txt
+
+  let map_lhs   f case = { case with pc_lhs = f case.pc_lhs }
+  let map_pat          = map_lhs
+  let map_guard f case = { case with pc_guard = Option.map f case.pc_guard }
+  let map_rhs   f case = { case with pc_rhs = f case.pc_rhs }
 end
 
 
@@ -624,6 +635,8 @@ module Vb = struct
       | Ppat_open (_, _) -> (??)
     in
     bind vb.pvb_pat vb.pvb_expr *)
+
+  let everything vb = everything (Vb vb)
 end
 
 module VbGroups = struct
@@ -762,9 +775,9 @@ module StructItems = struct
 
   (* Variable names introduced or used. Excludes ctors. *)
   (* Includes endings of qualified names, e.g. "x" in Thing.x *)
-  let names prog =
-    let everything = everything (Sis prog) in
-    let pat_names = everything.pats |>@& Pat.name_loced |>@ Loc_.txt in
+  let deep_names prog =
+    let everything  = everything (Sis prog) in
+    let pat_names   = everything.pats |>@& Pat.name_loced |>@ Loc_.txt in
     let ident_names = everything.exps |>@& Exp.ident_lid |>@ Longident.last in
     pat_names @ ident_names
 
@@ -772,6 +785,12 @@ module StructItems = struct
     let map_sis mapper sis = f (dflt_mapper.structure mapper sis) in
     let mapper = { dflt_mapper with structure = map_sis } in
     mapper.structure mapper struct_items
+
+  (* Will search the loc of all items in a struct_items list, hand that si to f, and replace the si with the list of sis returned by f...to thereby effect removes and deletions *)
+  let concat_map            f prog = map (fun sis -> sis |>@@ f) prog
+  let concat_map_by pred    f prog = concat_map (fun si -> if pred si then f si else [si]) prog
+  let concat_map_by_loc loc f prog = concat_map_by (StructItem.loc %> (=) loc) f prog
+
 end
 
 

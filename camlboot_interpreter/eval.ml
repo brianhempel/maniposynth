@@ -345,7 +345,10 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_tuple l ->
     let args = List.map (eval_expr fillings prims env lookup_exp_typed trace_state frame_no) l in
     intro @@ new_vtrace @@ Tuple args
-  | Pexp_match (e, cl) -> ret @@ eval_match fillings prims env lookup_exp_typed trace_state frame_no cl (eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no e)
+  | Pexp_match (e, cl) -> ret @@
+    begin try eval_match fillings prims env lookup_exp_typed trace_state frame_no cl (eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no e)
+    with Match_fail | BombExn -> intro_bomb ()
+    end
   | Pexp_coerce (e, _, _) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
   | Pexp_constraint (e, _) -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no e
   | Pexp_sequence (e1, e2) ->
@@ -671,7 +674,8 @@ and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v
       (* What the heck is this *)
       let tupv = intro @@ new_vtrace @@ Tuple [ fmt; v ] in
       pattern_bind fillings prims env lookup_exp_typed trace_state frame_no tupv [] p tupv
-    | Bomb ->
+    | Bomb
+    | Hole _ ->
       raise BombExn
     | _ ->
       (* Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v; *)

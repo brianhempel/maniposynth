@@ -133,12 +133,12 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
             matching_asserts
             |>@ begin fun Data.{ expected; expected_exp; _} ->
               span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
-                [html_of_value [] [] Envir.empty_env Env.empty (fun p -> p) expected]
+                [html_of_value [] [] Envir.empty_env Env.empty [] None expected]
             end in
           let code_to_assert_on = Exp.apply exp [(Nolabel, exp_of_value value)] |> Exp.to_string in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
-              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty (fun p -> p) result_value]
+              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty [] None result_value]
           ]
         end else
           []
@@ -149,8 +149,8 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value ?code_to_assert_on assert_results visualizers env type_env (make_extraction_pat : pattern -> pattern) ({ v_ = value_; _} as value : Data.value) =
-  let recurse = html_of_value assert_results visualizers env type_env in
+and html_of_value ?code_to_assert_on assert_results visualizers env type_env names_in_prog (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+  let recurse = html_of_value assert_results visualizers env type_env names_in_prog in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
@@ -160,11 +160,16 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env (ma
   let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let wrap_value str =
+    let perhaps_extraction_code =
+      extraction_exp_opt |>& begin fun extraction_exp ->
+        ("data-extraction-code", Exp.to_string extraction_exp)
+      end |> Option.to_list
+    in
     span
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
         [("data-possible-vises", String.concat "  " possible_vises)] @
-        [("data-extraction-pat", Pat.to_string @@ make_extraction_pat (Pat.var "v"))] @
+        perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
         [("class", "value"); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
@@ -184,48 +189,103 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env (ma
   | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
   | Tuple values                             ->
-    let make_extraction_pat_i i deeper =
-      make_extraction_pat @@
-      Pat.tuple begin
-        List.init (List.length values) (fun _ -> Pat.any ())
-        |> List.replace_nth i deeper
+    let make_extraction_exp_i i =
+      extraction_exp_opt |>& begin fun extraction_exp ->
+        let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+        Exp.match_ extraction_exp [
+          let value = List.nth values i in
+          let name = Name.gen_ ~avoid:(prior_extraction_names @ names_in_prog) ~base_name:(Name.from_val ~type_env value) in
+          let pat =
+            Pat.tuple @@ List.init (List.length values) (fun i' -> if i = i' then Pat.var name else Pat.any ())
+          in
+          Exp.case pat (Exp.var name)
+        ]
       end
     in
-    let recurse_i i v = recurse (make_extraction_pat_i i) v in
+    let recurse_i i v = recurse (make_extraction_exp_i i) v in
     "(" ^ String.concat ", " (List.mapi recurse_i values) ^ ")"
-  | Constructor (ctor_name, _, None)         -> ctor_name
-  | Constructor (ctor_name, _, Some arg_val) ->
-    let ctor_pat_name = if ctor_name = "::" then "(::)" else ctor_name in (* otherwise Pat.to_string loops forever *)
-    ctor_name ^ " " ^ recurse (fun deeper -> make_extraction_pat @@ Pat.construct_unqualified ctor_pat_name (Some deeper)) arg_val
+  | Constructor (ctor_name, _, None)     -> ctor_name
+  | Constructor (ctor_name, _, Some arg) ->
+    extraction_exp_opt |>&& begin fun extraction_exp ->
+      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+      Case_gen.gen_ctor_cases_from_ctor_name ~avoid_names:(prior_extraction_names @ names_in_prog) ctor_name type_env
+      |> List.findmap_opt begin fun case ->
+        match case.pc_lhs.ppat_desc with
+        | Ppat_construct ({ txt = Longident.Lident pat_ctor_name; _}, Some arg_pat) when pat_ctor_name = ctor_name ->
+          Some (case.pc_lhs, arg_pat)
+        | _ -> None
+      end
+      |>& begin fun (pat, arg_pat) ->
+        (* let ctor_pat_name = if ctor_name = "::" then "(::)" else ctor_name in (* otherwise Pat.to_string loops forever *) *)
+        match (arg_pat.ppat_desc, arg.v_) with
+        (* Multi arg ctor *)
+        | Ppat_tuple arg_pats, Tuple vs ->
+          let arg_children =
+            List.map2 begin fun arg_pat v ->
+              Pat.single_name arg_pat
+              |>& begin fun name ->
+                recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+            end
+              ||&~ (fun () -> recurse None v)
+            end arg_pats vs
+          in
+          ctor_name ^ " (" ^ String.concat ", " arg_children ^ ")"
+        (* Single arg ctor, should also be a var with our current case generator *)
+        | Ppat_var { txt = name; _ }, _ ->
+          ctor_name ^ " " ^ recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) arg
+        | _ ->
+          failwith "a;lsdkvoabviavwassvd why oh why"
+      end
+    end
+    ||&~ (fun () -> ctor_name ^ " " ^ recurse None arg)
   | Prim _                                   -> "prim"
   | Fexpr _                                  -> "fexpr"
   | ModVal _                                 -> "modval"
   | InChannel _                              -> "inchannel"
   | OutChannel _                             -> "outchannel"
   | Record entry_map                         ->
-    let make_extraction_pat_for_field field_name deeper = make_extraction_pat @@ Pat.record [(Longident.lident field_name, deeper)] Asttypes.Open in
     entry_map
     |> SMap.bindings
-    |> List.map (fun (field_name, value_ref) -> field_name ^ " = " ^ recurse (make_extraction_pat_for_field field_name) !value_ref)
-    |> String.concat "; " |> (fun entries_str -> "{ " ^ entries_str ^ " }")
+    |> List.map begin fun (field_name, value_ref) ->
+      let field_extraction_exp_opt =
+        extraction_exp_opt |>& begin fun extraction_exp ->
+          let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+          let name = Name.gen_ ~avoid:(prior_extraction_names @ names_in_prog) ~base_name:field_name in
+          Exp.match_ extraction_exp [Exp.case (Pat.record [(Longident.lident field_name, Pat.var name)] Asttypes.Open) (Exp.var name)]
+        end
+      in
+      field_name ^ " = " ^ recurse field_extraction_exp_opt !value_ref
+    end
+    |> String.concat "; "
+    |> (fun entries_str -> "{ " ^ entries_str ^ " }")
   | Lz _                                     -> "lazy"
   | Array values_arr                         ->
-    let make_extraction_pat_i i deeper =
-      make_extraction_pat @@
-      Pat.array begin
-        List.init (Array.length values_arr) (fun _ -> Pat.any ())
-        |> List.replace_nth i deeper
-      end
-    in
-    let recurse_i i v = recurse (make_extraction_pat_i i) v in
-    "[! " ^ (values_arr |> Array.to_list |> List.mapi recurse_i |> String.concat "; ") ^ " !]"
+    let vs = Array.to_list values_arr in
+    extraction_exp_opt |>& begin fun extraction_exp ->
+      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+      let child_pat_names =
+        vs
+        |> List.fold_left begin fun names v ->
+          let name = Name.gen_ ~avoid:(names @ prior_extraction_names @ names_in_prog) ~base_name:(Name.from_val ~type_env v) in
+          names @ [name]
+        end []
+      in
+      let pat = Pat.tuple (child_pat_names |>@ Pat.var) in
+      let children =
+        List.map2 begin fun name v ->
+          recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+        end child_pat_names vs
+      in
+      "[! " ^  String.concat "; " children ^ " !]"
+    end
+    ||&~ (fun () -> "[! " ^ (vs |>@ recurse None |> String.concat "; ") ^ " !]" )
   | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
   | Object _                                 -> "object"
   | ExCall _                                 -> "ExCall ShouldntSeeThis"
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc (trace : Trace.t) assert_results type_env visualizers loc =
+let html_of_values_for_loc (trace : Trace.t) assert_results type_env names_in_prog root_exp_opt visualizers loc =
   div
     ~attrs:[ ("data-loc", Serialize.string_of_loc loc) ] (* View root for visualizers, also for determining where to place new asserts before *)
     begin
@@ -233,19 +293,20 @@ let html_of_values_for_loc (trace : Trace.t) assert_results type_env visualizers
       |> Trace.entries_for_loc loc
       |> List.sort_by (fun (_, frame_no, _, _) -> frame_no)
       |> List.map begin fun (_, frame_no, value, env) ->
-        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value assert_results visualizers env type_env (fun p -> p) value]
+        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value assert_results visualizers env type_env names_in_prog root_exp_opt value]
       end
     end
 
-let html_of_values_for_exp trace assert_results type_lookups exp =
+let html_of_values_for_exp trace assert_results type_lookups names_in_prog exp =
   let type_env = type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
-  html_of_values_for_loc trace assert_results type_env visualizers exp.pexp_loc
+  html_of_values_for_loc trace assert_results type_env names_in_prog (Some exp) visualizers exp.pexp_loc
 
-let html_of_values_for_pat trace assert_results type_lookups pat =
+let html_of_values_for_pat trace assert_results type_lookups names_in_prog pat =
   let type_env = type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs pat.ppat_attributes in
-  html_of_values_for_loc trace assert_results type_env visualizers pat.ppat_loc
+  let root_exp_opt = Pat.single_name pat |>& Exp.var in
+  html_of_values_for_loc trace assert_results type_env names_in_prog root_exp_opt visualizers pat.ppat_loc
 
 let rec terminal_exps exp = (* Dual of gather_vbs *)
   match exp.pexp_desc with
@@ -263,31 +324,31 @@ let rec gather_vbs exp = (* Dual of terminal_exp *)
   | Pexp_letmodule (_, _, e) -> gather_vbs e
   | _                        -> []
 
-let rec html_of_vb trace assert_results type_lookups vb =
+let rec html_of_vb trace assert_results type_lookups names_in_prog vb =
   let show_pat    = not (Pat.is_unit vb.pvb_pat) in
   let show_output = show_pat && not (Exp.is_funlike vb.pvb_expr) in
-  let exp_with_vbs_html = render_exp_ensure_vbs ~show_output trace assert_results type_lookups vb.pvb_expr in
+  let exp_with_vbs_html = render_exp_ensure_vbs ~show_output trace assert_results type_lookups names_in_prog vb.pvb_expr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "vb" @@
     (if show_pat then [html_of_pat vb.pvb_pat] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results type_lookups (terminal_exp vb.pvb_expr)] else []) *)
 
-and render_exp_ensure_vbs ?(show_output = true) trace assert_results type_lookups exp =
-  let html_of_vb = html_of_vb trace assert_results type_lookups in
+and render_exp_ensure_vbs ?(show_output = true) trace assert_results type_lookups names_in_prog exp =
+  let html_of_vb = html_of_vb trace assert_results type_lookups names_in_prog in
   let vbs = gather_vbs exp in
   let terminal_exps = terminal_exps exp in
   let show_vbs_box = vbs <> [] || not (Exp.is_fun exp) in
-  let ret_exp_htmls   = terminal_exps |>@ (render_exp trace assert_results type_lookups) in
-  let values_htmls () = terminal_exps |>@ (html_of_values_for_exp trace assert_results type_lookups) in
+  let ret_exp_htmls   = terminal_exps |>@ (render_exp trace assert_results type_lookups names_in_prog) in
+  let values_htmls () = terminal_exps |>@ (html_of_values_for_exp trace assert_results type_lookups names_in_prog) in
   div begin
     (if show_vbs_box then [div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)] else []) @
     [table ~attrs:[("class", "returns")] begin
-      [ tr (ret_exp_htmls |>@ fun exp_html    -> td [exp_html]) ] @
-      (if show_output then [tr (values_htmls () |>@ fun values_html -> td [values_html])] else [])
+      [ tr (ret_exp_htmls |>@ fun exp_html  -> td ~attrs:[("class","exp")] [exp_html]) ] @
+      (if show_output then [tr (values_htmls () |>@ fun values_html -> td ~attrs:[("class","exp")] [values_html])] else [])
     end]
   end
 
-and render_exp trace assert_results type_lookups exp =
+and render_exp trace assert_results type_lookups names_in_prog exp =
   match exp.pexp_desc with
   (* | Pexp_apply (fexp, labeled_args) -> *)
   | Pexp_fun _ ->
@@ -297,26 +358,26 @@ and render_exp trace assert_results type_lookups exp =
         let later_rows, final_body = get_param_rows_and_body body in
         let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp ~type_lookups default_exp) ||& "" in
         let row =
-          tr
+          tr ~attrs:[("class", "pat")]
             [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-            ; td [html_of_values_for_pat trace assert_results type_lookups pat]
+            ; td [html_of_values_for_pat trace assert_results type_lookups names_in_prog pat]
             ]
         in
         (row::later_rows, final_body)
       | _ -> ([], exp)
     in
     let param_rows, body = get_param_rows_and_body exp in
-    div ~attrs:[("class", "fun")]
+    div ~attrs:[("class", "fun exp")]
       [ table param_rows
-      ; render_exp_ensure_vbs trace assert_results type_lookups body
+      ; render_exp_ensure_vbs trace assert_results type_lookups names_in_prog body
       ]
   | _ ->
-    div ~attrs:[("class", "exp_label")] [html_of_exp ~type_lookups exp]
+    div ~attrs:[("class", "exp_label exp")] [html_of_exp ~type_lookups exp]
 
-let html_of_structure_item trace assert_results type_lookups (item : structure_item) =
+let html_of_structure_item trace assert_results type_lookups names_in_prog (item : structure_item) =
   match item.pstr_desc with
   | Pstr_eval (_exp, _)         -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
-  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.map (html_of_vb trace assert_results type_lookups) vbs)
+  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.map (html_of_vb trace assert_results type_lookups names_in_prog) vbs)
   | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
   | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
   | Pstr_typext _               -> failwith "can't handle Pstr_typext"
@@ -357,6 +418,7 @@ let drawing_tools tenv =
 
 
 let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_tenv =
+  let names_in_prog = StructItems.deep_names structure_items in
   let top_level_vbs_loc = structure_items |> List.last_opt |>& StructItem.loc ||& Location.none in
   html
     [ head
@@ -373,7 +435,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv]
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
-        List.map (html_of_structure_item trace assert_results type_lookups) structure_items
+        List.map (html_of_structure_item trace assert_results type_lookups names_in_prog) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ div ~attrs:[("id", "type-of-selected")] []
         ; div ~attrs:[("id", "suggestions-pane")]

@@ -784,6 +784,7 @@ let refine prog fillings reqs file_name next =
     try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
+  let avoid_names = StructItems.deep_names prog in
   hole_locs
   |>@@ begin fun hole_loc ->
     let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
@@ -821,35 +822,7 @@ let refine prog fillings reqs file_name next =
         in
         match Option.project ctor_type_path_opts_at_name |>& List.dedup with
         | Some [type_path] ->
-          let ctor_descs, _ = Env.find_type_descrs type_path tenv in
-          let cases =
-            let new_names = ref [] in
-            ctor_descs
-            |>@ (fun ctor_desc ->
-              (* Tag_name (typ1, typ2) -> Ctor ("Tag_name", "type", [value_of_typ typ1, value_of_typ typ2]) *)
-              let arg_names =
-                ctor_desc.Types.cstr_args
-                |>@ begin fun arg_type ->
-                    let arg_name = Name.gen ~avoid:!new_names ~base_name:(Name.from_type arg_type) prog in
-                    new_names := arg_name :: !new_names;
-                    arg_name
-                end
-              in
-              let case_pat =
-                (* Tag_name (typ1, typ2) *)
-                let args_pat_opt =
-                  (match arg_names with
-                  | []         -> None
-                  | [arg_name] -> Some (Pat.var arg_name)
-                  | arg_names  -> Some (Pat.tuple (List.map Pat.var arg_names))
-                  )
-                in
-                (* Assuming constructors don't need path prefixes .. see https://github.com/ocaml/merlin/blob/v3.3.8/src/analysis/destruct.ml.new for how to change that when the time comes *)
-                Pat.construct (Longident.lident ctor_desc.cstr_name) args_pat_opt
-              in
-              Exp.case case_pat Exp.hole
-            )
-          in
+          let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
           let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
           [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch)) ]
         | _ -> []
