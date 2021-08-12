@@ -109,6 +109,17 @@ nav img {
   box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }
 
+.is-rec {
+  font-size: 12px;
+  margin-top: 4px;
+  float: right;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.is-rec input[type=checkbox] {
+  height: 8px;
+  margin: 0;
+}
 
 .exp_label {
   background-color: var(--color);

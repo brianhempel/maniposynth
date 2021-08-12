@@ -44,7 +44,9 @@ let table   ?(attrs = [])       inners = tag "table" ~attrs inners
 let tr      ?(attrs = [])       inners = tag "tr" ~attrs inners
 let td      ?(attrs = [])       inners = tag "td" ~attrs inners
 let button  ?(attrs = [])       inners = tag "button" ~attrs inners
+let label ?(attrs = [])         inners = tag "label" ~attrs inners
 let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
+let checkbox ?(attrs = [])      ()     = tag "input" ~attrs:(attrs @ [("type","checkbox")]) []
 let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let perhaps_pos_attr =
     match Pos.from_attrs parsetree_attrs with
@@ -317,24 +319,26 @@ let rec terminal_exps exp = (* Dual of gather_vbs *)
   | _                        -> [exp]
 
 let rec gather_vbs exp = (* Dual of terminal_exp *)
+  let tag_rec recflag vb = (recflag, vb) in
   match exp.pexp_desc with
-  | Pexp_let (_, vbs, e)     -> vbs @ gather_vbs e
-  | Pexp_sequence (e1, e2)   -> [Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.unit) e1] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
-  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ gather_vbs
-  | Pexp_letmodule (_, _, e) -> gather_vbs e
-  | _                        -> []
+  | Pexp_let (recflag, vbs, e) -> (vbs |>@ tag_rec recflag) @ gather_vbs e
+  | Pexp_sequence (e1, e2)     -> [(Asttypes.Nonrecursive, Vb.mk ~loc:e1.pexp_loc ~attrs:e1.pexp_attributes (Pat.unit) e1)] @ gather_vbs e2 (* Need to put the loc/attrs on the vb so the view code that sets up position works. *)
+  | Pexp_match (_, cases)      -> cases |>@ Case.rhs |>@@ gather_vbs
+  | Pexp_letmodule (_, _, e)   -> gather_vbs e
+  | _                          -> []
 
-let rec html_of_vb trace assert_results type_lookups names_in_prog vb =
-  let show_pat    = not (Pat.is_unit vb.pvb_pat) in
-  let show_output = show_pat && not (Exp.is_funlike vb.pvb_expr) in
-  let exp_with_vbs_html = render_exp_ensure_vbs ~show_output trace assert_results type_lookups names_in_prog vb.pvb_expr in
+let rec html_of_vb trace assert_results type_lookups names_in_prog recflag vb =
+  let is_rec_perhaps_checked = if recflag = Asttypes.Recursive then [("checked","true")] else [] in
+  let show_pat               = not (Pat.is_unit vb.pvb_pat) in
+  let show_output            = show_pat && not (Exp.is_funlike vb.pvb_expr) in
+  let exp_with_vbs_html      = render_exp_ensure_vbs ~show_output trace assert_results type_lookups names_in_prog vb.pvb_expr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "vb" @@
-    (if show_pat then [html_of_pat vb.pvb_pat] else []) @
+    (if show_pat then [html_of_pat vb.pvb_pat; label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results type_lookups (terminal_exp vb.pvb_expr)] else []) *)
 
 and render_exp_ensure_vbs ?(show_output = true) trace assert_results type_lookups names_in_prog exp =
-  let html_of_vb = html_of_vb trace assert_results type_lookups names_in_prog in
+  let html_of_vb (recflag, vb) = html_of_vb trace assert_results type_lookups names_in_prog recflag vb in
   let vbs = gather_vbs exp in
   let terminal_exps = terminal_exps exp in
   let show_vbs_box = vbs <> [] || not (Exp.is_fun exp) in
@@ -376,21 +380,21 @@ and render_exp trace assert_results type_lookups names_in_prog exp =
 
 let html_of_structure_item trace assert_results type_lookups names_in_prog (item : structure_item) =
   match item.pstr_desc with
-  | Pstr_eval (_exp, _)         -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
-  | Pstr_value (_rec_flag, vbs) -> String.concat "" (List.map (html_of_vb trace assert_results type_lookups names_in_prog) vbs)
-  | Pstr_primitive _            -> failwith "can't handle Pstr_primitive"
-  | Pstr_type (_, _)            -> "" (* failwith "can't handle Pstr_type" *)
-  | Pstr_typext _               -> failwith "can't handle Pstr_typext"
-  | Pstr_exception _            -> failwith "can't handle Pstr_exception"
-  | Pstr_module _               -> failwith "can't handle Pstr_module"
-  | Pstr_recmodule _            -> failwith "can't handle Pstr_recmodule"
-  | Pstr_modtype _              -> failwith "can't handle Pstr_modtype"
-  | Pstr_open _                 -> failwith "can't handle Pstr_open"
-  | Pstr_class _                -> failwith "can't handle Pstr_class"
-  | Pstr_class_type _           -> failwith "can't handle Pstr_class_type"
-  | Pstr_include _              -> failwith "can't handle Pstr_include"
-  | Pstr_attribute _            -> failwith "can't handle Pstr_attribute"
-  | Pstr_extension (_, _)       -> failwith "can't handle Pstr_extension"
+  | Pstr_eval (_exp, _)       -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
+  | Pstr_value (recflag, vbs) -> String.concat "" (List.map (html_of_vb trace assert_results type_lookups names_in_prog recflag) vbs)
+  | Pstr_primitive _          -> failwith "can't handle Pstr_primitive"
+  | Pstr_type (_, _)          -> "" (* failwith "can't handle Pstr_type" *)
+  | Pstr_typext _             -> failwith "can't handle Pstr_typext"
+  | Pstr_exception _          -> failwith "can't handle Pstr_exception"
+  | Pstr_module _             -> failwith "can't handle Pstr_module"
+  | Pstr_recmodule _          -> failwith "can't handle Pstr_recmodule"
+  | Pstr_modtype _            -> failwith "can't handle Pstr_modtype"
+  | Pstr_open _               -> failwith "can't handle Pstr_open"
+  | Pstr_class _              -> failwith "can't handle Pstr_class"
+  | Pstr_class_type _         -> failwith "can't handle Pstr_class_type"
+  | Pstr_include _            -> failwith "can't handle Pstr_include"
+  | Pstr_attribute _          -> failwith "can't handle Pstr_attribute"
+  | Pstr_extension (_, _)     -> failwith "can't handle Pstr_extension"
 
 
 let drawing_tools tenv =

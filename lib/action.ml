@@ -22,6 +22,7 @@ type t =
   | InsertCode       of string * string (* vbs loc str, code *)
   | SetPos           of string * int * int (* loc str, x, y *)
   | MoveVb           of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
+  | SetRecFlag       of string * bool (* vb loc str, is rec *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -42,6 +43,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "Some"; `Int x; `Int y]]                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (x,y))
+  | `List [`String "SetRecFlag"; `String vb_loc_str; `Bool is_rec]                   -> SetRecFlag (vb_loc_str, is_rec)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
 (* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
@@ -245,3 +247,12 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     let vbs_loc       = Serialize.loc_of_string vbs_loc_str in
     let mobile_vb_loc = Serialize.loc_of_string mobile_loc_str in
     move_vb vbs_loc mobile_vb_loc xy_opt final_tenv
+  | SetRecFlag (vb_loc_str, is_rec) ->
+    let vb_loc   = Serialize.loc_of_string vb_loc_str in
+    let recflag' = if is_rec then Asttypes.Recursive else Asttypes.Nonrecursive in
+    VbGroups.map begin fun (recflag, vbs) ->
+      if vbs |> List.exists (Vb.loc %> (=) vb_loc)
+      then (recflag', vbs)
+      else (recflag, vbs)
+    end
+    %> Bindings.fixup final_tenv

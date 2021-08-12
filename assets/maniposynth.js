@@ -118,16 +118,25 @@ function setPos(loc, x, y) {
   ]);
 }
 
-function moveVb(vbs_loc, mobile_loc, new_pos) {
-  let new_pos_opt = ["None"];
-  if (new_pos) { new_pos_opt = ["Some", new_pos.x, new_pos.y] }
+function moveVb(vbsLoc, mobileLoc, newPos) {
+  let newPosOpt = ["None"];
+  if (newPos) { newPosOpt = ["Some", newPos.x, newPos.y] }
   doAction([
     "MoveVb",
-    vbs_loc,
-    mobile_loc,
-    new_pos_opt
+    vbsLoc,
+    mobileLoc,
+    newPosOpt
   ]);
 }
+
+function setRecFlag(vbLoc, isRec) {
+  doAction([
+    "SetRecFlag",
+    vbLoc,
+    isRec
+  ]);
+}
+
 
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
@@ -889,6 +898,22 @@ window.addEventListener('DOMContentLoaded', () => {
   resizeVbHolders(document);
 });
 
+
+
+//////////////// rec checkboxes /////////////////////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Prevent clicks on label from triggering selection
+  document.querySelectorAll(".is-rec").forEach(elem => {
+      elem.addEventListener("click", event => event.stopImmediatePropagation());
+  })
+  document.querySelectorAll(".is-rec input[type=checkbox]").forEach(elem => {
+    elem.addEventListener("change", event => {
+      setRecFlag(elem.dataset.loc, elem.checked);
+      event.stopImmediatePropagation();
+    });
+  })
+});
 
 
 /////////////////// What Am I ///////////////////
