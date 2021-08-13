@@ -151,8 +151,8 @@ let rec apply_visualizers assert_results visualizers env type_env value_extracti
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value ?code_to_assert_on assert_results visualizers env type_env names_in_prog (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
-  let recurse = html_of_value assert_results visualizers env type_env names_in_prog in
+and html_of_value ?code_to_assert_on assert_results visualizers env type_env names_in_prog ?(in_list = false) (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+  let recurse ?(in_list = false) = html_of_value assert_results visualizers env type_env names_in_prog ~in_list in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
@@ -176,7 +176,28 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env nam
         perhaps_code_to_assert_on @
         [("class", "value"); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
-      [str] in
+      [str]
+  in
+  let tuple_or_array_children ?(in_list = false) vs =
+    extraction_exp_opt |>& begin fun extraction_exp ->
+      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+      let child_pat_names =
+        vs
+        |> List.fold_left begin fun names v ->
+          let name = Name.gen_ ~avoid:(names @ prior_extraction_names @ names_in_prog) ~base_name:(Name.from_val ~type_env v) in
+          names @ [name]
+        end []
+      in
+      let pat = Pat.tuple (child_pat_names |>@ Pat.var) in
+      let children =
+        List.combine child_pat_names vs |> List.mapi begin fun i (name, v) ->
+          recurse ~in_list:(in_list && i = 1 (* tail position *)) (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+        end
+      in
+      children
+    end
+    ||&~ (fun () -> vs |> List.mapi (fun i v -> recurse ~in_list:(i = 1 && in_list (* tail position *)) None v))
+  in
   wrap_value @@
   apply_visualizers assert_results visualizers env type_env extraction_exp_opt value ^
   match value_ with
@@ -190,24 +211,15 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env nam
   | Function (_, _)                          -> "func"
   | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
-  | Tuple values                             ->
-    let make_extraction_exp_i i =
-      extraction_exp_opt |>& begin fun extraction_exp ->
-        let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
-        Exp.match_ extraction_exp [
-          let value = List.nth values i in
-          let name = Name.gen_ ~avoid:(prior_extraction_names @ names_in_prog) ~base_name:(Name.from_val ~type_env value) in
-          let pat =
-            Pat.tuple @@ List.init (List.length values) (fun i' -> if i = i' then Pat.var name else Pat.any ())
-          in
-          Exp.case pat (Exp.var name)
-        ]
-      end
-    in
-    let recurse_i i v = recurse (make_extraction_exp_i i) v in
-    "(" ^ String.concat ", " (List.mapi recurse_i values) ^ ")"
+  | Tuple vs                                 ->
+    begin match (tuple_or_array_children ~in_list vs, in_list) with
+    | ([head; tail], true) -> head ^ tail
+    | (children, _)        -> "(" ^ String.concat ", " children ^ ")"
+    end
+  | Constructor ("[]", _, None)          -> if in_list then "]" else "[]"
   | Constructor (ctor_name, _, None)     -> ctor_name
   | Constructor (ctor_name, _, Some arg) ->
+    let ctor_name_to_show = if ctor_name = "::" then (if in_list then "; " else "[") else ctor_name ^ " " in
     extraction_exp_opt |>&& begin fun extraction_exp ->
       let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
       Case_gen.gen_ctor_cases_from_ctor_name ~avoid_names:(prior_extraction_names @ names_in_prog) ctor_name type_env
@@ -223,23 +235,25 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env nam
         (* Multi arg ctor *)
         | Ppat_tuple arg_pats, Tuple vs ->
           let arg_children =
-            List.map2 begin fun arg_pat v ->
+            List.combine arg_pats vs |> List.mapi begin fun i (arg_pat, v)->
               Pat.single_name arg_pat
               |>& begin fun name ->
-                recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+                recurse ~in_list:(ctor_name = "::" && i = 1 (* tail position *)) (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+              end
+              ||&~ (fun () -> recurse ~in_list:(ctor_name = "::") None v)
             end
-              ||&~ (fun () -> recurse None v)
-            end arg_pats vs
           in
-          ctor_name ^ " (" ^ String.concat ", " arg_children ^ ")"
+          if ctor_name = "::"
+          then ctor_name_to_show ^ String.concat "" arg_children
+          else ctor_name_to_show ^ "(" ^ String.concat ", " arg_children ^ ")"
         (* Single arg ctor, should also be a var with our current case generator *)
         | Ppat_var { txt = name; _ }, _ ->
-          ctor_name ^ " " ^ recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) arg
+          ctor_name_to_show ^ recurse ~in_list:(ctor_name = "::") (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) arg
         | _ ->
           failwith "a;lsdkvoabviavwassvd why oh why"
       end
     end
-    ||&~ (fun () -> ctor_name ^ " " ^ recurse None arg)
+    ||&~ (fun () -> ctor_name_to_show ^ recurse ~in_list:(ctor_name = "::") None arg)
   | Prim _                                   -> "prim"
   | Fexpr _                                  -> "fexpr"
   | ModVal _                                 -> "modval"
@@ -261,26 +275,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env nam
     |> String.concat "; "
     |> (fun entries_str -> "{ " ^ entries_str ^ " }")
   | Lz _                                     -> "lazy"
-  | Array values_arr                         ->
-    let vs = Array.to_list values_arr in
-    extraction_exp_opt |>& begin fun extraction_exp ->
-      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
-      let child_pat_names =
-        vs
-        |> List.fold_left begin fun names v ->
-          let name = Name.gen_ ~avoid:(names @ prior_extraction_names @ names_in_prog) ~base_name:(Name.from_val ~type_env v) in
-          names @ [name]
-        end []
-      in
-      let pat = Pat.tuple (child_pat_names |>@ Pat.var) in
-      let children =
-        List.map2 begin fun name v ->
-          recurse (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
-        end child_pat_names vs
-      in
-      "[! " ^  String.concat "; " children ^ " !]"
-    end
-    ||&~ (fun () -> "[! " ^ (vs |>@ recurse None |> String.concat "; ") ^ " !]" )
+  | Array values_arr                         -> "[! " ^ String.concat "; " (tuple_or_array_children @@ Array.to_list values_arr) ^ " !]"
   | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
   | Object _                                 -> "object"
   | ExCall _                                 -> "ExCall ShouldntSeeThis"
