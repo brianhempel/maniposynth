@@ -79,8 +79,7 @@ let string_of_arg_label =
 
 
 
-(* START HERE want to be able to extract by dragging visualizers *)
-let rec apply_visualizers assert_results visualizers env type_env (value : Data.value) =
+let rec apply_visualizers assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
   if visualizers = [] then "" else
   let result_htmls =
     visualizers
@@ -138,9 +137,10 @@ let rec apply_visualizers assert_results visualizers env type_env (value : Data.
                 [html_of_value [] [] Envir.empty_env Env.empty [] None expected]
             end in
           let code_to_assert_on = Exp.apply exp [(Nolabel, exp_of_value value)] |> Exp.to_string in
+          let extraction_exp_opt = value_extraction_exp_opt |>& (fun e -> Exp.apply exp [(Asttypes.Nolabel, e)]) in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
-              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty [] None result_value]
+              [wrap @@ html_of_value ~code_to_assert_on [] [] Envir.empty_env Env.empty [] extraction_exp_opt result_value]
           ]
         end else
           []
@@ -178,7 +178,7 @@ and html_of_value ?code_to_assert_on assert_results visualizers env type_env nam
       )
       [str] in
   wrap_value @@
-  apply_visualizers assert_results visualizers env type_env value ^
+  apply_visualizers assert_results visualizers env type_env extraction_exp_opt value ^
   match value_ with
   | Bomb                                     -> "💣"
   | Hole _                                   -> "??"

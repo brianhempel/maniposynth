@@ -197,6 +197,10 @@ table.returns {
   box-shadow: 0px 0px 5px rgb(0, 150, 255);
 }
 
+.value {
+  background-color: white;
+}
+
 .derived-vis-values {
   position: relative;
   top: -1em;

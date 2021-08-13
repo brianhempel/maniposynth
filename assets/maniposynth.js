@@ -346,8 +346,10 @@ window.addEventListener('DOMContentLoaded', () => {
   function globalEscape() {
     if (transientTextboxes().length > 0) {
       transientTextboxes().forEach(abortTextEdit);
-    } else {
+    } else if (selectedElems().length > 0) {
       deselectAll();
+    } else {
+      document.location.reload();
     }
   }
 
