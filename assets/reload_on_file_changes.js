@@ -28,7 +28,7 @@ function check_for_changes(path) {
 }
 
 function wait_and_check_for_changes(path) {
-  window.setTimeout(() => check_for_changes(path), 300);
+  window.setTimeout(() => check_for_changes(path), 900);
 }
 
 window.addEventListener('DOMContentLoaded', () => {

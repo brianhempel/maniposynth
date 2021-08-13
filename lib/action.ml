@@ -159,11 +159,13 @@ let insert_code loc code final_tenv old =
   let exp = Exp.from_string code in
   let name = Name.gen_from_exp exp old in
   let vb' =  Vb.mk (Pat.var name) exp in
-  if old = [] then [Ast_helper.Str.value Asttypes.Nonrecursive [vb']] else
-  old
-  |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
-  |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
-  |> Bindings.fixup final_tenv
+  Bindings.fixup final_tenv @@
+  if old = [] then
+    [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
+  else
+    old
+    |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
+    |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
 
 let set_pos loc x y old =
   old

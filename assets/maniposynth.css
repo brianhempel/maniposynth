@@ -27,7 +27,8 @@ nav {
   z-index: 3;
 }
 .top-level {
-  margin-top: 2.75rem
+  margin-top: 2.75rem;
+  min-height: calc(100vh - 2.75rem);
 }
 
 nav img {
@@ -98,7 +99,6 @@ nav img {
 .box > span:first-child {
   color: var(--pat-color);
 }
-
 
 .top-level > .box > span:first-child {
   font-size: 20px;

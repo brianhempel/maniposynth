@@ -351,7 +351,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  document.querySelectorAll('.top-level, .top-level *').forEach(elem => {
+  document.querySelectorAll('.vbs').forEach(elem => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
@@ -784,6 +784,17 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
+// function stuffMoved(event) {
+//   if (window.stuffMoving) {
+//     const dx = event.pageX - stuffMoving.startX;
+//     const dy = event.pageY - stuffMoving.startY;
+//     return (dx !== 0 || dy !== 0);
+//   } else {
+//     return false;
+//   }
+// }
+
+
 window.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll(".top-level").forEach(elem => {
@@ -824,6 +835,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         window.stuffMoving = undefined;
         removeDropTargetStyles();
+        event.stopImmediatePropagation();
       }
     });
   });
@@ -834,6 +846,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function resizeVbHolders(elem) {
   const vbsHolders = elem.querySelectorAll(".vbs");
   vbsHolders.forEach(vbsHolder => {
+    if (vbsHolder.classList.contains("top-level")) { return; }
     // console.log(vbsHolder.children);
     let maxWidth = 0;
     let maxHeight = 0;
