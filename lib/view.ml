@@ -373,7 +373,6 @@ and render_exp_ensure_vbs ?(show_output = true) trace prog assert_results type_l
 
 and render_exp trace prog assert_results type_lookups names_in_prog exp =
   match exp.pexp_desc with
-  (* | Pexp_apply (fexp, labeled_args) -> *)
   | Pexp_fun _ ->
     let rec get_param_rows_and_body exp =
       match exp.pexp_desc with
@@ -394,6 +393,17 @@ and render_exp trace prog assert_results type_lookups names_in_prog exp =
       [ table param_rows
       ; render_exp_ensure_vbs trace prog assert_results type_lookups names_in_prog None body
       ]
+  | Pexp_apply (_, labeled_args) ->
+    let arg_rows =
+      labeled_args |>@ begin fun (_arg_label, arg) ->
+        tr ~attrs:[("class", "arg")]
+          [ td ~attrs:[("class", "exp_label exp")] [render_exp trace prog assert_results type_lookups names_in_prog arg]
+          ; td [html_of_values_for_exp trace prog assert_results type_lookups names_in_prog None arg]
+          ]
+      end
+    in
+    table ~attrs:[("class", "apply exp")] @@
+      tr [td ~attrs:[("class", "exp_label exp");("colspan","2")] [html_of_exp ~type_lookups exp]] :: arg_rows
   | _ ->
     div ~attrs:[("class", "exp_label exp")] [html_of_exp ~type_lookups exp]
 
