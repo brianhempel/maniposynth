@@ -35,4 +35,7 @@ let gen_ctor_cases_from_ctor_name ~avoid_names ctor_name tenv =
   begin match Env.lookup_constructor (Longident.Lident ctor_name) tenv with
   | { cstr_res = { desc = Types.Tconstr (type_path, _, _); _ } ; _ } -> gen_ctor_cases ~avoid_names type_path tenv
   | _ -> []
+  | exception Not_found ->
+    (* print_endline @@ "Ctor " ^ ctor_name ^ " not found!"; *)
+    []
   end

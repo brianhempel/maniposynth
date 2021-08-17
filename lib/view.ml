@@ -294,10 +294,12 @@ let html_of_values_for_loc (trace : Trace.t) assert_results type_env names_in_pr
       end
     end
 
-let html_of_values_for_exp trace assert_results type_lookups names_in_prog exp =
+let html_of_values_for_exp trace assert_results type_lookups names_in_prog vb_pat_opt exp =
   let type_env = type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
-  html_of_values_for_loc trace assert_results type_env names_in_prog (Some exp) visualizers exp.pexp_loc
+  (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
+  let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
+  html_of_values_for_loc trace assert_results type_env names_in_prog (Some root_exp) visualizers exp.pexp_loc
 
 let html_of_values_for_pat trace assert_results type_lookups names_in_prog pat =
   let type_env = type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
@@ -326,19 +328,19 @@ let rec html_of_vb trace assert_results type_lookups names_in_prog recflag vb =
   let is_rec_perhaps_checked = if recflag = Asttypes.Recursive then [("checked","true")] else [] in
   let show_pat               = not (Pat.is_unit vb.pvb_pat) in
   let show_output            = show_pat && not (Exp.is_funlike vb.pvb_expr) in
-  let exp_with_vbs_html      = render_exp_ensure_vbs ~show_output trace assert_results type_lookups names_in_prog vb.pvb_expr in
+  let exp_with_vbs_html      = render_exp_ensure_vbs ~show_output trace assert_results type_lookups names_in_prog (Some vb.pvb_pat) vb.pvb_expr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "vb" @@
     (if show_pat then [html_of_pat vb.pvb_pat; label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
     [exp_with_vbs_html](*  @
     (if show_results then [html_of_values_for_exp trace assert_results type_lookups (terminal_exp vb.pvb_expr)] else []) *)
 
-and render_exp_ensure_vbs ?(show_output = true) trace assert_results type_lookups names_in_prog exp =
+and render_exp_ensure_vbs ?(show_output = true) trace assert_results type_lookups names_in_prog vb_pat_opt exp =
   let html_of_vb (recflag, vb) = html_of_vb trace assert_results type_lookups names_in_prog recflag vb in
   let vbs = gather_vbs exp in
   let terminal_exps = terminal_exps exp in
   let show_vbs_box = vbs <> [] || not (Exp.is_fun exp) in
   let ret_exp_htmls   = terminal_exps |>@ (render_exp trace assert_results type_lookups names_in_prog) in
-  let values_htmls () = terminal_exps |>@ (html_of_values_for_exp trace assert_results type_lookups names_in_prog) in
+  let values_htmls () = terminal_exps |>@ (html_of_values_for_exp trace assert_results type_lookups names_in_prog vb_pat_opt) in
   div begin
     (if show_vbs_box then [div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)] else []) @
     [table ~attrs:[("class", "returns")] begin
@@ -368,7 +370,7 @@ and render_exp trace assert_results type_lookups names_in_prog exp =
     let param_rows, body = get_param_rows_and_body exp in
     div ~attrs:[("class", "fun exp")]
       [ table param_rows
-      ; render_exp_ensure_vbs trace assert_results type_lookups names_in_prog body
+      ; render_exp_ensure_vbs trace assert_results type_lookups names_in_prog None body
       ]
   | _ ->
     div ~attrs:[("class", "exp_label exp")] [html_of_exp ~type_lookups exp]

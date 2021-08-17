@@ -1,6 +1,18 @@
 (* Convenience methods and filling in missing bits of the Stdlib. *)
 
-module SMap = Map.Make (String)
+module SMap = struct
+  include Map.Make (String)
+
+  let remove_all keys = List.fold_right remove keys
+
+  let to_string val_to_string smap =
+    bindings smap
+    |> List.map (fun (k, v) -> k ^ " => " ^ val_to_string v)
+    |> String.concat ",\n"
+    |> fun str -> "{\n" ^ str ^ "}"
+end
+
+
 module SSet = Set.Make (String)
 
 let clamp lo hi x =
@@ -141,6 +153,10 @@ module List = struct
   (* replacement_func takes a list to insert at the extraction location *)
   let extract_opt target list =
     extract_by_opt ((=) target) list
+
+  let max = function
+    | x::xs -> List.fold_left max x xs
+    | []    -> raise @@ Invalid_argument "List.max needs to be given a non-empty list"
 end
 
 module Seq = struct
@@ -293,3 +309,6 @@ let (%>@?) f g = fun x -> f x |>@? g
 let (%>@@) f g = fun x -> f x |>@@ g
 (* Rightward compose filter_map on List *)
 let (%>@&) f g = fun x -> f x |>@& g
+
+(* Leftward compositon (like @@, follows the above pattern of replacing the first char with %) *)
+let (%@) g f = f %> g

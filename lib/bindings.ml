@@ -495,6 +495,315 @@ and add_missing_bindings_exp defined_names exp =
   | Pmod_apply (m1, m2)                        -> { modl with pmod_desc = Pmod_apply (recurse m1, recurse m2) }
 
 
+(*
+  Current algorithm for handling extractions (i.e. case introductions.)
+
+  0. Extractions are initially encoded as e.g. let x = f (match (match x with _ -> ...) with _ -> ...), with a single case per match.
+  1. New VBs are duplicated into the branches of existing match statements, *because* it makes sense that new things should be created in the context of old things.
+    1a. ...with the caveat that new VBs with free vars are only pushed into branches in which those vars are defined
+  2. The new match statements are simplified, i.e. a match higher up in the AST may have already scrutinized the same scrutinee,
+    if so, we can replace the match with the appropriate branch.
+      match x with
+      | C1 x1 -> (match x with C1 x2 -> x2)
+      ...becomes...
+      match x with
+      | C1 x1 -> x1
+  3. Since new extraction matches have only a single case, that single case might be removed (i.e. we are on a branch on which the extraction cannot apply). Remove such bindings.
+  4. Transform matches to the more canonical form.
+      f (match (match x with C x1 -> x1) with C y1 -> y1)
+      ...becomes...
+      match x with
+      | C x1 ->
+        begin match x1 with
+        | C y1 -> f y1
+        end
+  5. Pull bindings duplicated across all cases into a higher scope. That is, bindings that were inserted into deep branches but don't need the destructured values can be moved back up.
+  6. Add missing match cases (since extraction matches are only a single case).
+      match x with
+      | C x1 ->
+        begin match x1 with
+        | C y1 -> f y1
+        | D -> (??)
+        end
+      | D -> (??)
+`
+ *)
+
+(* Duplicate the VB into case branches in which most of its free vars are defined. *)
+let rec insert_vb_into_all_relevant_branches vb exp =
+  let rec names_defined_deeper exp =
+    let recurse = names_defined_deeper in
+    match exp.pexp_desc with
+    | Pexp_let (_, vbs, body)  -> (vbs |>@@ Vb.names) @ recurse body
+    | Pexp_sequence (_, e2)    -> recurse e2
+    | Pexp_letmodule (_, _, e) -> recurse e
+    | Pexp_match (_, cases)    -> cases |>@@ (fun case -> Pat.names case.pc_lhs @ recurse case.pc_rhs)
+    | _                        -> []
+  in
+  let free_names_in_new_vb = List.dedup @@ free_unqualified_names_pat vb.pvb_pat @ free_unqualified_names vb.pvb_expr in
+  let recurse = insert_vb_into_all_relevant_branches vb in
+  match exp.pexp_desc with
+  | Pexp_let (recflag, vbs, body)           -> { exp with pexp_desc = Pexp_let (recflag, vbs, recurse body) }
+  | Pexp_sequence (e1, e2)                  -> { exp with pexp_desc = Pexp_sequence (e1, recurse e2) }
+  | Pexp_letmodule (name_loced, mod_exp, e) -> { exp with pexp_desc = Pexp_letmodule (name_loced, mod_exp, recurse e) }
+  | Pexp_match (e, cases)                   ->
+    (* Find which case(s) define the greatest number of needed names, then push into those. *)
+    let cases_and_needed_names_defined_count =
+      cases
+      |>@ begin fun case ->
+        let names_defined_deeper = List.dedup @@ Pat.names case.pc_lhs @ names_defined_deeper case.pc_rhs in
+        (case, List.length (List.inter free_names_in_new_vb names_defined_deeper))
+      end
+    in
+    let most_defined_count = cases_and_needed_names_defined_count |>@ snd |> List.max in
+    let cases' =
+      cases_and_needed_names_defined_count
+      |>@ begin fun (case, needed_names_defined_count) ->
+        if needed_names_defined_count = most_defined_count
+        then case |> Case.map_rhs recurse
+        else case
+      end
+    in
+    { exp with pexp_desc = Pexp_match (e, cases') }
+  | _ ->
+    Exp.let_ Asttypes.Nonrecursive [vb] exp
+
+(* Mapping is top-down, rather than bottom-up. *)
+(* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
+let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
+  let rec map_exp scope_info _ e =
+    let e'                       = f scope_info e in
+    let recurse                  = map_exp scope_info  (mapper scope_info) in
+    let recurse'     scope_info' = map_exp scope_info' (mapper scope_info') in
+    let map_children scope_info' = dflt_mapper.expr    (mapper scope_info') in
+    let handle_case case =
+      let scope_info' = handle_pat scope_info case.pc_lhs in
+      let recurse' = recurse' scope_info' in
+      case |> Case.map_guard recurse' |> Case.map_rhs recurse'
+    in
+    let ret desc = { e' with pexp_desc = desc } in
+    begin match e'.pexp_desc with
+    | Pexp_let (Asttypes.Nonrecursive, vbs, body)  -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in ret @@ Pexp_let (Asttypes.Nonrecursive, vbs |>@ Vb.map_exp recurse, recurse' scope_info' body)
+    | Pexp_let (Asttypes.Recursive, vbs, _)        -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in map_children scope_info' e'
+    | Pexp_match (scrutinee, cases)                -> ret @@ Pexp_match (recurse scrutinee, cases |>@ handle_case)
+    | Pexp_try   (body, cases)                     -> ret @@ Pexp_try (recurse body, cases |>@ handle_case)
+    | Pexp_function cases                          -> ret @@ Pexp_function (cases |>@ handle_case)
+    | Pexp_fun (arg_label, default, pat, body)     -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_fun (arg_label, default |>& recurse, pat, recurse' scope_info' body)
+    | Pexp_for (pat, e1, e2, dirflag, body)        -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse' scope_info' body)
+    | Pexp_letmodule (_str_loced, _mod_exp, _body) -> failwith "map_with_scope: letmodule not handled"
+    | Pexp_pack _mod_exp                           -> failwith "map_with_scope: pack not handled"
+    | Pexp_object _                                -> failwith "map_with_scope: classes not handled"
+    | Pexp_open (_, _, _)                          -> failwith "map_with_scope: local opens not handled"
+    | _                                            -> map_children scope_info e'
+    end
+  and map_struct_items scope_info _ sis =
+    let map_si mapper' = dflt_mapper.structure_item mapper' in
+    let sis'_rev, _ =
+      sis
+      |> List.fold_left begin fun (sis'_rev, scope_info) si ->
+        (match si.pstr_desc with
+        | Pstr_value (Asttypes.Nonrecursive, vbs) -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info)  si :: sis'_rev, scope_info')
+        | Pstr_value (Asttypes.Recursive, vbs)    -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info') si :: sis'_rev, scope_info')
+        | _                                       -> (map_si (mapper scope_info) si :: sis'_rev, scope_info)
+        )
+      end ([], scope_info)
+    in
+    List.rev sis'_rev
+  and mapper scope_info = { dflt_mapper with expr = map_exp scope_info; structure = map_struct_items scope_info }
+  in
+  (mapper init_scope_info).expr (mapper init_scope_info) exp
+
+
+let rename_unqualified_variables subst exp =
+  let handle_pat subst pat = SMap.remove_all (Pat.names pat) subst in
+  exp
+  |> map_exps_with_scope subst handle_pat begin fun subst exp ->
+    match exp.pexp_desc with
+    | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
+      SMap.find_opt name subst
+      |>& (fun name' -> { exp with pexp_desc = Pexp_ident {lid_loced with txt = Longident.Lident name'} })
+      ||& exp
+    | _ ->
+      exp
+  end
+
+
+let simplify_nested_matches_on_same_thing prog =
+  let simplify scrutinee_name branch_pat branch =
+    (* Handle shadowing. *)
+    let handle_pat higher_branch_opt pat = higher_branch_opt |>&& (fun ((scrutinee_name, _) as higher_branch) -> if List.mem scrutinee_name (Pat.names pat) then None else Some higher_branch) in
+    branch
+    |> map_exps_with_scope (Some (scrutinee_name, branch_pat)) handle_pat begin fun higher_branch_opt exp ->
+      match higher_branch_opt, exp.pexp_desc with
+      (* scrutinee is a simple variable and first pattern is a ctor *)
+      | Some (higher_scrutinee_name, higher_branch_pat)
+      , Pexp_match ({ pexp_desc = Pexp_ident {txt = Longident.Lident scrutinee_name; _}; _ } as scrutinee, (({ pc_lhs = { ppat_desc = Ppat_construct ({ txt = Longident.Lident _; _ }, _); _}; _}::_) as cases))
+      when higher_scrutinee_name = scrutinee_name ->
+        (* Find the case that is taken. *)
+        (* Three possible results:
+        1. One case taken. Replace match with that case.
+        2. No case taken. Match is not valid in this branch, remove it entirely (mark for removal by removing all its cases.)
+        3. Can't determine which case will be taken. Don't change the match.
+        *)
+        let exception DontKnow in
+        (* Returns case taken and variable substitution, or None if no case take, or raises DontKnow if can't tell *)
+        (* Only handles Ctors with variable name children *)
+        let pats_match case : (case * string SMap.t) option =
+          if case.pc_guard <> None then raise DontKnow else
+          begin match higher_branch_pat.ppat_desc, case.pc_lhs.ppat_desc with
+          | Ppat_construct ({ txt = Longident.Lident ctor_name1; _ }, args_opt1)
+          , Ppat_construct ({ txt = Longident.Lident ctor_name2; _ }, args_opt2) ->
+            if ctor_name1 <> ctor_name2 then None else
+            begin match args_opt1, args_opt2 with
+            | None
+            , None ->
+              Some (case, SMap.empty)
+            | Some _
+            , Some { ppat_desc = Ppat_any; _ } ->
+              Some (case, SMap.empty)
+            | Some { ppat_desc = Ppat_var {txt = higher_name; _}; _ }
+            , Some { ppat_desc = Ppat_var {txt = branch_name; _}; _ } ->
+              Some (case, SMap.singleton branch_name higher_name)
+            | Some { ppat_desc = Ppat_tuple higher_pats; _ }
+            , Some { ppat_desc = Ppat_tuple branch_pats; _ } ->
+              List.fold_left2 begin fun subst_opt higher_pat branch_pat ->
+                if subst_opt = None || Pat.is_any branch_pat then subst_opt else
+                begin match Pat.single_name higher_pat, Pat.single_name branch_pat with
+                | Some higher_name, Some branch_name -> subst_opt |>& SMap.add branch_name higher_name
+                | _                                  -> raise DontKnow
+                end
+              end (Some SMap.empty) higher_pats branch_pats
+              |>& (fun subst -> (case, subst))
+            | _ ->
+              raise DontKnow
+            end
+          | _ ->
+            raise DontKnow
+          end
+        in
+        begin try
+          match cases |> List.findmap_opt pats_match with
+          | Some (case, subst) ->
+            print_endline (SMap.to_string (fun str -> str) subst);
+            rename_unqualified_variables subst case.pc_rhs
+          | None ->
+            (* No case matches, mark for removal by removing all cases. *)
+            { exp with pexp_desc = Pexp_match (scrutinee, []) }
+        with DontKnow ->
+          exp
+        end
+      | _ ->
+        exp
+    end
+  in
+  prog
+  |> Exp.map begin fun exp ->
+    match exp.pexp_desc with
+    (* scrutinee is a simple variable and first pattern is a ctor *)
+    | Pexp_match ({ pexp_desc = Pexp_ident {txt = Longident.Lident scrutinee_name; _}; _ } as scrutinee, (({ pc_lhs = { ppat_desc = Ppat_construct ({ txt = Longident.Lident _; _ }, _); _}; _}::_) as cases)) ->
+      let cases' = cases |>@ fun case -> case |> Case.map_rhs (simplify scrutinee_name case.pc_lhs) in
+      { exp with pexp_desc = Pexp_match (scrutinee, cases') }
+    | _ ->
+      exp
+  end
+
+(* If an exp in a vb lhs has an empty match, remove the whole vb *)
+let remove_matches_with_no_cases prog =
+  let rec should_keep exp =
+    match exp.pexp_desc with
+    | Pexp_let (_, _, e)       -> should_keep e
+    | Pexp_sequence (_, e2)    -> should_keep e2
+    | Pexp_match (e, cases)    -> cases <> [] && should_keep e
+    | Pexp_letmodule (_, _, e) -> should_keep e
+    | _                        -> Exp.child_exps exp |> List.for_all should_keep
+  in
+  prog
+  |> VbGroups.map begin fun (recflag, vbs) -> (recflag, vbs |>@? (should_keep %@ Vb.exp)) end
+  |> VbGroups.SequenceLike.map (fun imperative_exp -> Some imperative_exp |>&? should_keep)
+
+
+
+let move_up_duplicated_bindings prog =
+  (* nondep = not dependent on the case pat OR anything defined earlier in the case branch *)
+  (* If we iteratively pluck out such letexps one by one we will catch nondep chains. *)
+  let find_nondep_letexps case =
+    let rec find_nondep_letexps names exp =
+      let recurse = find_nondep_letexps in
+      match exp.pexp_desc with
+      | Pexp_let (Asttypes.Nonrecursive, vbs, body) ->
+        let names_here = vbs |>@@ Vb.names in
+        if (vbs |> List.for_all (not %@ List.any_overlap names %@ free_unqualified_names %@ Vb.exp))
+        then exp :: recurse (names_here @ names) body
+        else        recurse (names_here @ names) body
+      | Pexp_let (Asttypes.Recursive, vbs, body) ->
+        let names_here = vbs |>@@ Vb.names in
+        let names = List.diff names names_here in
+        if (vbs |> List.for_all (not %@ List.any_overlap names %@ free_unqualified_names %@ Vb.exp))
+        then exp :: recurse (names_here @ names) body
+        else        recurse (names_here @ names) body
+      | Pexp_sequence (_, e2)    -> recurse names e2 (* could move these out... *)
+      | Pexp_letmodule (_, _, e) -> recurse names e
+      | _                        -> []
+    in
+    find_nondep_letexps (Pat.names case.pc_lhs) case.pc_rhs
+  in
+  let remove_attrs_mapper = Attrs.mapper (fun _ -> []) in
+  let remove_attrs_vb     = remove_attrs_mapper.value_binding remove_attrs_mapper in
+  let vbs_equal vb1 vb2 = Vb.to_string (remove_attrs_vb vb1) = Vb.to_string (remove_attrs_vb vb2) in
+  let letexps_equal e1 e2 =
+    match e1.pexp_desc, e2.pexp_desc with
+    | Pexp_let (recflag1, vbs1, _body1)
+    , Pexp_let (recflag2, vbs2, _body2) ->
+      recflag1 = recflag2 && List.for_all2_safe vbs_equal vbs1 vbs2
+    | _ ->
+      false
+  in
+  let rec remove_letexp letexp exp =
+    let recurse = remove_letexp letexp in
+    match exp.pexp_desc with
+    | Pexp_let (_, _, body) when letexps_equal exp letexp -> body
+    | Pexp_let (recflag, vbs, body)                       -> { exp with pexp_desc = Pexp_let (recflag, vbs, recurse body) }
+    | Pexp_sequence (e1, e2)                              -> { exp with pexp_desc = Pexp_sequence (e1, recurse e2) }
+    | Pexp_letmodule (name_loced, mod_exp, e)             -> { exp with pexp_desc = Pexp_letmodule (name_loced, mod_exp, recurse e) }
+    | _                                                   -> exp
+  in
+  let letexp_is_in_list letexp list = List.exists (letexps_equal letexp) list in
+  prog
+  |> Exp.map begin fun exp ->
+    match exp.pexp_desc with
+    | Pexp_match (scrutinee, ((_::_) as cases)) ->
+      let rec loop extracted_letexps letexps_to_ignore cases' =
+        let extraction_candidate =
+          find_nondep_letexps (List.hd cases')
+          |> List.find_opt (fun letexp -> not (letexp_is_in_list letexp letexps_to_ignore))
+        in
+        begin match extraction_candidate with
+        | Some letexp ->
+          if (cases' |> List.for_all (fun case -> letexp_is_in_list letexp (find_nondep_letexps case))) then
+            let cases' = cases' |>@ Case.map_rhs (remove_letexp letexp) in
+            loop (letexp::extracted_letexps) letexps_to_ignore cases'
+          else
+            loop extracted_letexps (letexp::letexps_to_ignore) cases'
+        | None ->
+          (* Loop done. Wrap match with extraced vbs *)
+          let extracted_vb_groups =
+            extracted_letexps
+            |>@ begin fun letexp ->
+              match letexp.pexp_desc with
+              | Pexp_let (recflag, vbs, _) -> (recflag, vbs)
+              | _                          -> failwith "move_up_duplicated_bindings: shouldn't happen"
+            end
+          in
+          List.fold_right
+            (fun (recflag, vbs) e -> Exp.let_ recflag vbs e)
+            extracted_vb_groups
+            { exp with pexp_desc = Pexp_match (scrutinee, cases') }
+        end
+      in
+      loop [] [] cases
+    | _ ->
+      exp
+  end
 
 (* Naive extraction produces e.g. `f (match x with y -> y)` *)
 (* Turn that into `match x with y -> f y` *)
@@ -625,10 +934,19 @@ let add_missing_cases final_tenv prog =
   end
 
 let fixup_matches final_tenv prog =
+  (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
   prog
+  (* |> log *)
+  |> simplify_nested_matches_on_same_thing (* A match statement may have been inserted inside a match branch that already matches on the same scrutinee. Simplify. *)
+  (* |> log *)
+  |> remove_matches_with_no_cases
+  (* |> log *)
   |> move_matches_outside
+  (* |> log *)
+  |> move_up_duplicated_bindings
+  (* |> log *)
   |> add_missing_cases final_tenv
-  (* |> consolidate_cases *)
+  (* |> log *)
 
 (* Need final tenv to know what constructors exist *)
 let fixup final_tenv prog =

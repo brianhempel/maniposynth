@@ -164,7 +164,7 @@ let insert_code loc code final_tenv old =
     [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
   else
     old
-    |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
+    |> Exp.map_by_loc loc (Bindings.insert_vb_into_all_relevant_branches vb')
     |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
 
 let set_pos loc x y old =

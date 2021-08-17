@@ -96,6 +96,10 @@ module Longident = struct
   (* Use Loc.ident for a fresh loc *)
   let lident str = Location.mknoloc (Lident str)
 
+  let simple_name = function
+    | Lident name -> Some name
+    | _           -> None
+
   let to_string = flatten %> String.concat "."
 end
 
@@ -466,6 +470,8 @@ module Exp = struct
     | Pexp_ident lid_loced -> Some lid_loced
     | _                    -> None
   let ident_lid = ident_lid_loced %>& Loc_.txt
+  let simple_name = ident_lid %>& Longident.simple_name
+
   let ctor_lid_loced (exp : expression) =
     match exp.pexp_desc with
     | Pexp_construct (lid_loced, _) -> Some lid_loced
@@ -544,6 +550,10 @@ module Pat = struct
     match ctor_lid_loced pat with
     | Some { txt = Longident.Lident "()"; _ } -> true
     | _                                       -> false
+  let is_any pat =
+    match pat.ppat_desc with
+    | Ppat_any -> true
+    | _        -> false
   let is_catchall pat =
     match pat.ppat_desc with
     | Ppat_var _ -> true
@@ -837,6 +847,15 @@ module Attr = struct
     attrs |>@? (name %> (<>) target_name)
 
   let set_exp target_name exp = remove_name target_name %> add_exp target_name exp
+end
+
+module Attrs = struct
+  let mapper f =
+    let map_attrs mapper attrs = f (dflt_mapper.attributes mapper attrs) in
+    { dflt_mapper with attributes = map_attrs }
+
+  let map f prog =
+    (mapper f).structure (mapper f) prog
 end
 
 
