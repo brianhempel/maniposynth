@@ -44,7 +44,7 @@ and value_ =
 and fexpr = Location.t -> (arg_label * expression) list -> expression option
 
 and vtrace = (trace_pt * tp_type) list
-and trace_pt = frame_no * Location.t (* Ast_id.t is AST exp/pat ids *)
+and trace_pt = frame_no * Location.t
 and tp_type =
   | Intro (* val introduction *)
   | Use (* var usage *)

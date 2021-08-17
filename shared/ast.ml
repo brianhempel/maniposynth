@@ -394,6 +394,14 @@ module Common
       prog |> iter (fun node -> if pred node then raise (Found node));
       failwith "find_by: couldn't find node"
     with Found node -> node
+  let find_by_opt pred prog : Node.t option =
+    try
+      prog |> iter (fun node -> if pred node then raise (Found node));
+      None
+    with Found node -> Some node
+
+  let find     target_loc = find_by (loc %> (=) target_loc)
+  let find_opt target_loc = find_by_opt (loc %> (=) target_loc)
 
   (* Returns extracted node, and a function that takes a node and replaces that element. *)
   let extract_by pred prog : Node.t * (Node.t -> program) =
@@ -401,8 +409,14 @@ module Common
     ( node
     , fun node' -> replace_by ((==) node) node' prog (* Physical equality (==) will work here because node is always boxed and was pulled out of prog *)
     )
+  let extract_by_opt pred prog : (Node.t * (Node.t -> program)) option =
+    find_by_opt pred prog |>& fun node ->
+    ( node
+    , fun node' -> replace_by ((==) node) node' prog (* Physical equality (==) will work here because node is always boxed and was pulled out of prog *)
+    )
 
-  let extract target_loc = extract_by (loc %> (=) target_loc)
+  let extract     target_loc = extract_by (loc %> (=) target_loc)
+  let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
 
   let child_exps t =
     let children = ref [] in

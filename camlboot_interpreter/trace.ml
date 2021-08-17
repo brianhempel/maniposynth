@@ -19,8 +19,10 @@ type trace_state =
   ; mutable frame_no : int
   }
 
+let empty = IMap.empty
+
 let new_trace_state =
-  { trace = IMap.empty
+  { trace = empty
   ; frame_no = 0
   }
 
@@ -30,9 +32,19 @@ let add entry trace =
 
 let entries_for_loc loc trace =
   let finder _ entry results =
-    if Entry.loc entry = loc then begin
+    if Entry.loc entry = loc then
       entry :: results
-    end else
+    else
       results
   in
   IMap.fold finder trace []
+
+let entries_in_frame frame_no trace =
+  let finder _ entry results =
+    if Entry.frame_no entry = frame_no then
+      entry :: results
+    else
+      results
+  in
+  IMap.fold finder trace []
+

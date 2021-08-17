@@ -92,7 +92,8 @@ nav img {
 }
 
 .box > span:first-child,
-.pat_label {
+.pat_label,
+.subvalue-name {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
 }
@@ -146,11 +147,6 @@ nav img {
 [data-in-place-edit-loc] {
   cursor: text;
 }
-.exp_label,
-/* .pat_label, */
-.derived-vis-values {
-  font-size: 0.8em;
-}
 
 table {
   border-collapse: collapse;
@@ -175,8 +171,18 @@ table.returns {
   display: none !important;
 }
 
+.exp_label,
+/* .pat_label, */
+.derived-vis-value .value {
+  font-size: 0.8rem;
+}
 .value {
+  font-size: 1.5rem;
   cursor: pointer;
+  font-weight: bold;
+}
+.derived-vis-value .value {
+  font-weight: normal;
 }
 
 .not-in-active-frame {
@@ -201,11 +207,37 @@ table.returns {
   background-color: white;
 }
 
+table.subvalue-annotations {
+  display: inline-block;
+  vertical-align: middle;
+  margin: -0.4rem 0;
+}
+
+table.subvalue-annotations td {
+  height: 1rem;
+  line-height: 1rem;
+  text-align: right;
+}
+
+.subvalue-name {
+  display: inline-block;
+  /* margin: 0px -1px -100000px; */
+  margin: 1px 0px -3px;
+  padding: 0 1px;
+  font-size: 0.7rem;
+  background-color: white;
+  color: var(--pat-color);
+  position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
+  border: solid 1px lightgray;
+}
+
+
 .derived-vis-values {
-  position: relative;
-  top: -1em;
-  left: -2px;
-  margin-right: -1px;
+  display: block;
+  height: 1rem;
+  margin: 0;
+  margin-top: -1rem;
+  position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
 }
 
 .derived-vis-value {

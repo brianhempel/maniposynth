@@ -10,6 +10,8 @@ module SMap = struct
     |> List.map (fun (k, v) -> k ^ " => " ^ val_to_string v)
     |> String.concat ",\n"
     |> fun str -> "{\n" ^ str ^ "}"
+
+  let from_list list = list |> List.fold_left (fun smap (k, v) -> add k v smap) empty
 end
 
 
