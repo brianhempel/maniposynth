@@ -213,8 +213,8 @@ and html_of_value ?code_to_assert_on trace frame_no prog assert_results visualiz
     |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
     |>@& (fun loc -> Pat.find_opt loc prog |>&& Pat.name)
     |>@? ((<>) extraction_code) (* Not a trivial name. Means we're at the root of pat that's likely labeled elsewhere. *)
-    |>@ (fun name -> span ~attrs:[("class","subvalue-name")] [name])
-    |> String.concat ", "
+    |>@ (fun name -> span ~attrs:[("class","subvalue-name");("data-extraction-code",name)] [name])
+    |> String.concat ""
   in
   wrap_value @@
   table ~attrs:[("class","subvalue-annotations")]

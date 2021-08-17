@@ -222,7 +222,7 @@ table.subvalue-annotations td {
 .subvalue-name {
   display: inline-block;
   /* margin: 0px -1px -100000px; */
-  margin: 1px 0px -3px;
+  margin: 1px 0px -3px 1px;
   padding: 0 1px;
   font-size: 0.7rem;
   background-color: white;
