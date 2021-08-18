@@ -901,16 +901,15 @@ function reflowUnpositionedElems(elem) {
     }
   });
 }
+function relayout() {
+  resizeVbHolders(document);
+  reflowUnpositionedElems(document);
+}
 window.addEventListener('DOMContentLoaded', () => {
-  resizeVbHolders(document);
-  reflowUnpositionedElems(document);
-  resizeVbHolders(document);
-  reflowUnpositionedElems(document);
-  resizeVbHolders(document);
-  reflowUnpositionedElems(document);
-  resizeVbHolders(document);
-  reflowUnpositionedElems(document);
-  resizeVbHolders(document);
+  relayout();
+  relayout();
+  relayout();
+  relayout();
 });
 
 
@@ -981,6 +980,13 @@ function setFrameNo(frameRootElem, frameNo) {
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
 }
 
+function initFrameNos() {
+  document.querySelectorAll(".fun").forEach(frameNoElem => {
+    const frameNo = frameNoElem.querySelector("[data-frame-no]")?.dataset?.frameNo;
+    if (frameNo) { setFrameNo(frameNoElem, frameNo); }
+  });
+}
+
 function updateActiveValues(elem, frameNo) {
   if (elem.classList.contains("fun")) {
     // Stop recursing, new set of nested lambdas
@@ -993,15 +999,19 @@ function updateActiveValues(elem, frameNo) {
   } else {
     for (child of elem.children) { updateActiveValues(child, frameNo) }
   }
+
+  relayout();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll("[data-frame-no]").forEach(elem => {
     elem.addEventListener("mouseenter", event => {
       const frameNoElem = findFrameNoElem(elem);
-      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo) }
+      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo); }
     });
-  })
+  });
+
+  initFrameNos();
 });
 
 
