@@ -15,7 +15,8 @@ module SMap = struct
 end
 
 
-module SSet = Set.Make (String)
+module SSet    = Set.Make (String)
+module CharSet = Set.Make (Char)
 
 let clamp lo hi x =
   if x < lo then lo
@@ -244,6 +245,11 @@ module String = struct
   let drop_prefix prefix str =
     if starts_with prefix str
     then drop (length prefix) str
+    else str
+
+  let drop_suffix suffix str =
+    if ends_with suffix str
+    then prefix (length str - length suffix) str
     else str
 
   let find_index ?(start_index = 0) target str : int option =

@@ -573,7 +573,7 @@ function beginEditCallback(editType) {
     console.log(originalElem);
     const input = document.createElement("input");
     input.type = "text";
-    input.value = originalElem.innerText;
+    input.value = originalElem.dataset.inPlaceEditCode || originalElem.innerText;
     input.classList.add("transient-textbox");
     input.originalElem = originalElem;
     // originalElem.appendChild(input);

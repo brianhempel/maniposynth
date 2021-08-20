@@ -6,6 +6,13 @@ let pervasives_names =
   @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
   |> SSet.of_list
 
+(* https://ocaml.org/releases/4.07/htmlman/names.html *)
+(* https://ocaml.org/releases/4.07/htmlman/lex.html#infix-symbol *)
+let infix_names = SSet.of_list ["*"; "+"; "-"; "-."; "="; "!="; "<"; ">"; "or"; "||"; "&"; "&&"; ":="; "mod"; "land"; "lor"; "lxor"; "lsl"; "lsr"; "asr"]
+let infix_init_chars = CharSet.of_list ['='; '<'; '>'; '@'; '^'; '|'; '&'; '+'; '-'; '*'; '/'; '$'; '%']
+let is_infix name =
+  SSet.mem name infix_names ||
+  (String.length name >= 1 && CharSet.mem name.[0] infix_init_chars)
 
 let from_type typ =
   (Shared.Formatter_to_stringifier.f Printtyp.type_expr) typ
