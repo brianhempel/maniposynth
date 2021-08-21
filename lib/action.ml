@@ -142,10 +142,17 @@ let remove_vis_from_loc loc vis_str old =
   end
 
 let replace_loc_code loc code final_tenv old =
+  (* If new code is a var pattern, try renaming *)
+  let try_rename prog =
+    match code |> Pat.from_string_opt |>&& Pat.single_name with
+    | Some name' -> Bindings.rename_pat_by_loc loc name' prog
+    | None       -> prog
+  in
   (* Preserve old attrs and loc. *)
   old
   |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
-  |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end
+  |> try_rename
+  |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
   |> Bindings.fixup final_tenv
 
 let add_assert_before_loc loc lhs_code rhs_code final_tenv old =

@@ -570,7 +570,7 @@ let rec insert_vb_into_all_relevant_branches vb exp =
 
 (* Mapping is top-down, rather than bottom-up. *)
 (* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
-let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
+let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
   let rec map_exp scope_info _ e =
     let e'                       = f scope_info e in
     let recurse                  = map_exp scope_info  (mapper scope_info) in
@@ -611,22 +611,46 @@ let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a
     List.rev sis'_rev
   and mapper scope_info = { dflt_mapper with expr = map_exp scope_info; structure = map_struct_items scope_info }
   in
-  (mapper init_scope_info).expr (mapper init_scope_info) exp
+  mapper init_scope_info
+
+let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
+  let mapper = mapper_with_scope init_scope_info handle_pat f in
+  mapper.expr mapper exp
 
 
+let map_exps_with_scope_prog (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) struct_items =
+  let mapper = mapper_with_scope init_scope_info handle_pat f in
+  mapper.structure mapper struct_items
+
+(* Preserves old attrs and locs *)
+let apply_subst_on_exp subst exp =
+  match exp.pexp_desc with
+  | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
+    SMap.find_opt name subst
+    |>& (fun name' -> { exp with pexp_desc = Pexp_ident {lid_loced with txt = Longident.Lident name'} })
+    ||& exp
+  | _ ->
+    exp
+
+(* Preserves old attrs and locs *)
 let rename_unqualified_variables subst exp =
   let handle_pat subst pat = SMap.remove_all (Pat.names pat) subst in
   exp
-  |> map_exps_with_scope subst handle_pat begin fun subst exp ->
-    match exp.pexp_desc with
-    | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
-      SMap.find_opt name subst
-      |>& (fun name' -> { exp with pexp_desc = Pexp_ident {lid_loced with txt = Longident.Lident name'} })
-      ||& exp
-    | _ ->
-      exp
-  end
+  |> map_exps_with_scope subst handle_pat apply_subst_on_exp
 
+(* Only handles single name pats for now, not as-pats. *)
+(* Preserves old attrs and locs *)
+let rename_pat_by_loc loc name' prog =
+  let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = loc in
+  let handle_pat subst pat =
+    let subst = SMap.remove_all (Pat.names pat) subst in
+    match pat |> Pat.flatten |> List.find_opt is_target_pat with
+    | Some pat -> SMap.add (Pat.single_name pat ||& "") name' subst
+    | None     -> subst
+  in
+  prog
+  |> map_exps_with_scope_prog SMap.empty handle_pat apply_subst_on_exp
+  |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
 
 let simplify_nested_matches_on_same_thing prog =
   let simplify scrutinee_name branch_pat branch =

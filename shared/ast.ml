@@ -473,6 +473,7 @@ module Exp = struct
 
   let to_string = Pprintast.string_of_expression
   let from_string = Lexing.from_string %> Parse.expression
+  let from_string_opt exp = try Some (from_string exp) with Syntaxerr.Error _ -> None
 
   let int (exp : expression) =
     match exp.pexp_desc with
@@ -539,6 +540,8 @@ module Pat = struct
 
   let to_string = Formatter_to_stringifier.f Pprintast.pattern
   let from_string = Lexing.from_string %> Parse.pattern
+  let from_string_opt exp = try Some (from_string exp) with Syntaxerr.Error _ -> None
+
   (* let rec one_var (pat : pattern) =
     match pat.ppat_desc with
     | Ppat_var _               -> Some pat
@@ -796,6 +799,8 @@ module StructItems = struct
 
   let to_string = Pprintast.string_of_structure
   let from_string = Lexing.from_string %> Parse.implementation
+  let from_string_opt exp = try Some (from_string exp) with Syntaxerr.Error _ -> None
+
 
   (* Variable names introduced or used. Excludes ctors. *)
   (* Includes endings of qualified names, e.g. "x" in Thing.x *)
