@@ -1,6 +1,7 @@
 :root {
   --padding: 4px;
   --color: rgb(163, 255, 174);
+  --color-light: rgb(215, 255, 220);
   --pat-color: rgb(226, 43, 144);
 }
 
@@ -14,6 +15,16 @@ input[type=text] {
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
 }
+table {
+  border-collapse: collapse;
+}
+td {
+  padding: 0;
+}
+.hidden {
+  display: none !important;
+}
+
 
 nav {
   top: 0;
@@ -66,46 +77,41 @@ nav img {
 }
 
 .box {
-  /* border: solid 1px black; */
-  /* box-shadow: -2px 1px 5px rgba(0,0,0,0.2); */
-  /* border-left: solid 1px black; */
-  /* display: inline-block; */
-  /* margin: var(--padding); */
   display: block;
   position: absolute;
   max-width: 100%;
   cursor: move;
   border: solid 10px transparent; /* Makes edges grabbable for relocating. */
-  /* background-color: rgba(200,200,200,0.2); */
 }
 .box > * {
   cursor: auto;
 }
 
-.box > * {
+.box > *,
+.returns > .tv {
   background-color: white;
 }
 
-.box > :last-child {
-  /* border: solid 1px black; */
+.box > .tv,
+.returns > .tv {
   box-shadow: 0px 0px 5px rgba(0,0,0,0.15);
 }
 
-.box > span:first-child,
+.box > .pat,
 .pat_label,
 .subvalue-name {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
 }
-.box > span:first-child {
+.box > .pat:first-child {
   color: var(--pat-color);
 }
 
-.top-level > .box > span:first-child {
+.top-level > .box > .pat:first-child {
   font-size: 20px;
 }
 
-.top-level > .box > :last-child {
+.top-level > .box > .tv {
   /* border: solid 1px black; */
   box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }
@@ -122,59 +128,108 @@ nav img {
   margin: 0;
 }
 
-.exp_label {
-  background-color: var(--color);
+.tv {
+  min-height: 3em;
+  min-width: 2em;
+  /* display: inline-block; */
 }
-.pat_label {
-  color: white;
-  background-color: var(--pat-color);
-  /* background-color: #ddd; */
-}
-.pat_label,
-.pat_label + td {
-  border: solid 1px var(--pat-color);
+.exp_label .tv {
+  min-height: 2em;
+  min-width: 1em;
 }
 .exp_label,
-.pat_label {
+.pat_label,
+.box > .pat:last-child {
   padding: var(--padding);
+}
+.pat_label,
+.box > .pat:last-child,
+.subvalue-name {
+  background-color: white;
+  color: var(--pat-color);
+}
+.fun-param > .pat_label {
+  color: white;
+  background-color: var(--pat-color);
+}
+.fun-param > td {
+  border: solid 1px var(--pat-color);
 }
 .root-value-holder {
   padding: var(--padding);
   display: inline-block;
+}
+.exp_label .root-value-holder {
+  padding: 0;
+}
+.exp_label .values {
+  display: inline-block;
+  position: relative;
+  top: -0.7em;
+  margin-left: 2px;
+  background-color: var(--color-light);
+  /* border: solid 1px var(--color); */
+  padding: 1px;
+  color: #555;
+}
+.fun-param > td > .values > .root-value-holder {
   margin-right: 1.2em;
 }
+
+table.subvalue-annotations {
+  display: inline-block;
+  vertical-align: middle;
+  margin: -2rem 0;
+}
+table.subvalue-annotations td {
+  height: 1rem;
+  line-height: 1rem;
+  text-align: right;
+}
+.subvalue-name,
+.box > .pat:last-child {
+  border: solid 1px lightgray;
+}
+.subvalue-name {
+  display: inline-block;
+  margin: 1px 0px -3px 1px;
+  padding: 0 1px;
+  font-size: 0.7rem;
+  position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
+}
+.tv > .exp_label {
+  background-color: var(--color);
+  display: inline-block;
+  margin-left: -0.9em;
+  margin-top: -1.5em;
+  margin-right: -10em;
+}
+.exp_label .exp_label {
+  border: solid 1px white;
+}
+.box > .pat:last-child {
+  position: absolute;
+  padding: 2px;
+  left: -0.9rem;
+  bottom: -1.1rem;
+}
+
 
 [data-in-place-edit-loc] {
   cursor: text;
 }
 
-table {
-  border-collapse: collapse;
-}
-
-td {
-  padding: 0;
-}
-table.returns {
-  width: 100%;
-}
-
-/* .vbs {
-  overflow: hidden;
-} */
 .vbs {
   position: relative;
-  /* padding: 0; */
-}
-
-.hidden {
-  display: none !important;
+  /* min-height for .vbs in the the resizeVbHolders javascript */
 }
 
 .exp_label,
-/* .pat_label, */
 .derived-vis-value .value {
   font-size: 0.8rem;
+}
+.exp_label .value {
+  font-size: 0.65rem;
 }
 .value {
   display: inline-block;
@@ -182,7 +237,8 @@ table.returns {
   cursor: pointer;
   font-weight: bold;
 }
-.derived-vis-value .value {
+.derived-vis-value .value,
+.exp_label .value {
   font-weight: normal;
 }
 
@@ -196,8 +252,12 @@ table.returns {
 
 .draggable-hovered {
   /* background-color: rgba(200,200,200,0.5); */
-  /* color: #000; */
   box-shadow: 1px 1px 7px rgba(0,0,0,0.3);
+}
+/* For making it clearer which tiny subvalue in an exp_label is hovered. */
+.draggable-hovered.value {
+  color: black;
+  background-color: white;
 }
 
 .current-drop-target {
@@ -206,34 +266,6 @@ table.returns {
 
 .selected {
   box-shadow: 0px 0px 5px rgb(0, 150, 255);
-}
-
-.value {
-  background-color: white;
-}
-
-table.subvalue-annotations {
-  display: inline-block;
-  vertical-align: middle;
-  margin: -0.4rem 0;
-}
-
-table.subvalue-annotations td {
-  height: 1rem;
-  line-height: 1rem;
-  text-align: right;
-}
-
-.subvalue-name {
-  display: inline-block;
-  /* margin: 0px -1px -100000px; */
-  margin: 1px 0px -3px 1px;
-  padding: 0 1px;
-  font-size: 0.7rem;
-  background-color: white;
-  color: var(--pat-color);
-  position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
-  border: solid 1px lightgray;
 }
 
 
@@ -259,6 +291,15 @@ table.subvalue-annotations td {
   background-color: rgb(130, 255, 81);
 }
 
+
+.returns {
+  padding: 1.5rem 1rem 0.5rem;
+  border-top: solid 1px lightgray;
+  display: flex;
+  justify-content: space-evenly;
+}
+
+
 #inspector {
   position: fixed;
   border: solid 1px black;
@@ -277,16 +318,10 @@ table.subvalue-annotations td {
   border: inset 2px lightgray;
 }
 
-/* #inspector h2 {
-  margin: var(--padding) 0;
-  font-size: 20px;
-} */
-
 #inspector label,
 #inspector input[type=checkbox] {
   cursor: pointer;
 }
-
 
 #inspector .exp-row {
   padding: var(--padding);
@@ -301,14 +336,6 @@ table.subvalue-annotations td {
   float: right;
 }
 
-
-/* #inspector label {
-  display: inline-block;
-  border: solid 1px black;
-  border-radius: 1em;
-  padding: 0 4px;
-  margin: 3px;
-} */
 
 #synth-button {
   font-family: 'SignPainter', 'Brush Script MT', cursive;

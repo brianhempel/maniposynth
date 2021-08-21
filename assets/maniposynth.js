@@ -847,6 +847,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // Resize deepest first.
 function resizeVbHolders(elem) {
   const vbsHolders = elem.querySelectorAll(".vbs");
+  const minVbHolderHeight = 70;
   vbsHolders.forEach(vbsHolder => {
     if (vbsHolder.classList.contains("top-level")) { return; }
     // console.log(vbsHolder.children);
@@ -859,10 +860,10 @@ function resizeVbHolders(elem) {
     }
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
-      vbsHolder.style.height = `${maxHeight + 10}px`
+      vbsHolder.style.height = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`
     } else {
       vbsHolder.style.minWidth  = `${maxWidth + 10}px`
-      vbsHolder.style.minHeight = `${maxHeight + 10}px`
+      vbsHolder.style.minHeight = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`
     }
   });
 };
