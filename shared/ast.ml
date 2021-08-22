@@ -506,6 +506,7 @@ module Exp = struct
   let is_funlike exp = is_fun exp || is_function exp
   let is_constant    = function { pexp_desc = Pexp_constant _; _ } -> true | _ -> false
   let is_match       = function { pexp_desc = Pexp_match _; _ }    -> true | _ -> false
+  let is_ident       = function { pexp_desc = Pexp_ident _; _ }    -> true | _ -> false
 
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in

@@ -342,13 +342,16 @@ let html_of_values_for_pat stuff pat =
 (* hide assert/imperative unit returns *)
 (* vb moving boxes work with above (make them bigger?) *)
 
+(* "(+)" -> "+" *)
+let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
+
 (* For exp labels *)
 let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) (stuff : stuff) exp =
   let recurse ?(show_result = true) ?(infix = false) = html_of_exp ~show_result ~infix stuff in
   (* let exp_to_edit = exp_to_edit ||& exp in *)
   let code         = Exp.to_string { exp         with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
   (* Remove parens around ops rendered infix. *)
-  let code = if infix then (code |> String.drop_prefix "(" |> String.drop_suffix ")") else code in
+  let code = if infix then uninfix code else code in
   (* let code_to_edit = Exp.to_string { exp_to_edit with pexp_attributes = [] } in Don't show pos/vis attrs. *)
   let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
   let perhaps_suggestions_attr = if Exp.is_hole exp then [("data-suggestions", String.concat "  " Hole_suggestions.suggestions)] else [] in
@@ -365,9 +368,10 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   | Pexp_apply (fexp, labeled_args) ->
     let html_of_labeled_arg (label, arg) = Asttypes.(match label with Nolabel -> "" | Labelled str -> "~" ^ str | Optional str -> "?" ^ str) ^ recurse arg in
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
+    (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg la1 ^ recurse ~show_result:false ~infix:true fexp ^ html_of_labeled_arg la2
-    | _                -> recurse ~show_result:false fexp ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
+    | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
+    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
     end
   | _ -> code
 
