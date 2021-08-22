@@ -221,7 +221,7 @@ table.subvalue-annotations td {
 
 .vbs {
   position: relative;
-  /* min-height for .vbs in the the resizeVbHolders javascript */
+  /* min-height for .vbs in the the resizeVbHolders() javascript */
 }
 
 .exp_label,
@@ -312,13 +312,16 @@ table.subvalue-annotations td {
   font-weight: bold;
 }
 
-#inspector #exps-textbox {
+#inspector input[type=text] {
   width: 100%;
   /* border: none; */
   border: inset 2px lightgray;
 }
 
-#inspector label,
+#inspector label {
+  font-size: 0.7em;
+}
+
 #inspector input[type=checkbox] {
   cursor: pointer;
 }

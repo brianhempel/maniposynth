@@ -284,7 +284,7 @@ function select(elem) {
   elem.classList.add("selected");
   saveSelection();
   updateInspector();
-  document.getElementById("exps-textbox").focus();
+  selectInspectorTextbox();
 }
 
 function deselect(elem) {
@@ -349,7 +349,7 @@ window.addEventListener('DOMContentLoaded', () => {
     } else if (selectedElems().length > 0) {
       deselectAll();
     } else {
-      document.location.reload();
+      // document.location.reload();
     }
   }
 
@@ -368,7 +368,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  restoreSelection();
+  // restoreSelection();
 });
 
 
@@ -406,24 +406,38 @@ function containingLoc(elem) {
   return elem.closest("[data-loc]").dataset.loc;
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  window.inspector = document.getElementById("inspector");
-
-  document.getElementById("exps-textbox").addEventListener("keydown", event => {
+function textboxKeydownHandler(handleSubmit) {
+  return function (event) {
     let textbox = event.currentTarget;
     if (event.key === "Enter" && textbox.value) {
       const elem = selectedElems()[0];
-      if (elem) {
-        const vis = textbox.value;
-        addVis(containingLoc(elem), vis);
+      if (textbox.targetElem) {
+        handleSubmit(textbox.targetElem, textbox.value);
       }
     } else if (event.key === "Esc" || event.key === "Escape") {
-      textbox.value = "";
+      textbox.value = textbox.originalValue || "";
       textbox.blur();
-      // document.querySelector(".top-level").focus(); // I don't think this works :/
+      delete textbox.targetElem;
     }
     event.stopImmediatePropagation();
-  });
+  };
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.inspector = document.getElementById("inspector");
+
+  document.getElementById("exps-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
+    const vis = text;
+    addVis(containingLoc(targetElem), vis);
+  }));
+
+  document.getElementById("node-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
+    replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
+  }));
+
+  document.getElementById("root-node-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
+    replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
+  }));
 
   window.addEventListener("resize", updateInspector);
   window.addEventListener("scroll", updateInspector);
@@ -431,15 +445,30 @@ window.addEventListener('DOMContentLoaded', () => {
   updateInspector();
 });
 
+function selectInspectorTextbox() {
+  let found = false;
+  window.inspector.querySelectorAll("input[type=text]").forEach(textbox => {
+    if (!found) {
+      if (selfAndParents(textbox).every(isShown)) {
+        found = true;
+        textbox.select();
+      }
+    }
+  });
+}
 
 function updateInspector() {
   const inspector              = window.inspector;
+  const textEditPane           = document.getElementById("text-edit-pane");
+  const textEditRootStuff      = document.getElementById("text-edit-root-stuff");
+  const rootNodeTextbox        = document.getElementById("root-node-textbox");
+  const nodeTextbox            = document.getElementById("node-textbox");
   const typeOfSelected         = document.getElementById("type-of-selected");
   const expsList               = document.getElementById("exps-list");
   const suggestionsForSelected = document.getElementById("suggestions-for-selected");
   const expsPane               = document.getElementById("exps-pane");
   const suggestionsPane        = document.getElementById("suggestions-pane");
-  // const addVisTextbox    = document.getElementById("exps-textbox");
+  const addVisTextbox          = document.getElementById("exps-textbox");
 
   const elem = selectedElems()[0];
 
@@ -507,6 +536,30 @@ function updateInspector() {
       inspector.style.top   = rect.bottom;
     }
     show(inspector);
+
+    if (elem.dataset.inPlaceEditLoc) {
+      let rootNodeElem = undefined;
+      for (const parent of selfAndParents(elem)) {
+        if (parent.dataset.inPlaceEditLoc) {
+          rootNodeElem = parent;
+        } else {
+          break;
+        }
+      }
+      const rootNodeCode            = rootNodeElem?.dataset?.inPlaceEditCode || rootNodeElem?.innerText;
+      rootNodeTextbox.value         = rootNodeCode;
+      rootNodeTextbox.originalValue = rootNodeCode;
+      rootNodeTextbox.targetElem    = rootNodeElem;
+      const nodeCode                = elem.dataset.inPlaceEditCode || elem.innerText;
+      nodeTextbox.value             = nodeCode;
+      nodeTextbox.originalValue     = nodeCode;
+      nodeTextbox.targetElem        = elem;
+      if (rootNodeElem === elem) { hide(textEditRootStuff); } else { show(textEditRootStuff); }
+      show(textEditPane);
+    } else {
+      hide(textEditPane);
+    }
+
     const typeStr = elem.dataset.type || "Unknown";
     typeOfSelected.innerHTML = "";
     suggestionsForSelected.innerHTML = "";
@@ -527,6 +580,7 @@ function updateInspector() {
       hide(suggestionsPane);
     }
     if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
+      addVisTextbox.targetElem = elem;
       show(expsPane);
       const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
       const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
@@ -547,12 +601,16 @@ function updateInspector() {
 
 /////////////////// Text Editing ///////////////////
 
-function hide(originalElem) {
-  originalElem.classList.add("hidden");
+function hide(elem) {
+  elem.classList.add("hidden");
 }
 
-function show(originalElem) {
-  originalElem.classList.remove("hidden");
+function show(elem) {
+  elem.classList.remove("hidden");
+}
+
+function isShown(elem) {
+  return !elem.classList.contains("hidden");
 }
 
 function abortTextEdit(textbox) {
@@ -565,47 +623,47 @@ function transientTextboxes() {
   return document.querySelectorAll(".transient-textbox");
 }
 
-function beginEditCallback(editType) {
-  return function (event) {
-    event.stopImmediatePropagation();
-    const originalElem = event.currentTarget;
-    // const parent = originalElem.parentElement;
-    console.log(originalElem);
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = originalElem.dataset.inPlaceEditCode || originalElem.innerText;
-    input.classList.add("transient-textbox");
-    input.originalElem = originalElem;
-    // originalElem.appendChild(input);
-    originalElem.insertAdjacentElement("afterend", input);
-    hide(originalElem);
-    // input.focus();
-    updateInspector();
-    input.select();
+// function beginEditCallback(editType) {
+//   return function (event) {
+//     event.stopImmediatePropagation();
+//     const originalElem = event.currentTarget;
+//     // const parent = originalElem.parentElement;
+//     console.log(originalElem);
+//     const input = document.createElement("input");
+//     input.type = "text";
+//     input.value = originalElem.dataset.inPlaceEditCode || originalElem.innerText;
+//     input.classList.add("transient-textbox");
+//     input.originalElem = originalElem;
+//     // originalElem.appendChild(input);
+//     originalElem.insertAdjacentElement("afterend", input);
+//     hide(originalElem);
+//     // input.focus();
+//     updateInspector();
+//     input.select();
 
-    input.addEventListener('keydown', event => {
-      // console.log(event.key);
-      if (event.key === "Enter") {
-        if (editType === "in-place") {
-          if (input.value.length > 0) {
-            replaceLoc(originalElem.dataset.inPlaceEditLoc, input.value);
-          } else {
-            deleteLoc(originalElem.dataset.inPlaceEditLoc);
-          }
-        } else if (editType === "new assert") {
-          if (input.value.length > 0) {
-            newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
-          }
-        } else {
-          console.warn("Unknown edit type " + editType)
-        }
-      } else if (event.key === "Esc" || event.key === "Escape") {
-        abortTextEdit(input);
-      }
-      event.stopImmediatePropagation();
-    });
-  }
-}
+//     input.addEventListener('keydown', event => {
+//       // console.log(event.key);
+//       if (event.key === "Enter") {
+//         if (editType === "in-place") {
+//           if (input.value.length > 0) {
+//             replaceLoc(originalElem.dataset.inPlaceEditLoc, input.value);
+//           } else {
+//             deleteLoc(originalElem.dataset.inPlaceEditLoc);
+//           }
+//         } else if (editType === "new assert") {
+//           if (input.value.length > 0) {
+//             newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
+//           }
+//         } else {
+//           console.warn("Unknown edit type " + editType)
+//         }
+//       } else if (event.key === "Esc" || event.key === "Escape") {
+//         abortTextEdit(input);
+//       }
+//       event.stopImmediatePropagation();
+//     });
+//   }
+// }
 
 function beginNewCodeEdit(vbsHolder) {
   return function (event) {
@@ -636,13 +694,13 @@ function beginNewCodeEdit(vbsHolder) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
-    elem.addEventListener("dblclick", beginEditCallback("in-place"));
-  });
+  // document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
+  //   elem.addEventListener("dblclick", beginEditCallback("in-place"));
+  // });
 
-  document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
-    elem.addEventListener("dblclick", beginEditCallback("new assert"));
-  });
+  // document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
+  //   elem.addEventListener("dblclick", beginEditCallback("new assert"));
+  // });
 
   document.querySelectorAll('.vbs').forEach(elem => {
     elem.addEventListener("dblclick", beginNewCodeEdit(elem));
@@ -933,20 +991,20 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// What Am I ///////////////////
 
-// // Self is first, root is last.
-// // Based on https://developer.mozilla.org/en-US/docs/Web/API/Element/closest#polyfill
-// function selfAndParents(elem) {
-//   const out = [];
-//   while (elem !== null && elem.nodeType === 1) {
-//     out.push(elem);
-//     elem = elem.parentElement || elem.parentNode;
-//   }
-//   return out;
-// }
+// Self is first, root is last.
+// Based on https://developer.mozilla.org/en-US/docs/Web/API/Element/closest#polyfill
+function selfAndParents(elem) {
+  const out = [];
+  while (elem !== null && elem.nodeType === 1) {
+    out.push(elem);
+    elem = elem.parentElement || elem.parentNode;
+  }
+  return out;
+}
 
 // // .exp .vb and .pat are littered around the HTML
 // // Messy because Maniposynth's canvas is deliberately not 1-to-1 with the code.
-// // An invariant: A .vb elem is always a child of a .vbs, and all .vbs immediat children are a .vb (no exceptions)
+// // An invariant: A .vb elem is always a child of a .vbs, and all .vbs immediate children are a .vb (no exceptions)
 // function isInPatternPosition(elem) {
 //   for (const el of selfAndParents(elem)) {
 //     if (el.classList.contains("pat")) {

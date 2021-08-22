@@ -337,8 +337,8 @@ let html_of_values_for_pat stuff pat =
   html_of_values_for_loc stuff type_env root_exp_opt visualizers pat.ppat_loc
 
 (* START HERE *)
-(* need to be able to double click to edit the whole exp...or just put it in the inspector *)
-(* need to be able to insert fun calls with hole args *)
+(* make assert in inspector *)
+(* insert fun calls with hole args *)
 (* hide assert/imperative unit returns *)
 (* vb moving boxes work with above (make them bigger?) *)
 
@@ -522,13 +522,22 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
         List.map (html_of_structure_item stuff) structure_items
       ; div ~attrs:[("id", "inspector")]
-        [ div ~attrs:[("id", "type-of-selected")] []
+        [ div ~attrs:[("id", "text-edit-pane")]
+          [ span  ~attrs:[("id", "text-edit-root-stuff")]
+            [ label ~attrs:[("for","root-node-textbox")] ["Root"]
+            ; textbox ~attrs:[("id", "root-node-textbox")] []
+            ; label ~attrs:[("for","node-textbox")] ["Item"]
+            ]
+          ; textbox ~attrs:[("id", "node-textbox")] []
+          ]
+        ; div ~attrs:[("id", "type-of-selected")] []
         ; div ~attrs:[("id", "suggestions-pane")]
           [ h2 ["Suggestions"]
           ; div ~attrs:[("id", "suggestions-for-selected")] []
           ]
         ; div ~attrs:[("id", "exps-pane")]
-          [ textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []
+          [ label ~attrs:[("for","exps-textbox")] ["Use"]
+          ; textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []
           ; div ~attrs:[("id", "exps-list")] []
           ]
         ]
