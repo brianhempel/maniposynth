@@ -337,7 +337,6 @@ let html_of_values_for_pat stuff pat =
   html_of_values_for_loc stuff type_env root_exp_opt visualizers pat.ppat_loc
 
 (* START HERE *)
-(* make assert in inspector *)
 (* insert fun calls with hole args *)
 (* hide assert/imperative unit returns *)
 (* vb moving boxes work with above (make them bigger?) *)
@@ -533,6 +532,10 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
             ; label ~attrs:[("for","node-textbox")] ["Item"]
             ]
           ; textbox ~attrs:[("id", "node-textbox")] []
+          ]
+        ; div ~attrs:[("id", "assert-pane")]
+          [ label ~attrs:[("for","assert-textbox")] ["Assert "; span ~attrs:[("id","assert-on")] []; " ="]
+          ; textbox ~attrs:[("id", "assert-textbox")] []
           ]
         ; div ~attrs:[("id", "type-of-selected")] []
         ; div ~attrs:[("id", "suggestions-pane")]

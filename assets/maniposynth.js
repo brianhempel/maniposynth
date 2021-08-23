@@ -357,7 +357,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-extraction-code],.vb,.exp[data-in-place-edit-loc]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code],.vb,.exp[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", toggleSelect);
   });
@@ -439,6 +439,10 @@ window.addEventListener('DOMContentLoaded', () => {
     replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
   }));
 
+  document.getElementById("assert-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
+    newAssert(containingLoc(targetElem), targetElem.dataset.codeToAssertOn, text);
+  }));
+
   window.addEventListener("resize", updateInspector);
   window.addEventListener("scroll", updateInspector);
 
@@ -463,6 +467,9 @@ function updateInspector() {
   const textEditRootStuff      = document.getElementById("text-edit-root-stuff");
   const rootNodeTextbox        = document.getElementById("root-node-textbox");
   const nodeTextbox            = document.getElementById("node-textbox");
+  const assertPane             = document.getElementById("assert-pane");
+  const assertOn               = document.getElementById("assert-on");
+  const assertTextbox          = document.getElementById("assert-textbox");
   const typeOfSelected         = document.getElementById("type-of-selected");
   const expsList               = document.getElementById("exps-list");
   const suggestionsForSelected = document.getElementById("suggestions-for-selected");
@@ -558,6 +565,15 @@ function updateInspector() {
       show(textEditPane);
     } else {
       hide(textEditPane);
+    }
+    if (elem.dataset.codeToAssertOn) {
+      assertOn.innerText          = elem.dataset.codeToAssertOn;
+      assertTextbox.value         = "";
+      assertTextbox.originalValue = "";
+      assertTextbox.targetElem    = elem;
+      show(assertPane);
+    } else {
+      hide(assertPane);
     }
 
     const typeStr = elem.dataset.type || "Unknown";
@@ -947,7 +963,7 @@ function reflowUnpositionedElems(elem) {
       }
       if (!placedBoxes.includes(box)) {
         box.style.left = `10px`
-        let top = 0;
+        let top = 10;
         box.style.top = `${top}px`
         while (placedBoxes.find(box2 => areOverlapping(box, box2))) {
           top += 10
