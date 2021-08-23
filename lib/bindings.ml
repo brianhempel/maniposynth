@@ -529,8 +529,8 @@ and add_missing_bindings_exp defined_names exp =
 `
  *)
 
-(* Duplicate the VB into case branches in which most of its free vars are defined. *)
-let rec insert_vb_into_all_relevant_branches vb exp =
+(* Duplicate the VB into case branches in which most of its free vars are defined OR into matches that scrutinize matches the vb also scrutinizes. *)
+let rec insert_vb_into_all_relevant_branches ?(recflag = Asttypes.Nonrecursive) vb exp =
   let rec names_defined_deeper exp =
     let recurse = names_defined_deeper in
     match exp.pexp_desc with
@@ -540,19 +540,25 @@ let rec insert_vb_into_all_relevant_branches vb exp =
     | Pexp_match (_, cases)    -> cases |>@@ (fun case -> Pat.names case.pc_lhs @ recurse case.pc_rhs)
     | _                        -> []
   in
-  let free_names_in_new_vb = List.dedup @@ free_unqualified_names_pat vb.pvb_pat @ free_unqualified_names vb.pvb_expr in
   let recurse = insert_vb_into_all_relevant_branches vb in
   match exp.pexp_desc with
   | Pexp_let (recflag, vbs, body)           -> { exp with pexp_desc = Pexp_let (recflag, vbs, recurse body) }
   | Pexp_sequence (e1, e2)                  -> { exp with pexp_desc = Pexp_sequence (e1, recurse e2) }
   | Pexp_letmodule (name_loced, mod_exp, e) -> { exp with pexp_desc = Pexp_letmodule (name_loced, mod_exp, recurse e) }
   | Pexp_match (e, cases)                   ->
+    let free_names_in_vb =
+      let free_names = List.dedup @@ free_unqualified_names_pat vb.pvb_pat @ free_unqualified_names vb.pvb_expr in
+      begin match recflag with
+      | Asttypes.Nonrecursive -> free_names
+      | Asttypes.Recursive    -> List.diff free_names (Vb.names vb)
+      end
+    in
     (* Find which case(s) define the greatest number of needed names, then push into those. *)
     let cases_and_needed_names_defined_count =
       cases
       |>@ begin fun case ->
         let names_defined_deeper = List.dedup @@ Pat.names case.pc_lhs @ names_defined_deeper case.pc_rhs in
-        (case, List.length (List.inter free_names_in_new_vb names_defined_deeper))
+        (case, List.length (List.inter free_names_in_vb names_defined_deeper))
       end
     in
     let most_defined_count = cases_and_needed_names_defined_count |>@ snd |> List.max in
@@ -566,7 +572,14 @@ let rec insert_vb_into_all_relevant_branches vb exp =
     in
     { exp with pexp_desc = Pexp_match (e, cases') }
   | _ ->
-    Exp.let_ Asttypes.Nonrecursive [vb] exp
+    Exp.let_ recflag [vb] exp
+
+let move_vbs_into_all_relevant_branches =
+  Exp.map begin fun exp ->
+    match exp.pexp_desc with
+    | Pexp_let (recflag, [vb], body) -> insert_vb_into_all_relevant_branches ~recflag vb body
+    | _                              -> exp
+  end
 
 (* Mapping is top-down, rather than bottom-up. *)
 (* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
@@ -958,19 +971,21 @@ let add_missing_cases final_tenv prog =
   end
 
 let fixup_matches final_tenv prog =
-  (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
+  let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in
   prog
-  (* |> log *)
+  |> log
+  |> move_vbs_into_all_relevant_branches
+  |> log
   |> simplify_nested_matches_on_same_thing (* A match statement may have been inserted inside a match branch that already matches on the same scrutinee. Simplify. *)
-  (* |> log *)
+  |> log
   |> remove_matches_with_no_cases
-  (* |> log *)
+  |> log
   |> move_matches_outside
-  (* |> log *)
+  |> log
   |> move_up_duplicated_bindings
-  (* |> log *)
+  |> log
   |> add_missing_cases final_tenv
-  (* |> log *)
+  |> log
 
 (* Need final tenv to know what constructors exist *)
 let fixup final_tenv prog =

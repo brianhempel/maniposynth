@@ -104,7 +104,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
           let (fval, _) =
             Eval.with_gather_asserts begin fun () ->
               let exp_to_run = Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") with _ -> (??)" in
-              Eval.eval_expr Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
           let matching_asserts =
             assert_results
@@ -128,7 +128,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
           let (result_value, _) =
             (* "with_gather_asserts" so failed asserts don't crash execution *)
             Eval.with_gather_asserts begin fun () ->
-              Eval.eval_expr Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
           let wrap html =
             if any_failures then
@@ -312,16 +312,21 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
 
 
 let html_of_values_for_loc stuff type_env root_exp_opt visualizers loc =
+  let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
+  let html_of_entry (_, frame_no, value, env) =
+    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value stuff frame_no visualizers env type_env root_exp_opt value]
+  in
+  let inners =
+    if List.length entries >= 5 then
+      (List.prefix 2 entries |>@ html_of_entry) @
+      [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 4) ^ " more..."]] @
+      (List.suffix 2 entries |>@ html_of_entry)
+    else
+      entries |>@ html_of_entry
+  in
   div
     ~attrs:[("class","values");("data-loc", Serialize.string_of_loc loc)] (* View root for visualizers, also for determining where to place new asserts before *)
-    begin
-      stuff.trace
-      |> Trace.entries_for_loc loc
-      |> List.sort_by (fun (_, frame_no, _, _) -> frame_no)
-      |>@ begin fun (_, frame_no, value, env) ->
-        span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value stuff frame_no visualizers env type_env root_exp_opt value]
-      end
-    end
+    inners
 
 let html_of_values_for_exp stuff vb_pat_opt exp =
   let type_env = stuff.type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
@@ -337,12 +342,13 @@ let html_of_values_for_pat stuff pat =
   html_of_values_for_loc stuff type_env root_exp_opt visualizers pat.ppat_loc
 
 (* START HERE *)
-(* insert fun calls with hole args *)
 (* hide assert/imperative unit returns *)
 (* vb moving boxes work with above (make them bigger?) *)
 
 (* "(+)" -> "+" *)
 let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
+
+
 
 (* For exp labels *)
 let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) (stuff : stuff) exp =
@@ -361,7 +367,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     ] @ perhaps_type_attr @ perhaps_suggestions_attr)
     [inner]
   in
-  (if show_result && not tv_root_exp && not (Exp.is_constant exp) then html_of_values_for_exp stuff None exp else "") ^
+  (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp stuff None exp else "") ^
   wrap @@
   match exp.pexp_desc with
   | Pexp_apply (fexp, labeled_args) ->
@@ -370,9 +376,9 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
     | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
-    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
+    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
     end
-  | _ -> code
+  | _ -> code ^ " "
 
 
 let rec terminal_exps exp = (* Dual of gather_vbs *)

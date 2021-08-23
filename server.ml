@@ -57,7 +57,7 @@ let render_maniposynth out_chan url =
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
   let (trace, assert_results) =
     Camlboot_interpreter.Eval.with_gather_asserts begin fun () ->
-      Camlboot_interpreter.Interp.run_files type_lookups.lookup_exp [path]
+      Camlboot_interpreter.Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
     end in
   (* print_endline @@ string_of_int (List.length assert_results); *)
   let html_str = View.html_str parsed trace assert_results type_lookups final_tenv in

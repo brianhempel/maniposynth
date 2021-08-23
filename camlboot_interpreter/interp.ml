@@ -82,7 +82,7 @@ let eval_env_flag ~loc env flag =
      let module_ident = Location.mkloc module_ident loc in
      env_extend false env (env_get_module_data env module_ident)
 
-let load_rec_units ?(fillings = Shared.Loc_map.empty) env lookup_exp_typed trace_state flags_and_units =
+let load_rec_units ?fuel_per_top_level_binding ?(fillings = Shared.Loc_map.empty) env lookup_exp_typed trace_state flags_and_units =
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let unit_paths = List.map snd flags_and_units in
@@ -94,7 +94,7 @@ let load_rec_units ?(fillings = Shared.Loc_map.empty) env lookup_exp_typed trace
       let module_contents =
         let loc = Location.in_file unit_path in
         let local_env = List.fold_left (eval_env_flag ~loc) global_env flags in
-        eval_structure fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no (parse unit_path)
+        eval_structure ?fuel_per_binding:fuel_per_top_level_binding fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no (parse unit_path)
       in
       define_unit global_env unit_path (make_module_data module_contents)
     )
@@ -352,7 +352,7 @@ let run_ocamlopt () =
   ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state native_compiler_units)
 
 
-let run_files lookup_exp_typed files =
+let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
   (* let rev_files = ref [] in
   let anon_fun file = rev_files := file :: !rev_files in
   Arg.parse [] anon_fun "";
@@ -361,14 +361,14 @@ let run_files lookup_exp_typed files =
   begin try
     files
     |> List.map (fun file -> stdlib_flag, file)
-    |> load_rec_units stdlib_env lookup_exp_typed trace_state
+    |> load_rec_units ?fuel_per_top_level_binding stdlib_env lookup_exp_typed trace_state
     |> ignore
   with InternalException value ->
     Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value
   end;
   trace_state.trace
 
-let run_parsed lookup_exp_typed parsed file_name =
+let run_parsed ?fuel_per_top_level_binding lookup_exp_typed parsed file_name =
   let trace_state = Trace.new_trace_state in
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
@@ -376,7 +376,7 @@ let run_parsed lookup_exp_typed parsed file_name =
   let loc = Location.in_file file_name in
   let local_env = eval_env_flag ~loc stdlib_env (Open (Longident.Lident "Stdlib")) in
   begin try
-    ignore @@ eval_structure fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no parsed
+    ignore @@ eval_structure ?fuel_per_binding:fuel_per_top_level_binding fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no parsed
   with InternalException value ->
     Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value
   end;

@@ -163,16 +163,28 @@ let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
   |> Bindings.fixup final_tenv
 
 let insert_code loc code final_tenv old =
-  let exp = Exp.from_string code in
+  let exp = Exp.from_string code |> Exp.freshen_locs in
   let name = Name.gen_from_exp exp old in
   let vb' =  Vb.mk (Pat.var name) exp in
-  Bindings.fixup final_tenv @@
-  if old = [] then
-    [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
-  else
-    old
-    |> Exp.map_by_loc loc (Bindings.insert_vb_into_all_relevant_branches vb')
-    |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
+  let prog =
+    Bindings.fixup final_tenv @@
+    if old = [] then
+      [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
+    else
+      old
+      |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
+      |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
+  in
+  (* Turn inserted bare functions into calls. *)
+  match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" exp.pexp_loc with
+  | Some { exp_type; _ } when Type.is_arrow_type exp_type ->
+    let arg_count = List.length (Type.flatten_arrows exp_type) - 1 in
+    prog
+    |> Exp.map_by_loc exp.pexp_loc begin fun fexp ->
+      Exp.apply fexp @@ List.init arg_count (fun _ -> (Asttypes.Nolabel, Exp.hole))
+    end
+  | _ ->
+    prog
 
 let set_pos loc x y old =
   old

@@ -172,7 +172,8 @@ nav img {
   padding: 1px;
   color: #555;
 }
-.fun-param > td > .values > .root-value-holder {
+.fun-param > td > .values > .root-value-holder,
+.fun-param > td > .values > .ellipses {
   margin-right: 1.2em;
 }
 
@@ -242,10 +243,11 @@ table.subvalue-annotations td {
   font-weight: normal;
 }
 
-.not-in-active-frame {
+.not-in-active-frame, .ellipses {
   display: none;
 }
-.pat .not-in-active-frame {
+.pat .not-in-active-frame,
+.pat .ellipses {
   display: inline-block;
   opacity: 0.14;
 }

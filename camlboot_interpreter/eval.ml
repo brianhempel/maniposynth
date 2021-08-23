@@ -277,8 +277,11 @@ and handle_fexpr_apply fillings prims env lookup_exp_typed trace_state frame_no 
   | Some expr -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr
 
 and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
-  fuel := !fuel - 1;
-  if !fuel < 0 then raise No_fuel;
+  decr fuel;
+  (* print_endline (string_of_int !fuel); *)
+  (* print_endline (Shared.Ast.Exp.to_string expr); *)
+  (* if true then failwith "asfasdfadaf" else *)
+  if !fuel <= 0 then raise No_fuel;
   let attach_trace value =
     let trace_entry = (expr.pexp_loc, frame_no, value, env) in
     trace_state.Trace.trace <- Trace.add trace_entry trace_state.Trace.trace;
@@ -543,14 +546,24 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
 and eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no expr =
   try Ok (eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr) with InternalException v -> Error v
 
-and bind_value fillings prims env lookup_exp_typed trace_state frame_no vb =
-  let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
-  pattern_bind fillings prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v
-
-and eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag defs =
+(* fuel_per_binding is top-level only and not recursed to children *)
+and eval_bindings ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag defs =
+  let bind_value env vb =
+    let f () =
+      let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
+      pattern_bind fillings prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v
+    in
+    begin match fuel_per_binding with
+    | None -> f ()
+    | Some fuel ->
+      with_fuel fuel f
+        (* If out of fuel, set all var names to Bomb *)
+        (fun () -> vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env)
+    end
+  in
   match recflag with
     | Nonrecursive ->
-      List.fold_left (fun env vb -> bind_value fillings prims env lookup_exp_typed trace_state frame_no vb) env defs
+      List.fold_left bind_value env defs
     | Recursive ->
       (* LHS of let rec is always a single variable *)
       (* What's allowed on the RHS is rather complicated (see classify_expression in typecore.ml) *)
@@ -583,7 +596,13 @@ and eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recfl
           raise (InternalException (Runtime_base.failure_exn "Only single vars are allowed on the LHS of a let rec"))
       in
       let dummy_env = List.fold_left (fun env vb -> env_set_value (single_name vb.pvb_pat) (new_vtrace Bomb) env) env defs in
-      let vals = List.map (fun vb -> eval_expr fillings prims dummy_env lookup_exp_typed trace_state frame_no vb.pvb_expr) defs in
+      let vals = defs |> List.map begin fun vb ->
+        let f () = eval_expr fillings prims dummy_env lookup_exp_typed trace_state frame_no vb.pvb_expr in
+        begin match fuel_per_binding with
+        | None      -> f ()
+        | Some fuel -> with_fuel fuel f (fun () -> new_vtrace Bomb) (* If out of fuel, value is Bomb *)
+        end
+      end in
       let nenv = List.fold_left2
         (* (fun env vb v -> env_set_value (single_name vb.pvb_pat) (pat_match vb.pvb_pat [] v v) env) *)
         (fun env vb v -> pattern_bind fillings prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v)
@@ -1019,13 +1038,19 @@ and eval_functor_data _env _loc = function
   | Unit _ -> failwith "tried to apply a simple module unit"
   | Functor (arg_name, body, env) -> (arg_name, body, env)
 
-and eval_structitem fillings prims env lookup_exp_typed trace_state frame_no it =
+and eval_structitem ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no it =
   match it.pstr_desc with
   | Pstr_eval (e, _) ->
-    let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
+    let f () = eval_expr fillings prims env lookup_exp_typed trace_state frame_no e in
+    let v =
+      begin match fuel_per_binding with
+      | None      -> f ()
+      | Some fuel -> with_fuel fuel f (fun () -> new_vtrace Bomb) (* If out of fuel, value is Bomb *)
+      end
+    in
     Format.printf "%a@." pp_print_value v;
     env
-  | Pstr_value (recflag, defs) -> eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag defs
+  | Pstr_value (recflag, defs) -> eval_bindings ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag defs
   | Pstr_primitive { pval_name = { txt = name; loc }; pval_prim = l; _ } ->
     let prim_name = List.hd l in
     let prim =
@@ -1085,18 +1110,24 @@ and eval_structitem fillings prims env lookup_exp_typed trace_state frame_no it 
   | Pstr_attribute _ -> env
   | Pstr_extension _ -> unsupported it.pstr_loc; assert false
 
-and eval_structure_ fillings prims env lookup_exp_typed trace_state frame_no str =
+and eval_structure_ ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no str =
   match str with
   | [] -> env
   | it :: str ->
     eval_structure_
+      ?fuel_per_binding
       fillings
       prims
-      (eval_structitem fillings prims env lookup_exp_typed trace_state frame_no it)
+      (eval_structitem ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no it)
       lookup_exp_typed
       trace_state
       frame_no
       str
 
-and eval_structure fillings prims env lookup_exp_typed trace_state frame_no str =
-  eval_structure_ fillings prims (prevent_export env) lookup_exp_typed trace_state frame_no str
+and eval_structure ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no str =
+  eval_structure_ ?fuel_per_binding fillings prims (prevent_export env) lookup_exp_typed trace_state frame_no str
+
+let eval_expr_with_fuel_or_bomb fuel fillings prims env lookup_exp_typed trace_state frame_no expr =
+  with_fuel fuel
+    (fun _ -> eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr)
+    (fun _ -> new_vtrace Bomb)

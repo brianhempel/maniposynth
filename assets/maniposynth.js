@@ -794,7 +794,16 @@ window.addEventListener('DOMContentLoaded', () => {
 /////////////////// Topbar Tools ///////////////////
 
 function vbsHolderForInsert(elem) {
-  let scopeElem = elem.closest(".vbs, .exp.fun");
+  const deeperVbs =
+    // Function vbs for selected binding
+    elem.querySelector(":scope > .tv > .fun > .vbs") ||
+    // Nested vbs for selected binding
+    elem.querySelector(":scope > .tv > .vbs");
+  if (deeperVbs) {
+    return deeperVbs;
+  }
+
+  const scopeElem = elem.closest(".vbs, .exp.fun");
   if (scopeElem.classList.contains("vbs")) {
     return scopeElem;
   } else {

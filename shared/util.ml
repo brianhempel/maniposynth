@@ -83,6 +83,20 @@ module List = struct
     | [x]     -> Some x
     | _::rest -> last_opt rest
 
+  let rec prefix len list =
+    if len <= 0 then [] else
+    match list with
+    | []      -> list
+    | x::rest -> x :: prefix (len-1) rest
+
+  let rec drop len list =
+    if len <= 0 then list else
+    match list with
+    | []      -> list
+    | _::rest -> drop (len-1) rest
+
+  let suffix len list = drop (length list - len) list
+
   let rec replace_nth i new_elem = function
     | [] -> raise (Invalid_argument "List.replace_nth called on a list that is too short")
     | x::rest ->

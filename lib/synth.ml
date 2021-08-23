@@ -922,7 +922,7 @@ let try_async path =
     let lookup_exp_typed = Typing.exp_typed_lookup_of_parsed parsed path in
     let (trace, assert_results) =
       Eval.with_gather_asserts begin fun () ->
-        Interp.run_parsed lookup_exp_typed parsed path
+        Interp.run_parsed ~fuel_per_top_level_binding:10_000 lookup_exp_typed parsed path
       end in
     begin match results parsed trace assert_results path |>@ remove_unnecessary_rec_flags with
     | result::_ ->
