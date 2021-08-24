@@ -576,11 +576,15 @@ function updateInspector() {
       hide(assertPane);
     }
 
-    const typeStr = elem.dataset.type || "Unknown";
-    typeOfSelected.innerHTML = "";
+    const typeStr = elem.dataset.type;
+    if (typeStr) {
+      typeOfSelected.innerText = typeStr;
+      show(typeOfSelected);
+    } else {
+      hide(typeOfSelected);
+    }
     suggestionsForSelected.innerHTML = "";
     expsList.innerHTML = "";
-    typeOfSelected.appendChild(document.createTextNode(typeStr));
     const suggestions = elemSuggestions(elem);
     if (suggestions.length > 0) {
       show(suggestionsPane);

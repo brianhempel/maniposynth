@@ -629,6 +629,12 @@ module Vb = struct
     Formatter_to_stringifier.f Pprintast.pattern vb.pvb_pat ^ " = " ^
     Pprintast.string_of_expression vb.pvb_expr
 
+  (* "pat = expr" -> vb (inverse of to_string) *)
+  let from_string code =
+    match "let " ^ code |> Lexing.from_string |> Parse.implementation with
+    | [{ pstr_desc = Pstr_value (_, [vb]); _ }] -> vb
+    | struct_items                              -> failwith @@ "Vb.from_string not a vb: " ^ Pprintast.string_of_structure struct_items
+
   let pat { pvb_pat;  _ } = pvb_pat
   let exp { pvb_expr; _ } = pvb_expr
   let names_loced         = pat %> Pat.names_loced

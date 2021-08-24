@@ -143,17 +143,25 @@ let remove_vis_from_loc loc vis_str old =
 
 let replace_loc_code loc code final_tenv old =
   (* If new code is a var pattern, try renaming *)
-  let try_rename prog =
+  let try_rename ?(loc = loc) ?(code = code) prog =
     match code |> Pat.from_string_opt |>&& Pat.single_name with
     | Some name' -> Bindings.rename_pat_by_loc loc name' prog
     | None       -> prog
   in
   (* Preserve old attrs and loc. *)
-  old
-  |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
-  |> try_rename
-  |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
-  |> Bindings.fixup final_tenv
+  match Vb.find_opt loc old with (* Is loc a vb? *)
+  | Some vb ->
+    let vb' = Vb.from_string code in
+    old
+    |> try_rename ~loc:vb.pvb_pat.ppat_loc ~code:(Pat.to_string vb'.pvb_pat)
+    |> Vb.map_by_loc loc begin fun vb -> { vb with pvb_pat = vb'.pvb_pat; pvb_expr = vb'.pvb_expr } end
+    |> Bindings.fixup final_tenv
+  | None ->
+    old
+    |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
+    |> try_rename
+    |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
+    |> Bindings.fixup final_tenv
 
 let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
   let assert_exp = Exp.assert_ @@ Exp.from_string @@ "(" ^ lhs_code ^ ") = (" ^ rhs_code ^ ")" in

@@ -72,10 +72,11 @@ let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let attrs = ("class", ("box " ^ klass)) :: loc_attr loc:: perhaps_pos_attr @ attrs in
   div ~attrs inners
 
-let html_of_pat ?(attrs = []) pat =
+let html_of_pat ?(attrs = []) stuff pat =
   let code = Pat.to_string { pat with ppat_attributes = [] } in (* Don't show vis attrs. *)
+  let perhaps_type_attr = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.pat_type)]) ||& [] in
   let perhaps_extraction_attr = if Pat.is_single_name pat then [("data-extraction-code", code)] else [] in
-  span ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_extraction_attr)
+  span ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_type_attr @ perhaps_extraction_attr)
     [code]
 
 let string_of_arg_label =
@@ -221,7 +222,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
     |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
     |>@& (fun loc -> Pat.find_opt loc stuff.prog)
     |>@? (Pat.name %>& ((<>) extraction_code) %||& false) (* A name pat but not trival. If = extraction_code that means we're at the root of pat that's likely labeled elsewhere. *)
-    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")]
+    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")] stuff
     |> String.concat ""
   in
   wrap_value @@
@@ -404,11 +405,13 @@ let rec html_of_vb stuff recflag vb =
   let show_pat               = not (Pat.is_unit vb.pvb_pat) in
   let show_pat_on_top        = Exp.is_funlike vb.pvb_expr || should_show_vbs vb.pvb_expr in
   let show_output            = show_pat && not (Exp.is_funlike vb.pvb_expr) in
-  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes "vb" @@
-    (if show_pat && show_pat_on_top then [html_of_pat vb.pvb_pat] else []) @
+  let perhaps_type_attr      = stuff.type_lookups.lookup_exp vb.pvb_expr.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
+  let attrs                  = [("data-in-place-edit-loc", Serialize.string_of_loc vb.pvb_loc); ("data-in-place-edit-code", Vb.to_string vb)] @ perhaps_type_attr in
+  box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes ~attrs "vb" @@
+    (if show_pat && show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) @
     (if show_pat && Exp.is_funlike vb.pvb_expr then [label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
     [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) vb.pvb_expr] @
-    (if show_pat && not show_pat_on_top then [html_of_pat vb.pvb_pat] else [])
+    (if show_pat && not show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else [])
 
 (* Shows value bindings *)
 and local_canvas_vbs_and_returns_htmls stuff exp =
@@ -432,7 +435,7 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
         let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp stuff default_exp) ||& "" in
         let row =
           tr ~attrs:[("class", "pat fun-param")]
-            [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
+            [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat stuff pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
             ; td [html_of_values_for_pat stuff pat]
             ]
         in
