@@ -928,6 +928,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
+const vb_margin_bottom = 20;
 function resizeVbHolders(elem) {
   const vbsHolders = elem.querySelectorAll(".vbs");
   const minVbHolderHeight = 70;
@@ -939,7 +940,7 @@ function resizeVbHolders(elem) {
     for (box of vbsHolder.children) {
       resizeVbHolders(box);
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
-      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
+      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight + vb_margin_bottom);
     }
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
@@ -955,7 +956,7 @@ function reflowUnpositionedElems(elem) {
   function left(box)  { return box.offsetLeft; }
   function top(box)   { return box.offsetTop; }
   function right(box) { return box.offsetLeft + box.offsetWidth; }
-  function bot(box)   { return box.offsetTop + box.offsetHeight; }
+  function bot(box)   { return box.offsetTop + box.offsetHeight + vb_margin_bottom; }
   function areOverlapping(box1, box2) {
     // console.log(left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2),)
     if (right(box1) < left(box2) || right(box2) < left(box1)) { return false; }
