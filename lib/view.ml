@@ -72,10 +72,10 @@ let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let attrs = ("class", ("box " ^ klass)) :: loc_attr loc:: perhaps_pos_attr @ attrs in
   div ~attrs inners
 
-let html_of_pat pat =
+let html_of_pat ?(attrs = []) pat =
   let code = Pat.to_string { pat with ppat_attributes = [] } in (* Don't show vis attrs. *)
   let perhaps_extraction_attr = if Pat.is_single_name pat then [("data-extraction-code", code)] else [] in
-  span ~attrs:([("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_extraction_attr)
+  span ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_extraction_attr)
     [code]
 
 let string_of_arg_label =
@@ -219,9 +219,9 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
     |>@? (fun { v_; _ }     -> v_ == value_)
     |>@? (fun { vtrace; _ } -> is_descendent vtrace value.vtrace)
     |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
-    |>@& (fun loc -> Pat.find_opt loc stuff.prog |>&& Pat.name)
-    |>@? ((<>) extraction_code) (* Not a trivial name. Means we're at the root of pat that's likely labeled elsewhere. *)
-    |>@ (fun name -> span ~attrs:[("class","subvalue-name");("data-extraction-code",name)] [name])
+    |>@& (fun loc -> Pat.find_opt loc stuff.prog)
+    |>@? (Pat.name %>& ((<>) extraction_code) %||& false) (* A name pat but not trival. If = extraction_code that means we're at the root of pat that's likely labeled elsewhere. *)
+    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")]
     |> String.concat ""
   in
   wrap_value @@
