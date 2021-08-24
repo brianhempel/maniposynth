@@ -82,6 +82,8 @@ nav img {
   max-width: 100%;
   cursor: move;
   border: solid 10px transparent; /* Makes edges grabbable for relocating. */
+  padding: 1rem;
+  /* padding: 0.5em 5em 1em 1em; */
 }
 .box > * {
   cursor: auto;
@@ -129,14 +131,14 @@ nav img {
 }
 
 .tv {
-  min-height: 3em;
-  min-width: 2em;
+  min-height: 3rem;
+  min-width: 2rem;
   /* display: inline-block; */
 }
-.exp_label .tv {
+/* .exp_label .tv {
   min-height: 2em;
   min-width: 1em;
-}
+} */
 .exp_label,
 .pat_label,
 .box > .pat:last-child {
@@ -203,16 +205,17 @@ table.subvalue-annotations td {
   display: inline-block;
   margin-left: -0.9em;
   margin-top: -1.5em;
-  margin-right: -10em;
+  margin-right: -1em; /* Make this too negative and the exp_label escapes its vb selection box */
 }
-.exp_label .exp_label {
+/* .exp_label .exp_label {
   border: solid 1px white;
-}
+} */
 .box > .pat:last-child {
+  font-size: 0.9rem;
   position: absolute;
   padding: 2px;
-  left: -0.9rem;
-  bottom: -1.1rem;
+  left: 0.1rem;
+  bottom: -0.1rem;
 }
 
 

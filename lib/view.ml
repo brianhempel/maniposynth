@@ -341,10 +341,6 @@ let html_of_values_for_pat stuff pat =
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
   html_of_values_for_loc stuff type_env root_exp_opt visualizers pat.ppat_loc
 
-(* START HERE *)
-(* hide assert/imperative unit returns *)
-(* vb moving boxes work with above (make them bigger?) *)
-
 (* "(+)" -> "+" *)
 let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
 
