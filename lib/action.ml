@@ -171,6 +171,7 @@ let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
   |> Bindings.fixup final_tenv
 
 let insert_code loc code final_tenv old =
+  (* print_endline (String.inspect code); *) (* We were getting non-breaking spaces from JS :/ *)
   let exp = Exp.from_string code |> Exp.freshen_locs in
   let name = Name.gen_from_exp exp old in
   let vb' =  Vb.mk (Pat.var name) exp in

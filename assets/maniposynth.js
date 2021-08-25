@@ -727,12 +727,7 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.autocompleteDiv = autocompleteDiv;
     textboxDiv.focus();
 
-    // START HERE offer all visible values as autocomplete blobs
     const options = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown);
-
-    // START HERE
-    // 1. can't delete in autocomplete
-    // 2. autocomplete wraps :( :( :(
 
     textboxDiv.addEventListener('keydown', event => {
       // console.log(event.key);
@@ -749,6 +744,7 @@ function beginNewCodeEdit(vbsHolder) {
               code += `(${child.dataset.extractionCode})`
             }
           }
+          code = code.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
           insertCode(vbsHolder.dataset.loc, code);
           event.stopImmediatePropagation(); /* does this even do anything? */
           event.preventDefault(); /* Don't insert a newline character */
@@ -763,6 +759,8 @@ function beginNewCodeEdit(vbsHolder) {
         textboxDiv.blur();
         autocompleteDiv.children[autocompleteDiv.children.length - 1]?.focus();
         event.preventDefault();
+      } else if (event.key === "Backspace" || event.key === "Delete") {
+        event.stopImmediatePropagation(); /* Don't hit the global delete handler */
       }
       // event.stopImmediatePropagation();
     }, { capture: true }); /* Run this handler befooooorrre the typing happens */
@@ -787,6 +785,7 @@ function updateAutocomplete(textboxDiv, options, optionsDiv) {
     // optionDiv.innerText = option;
     const optionClone = option.cloneNode(true);
     optionClone.tabIndex = 0; /* Make element focusable, even though below we override tab */
+    optionClone.originalElem = option;
     optionClone.addEventListener('keydown', event => {
       let focusedOptionIdx = -1;
       for (i in optionsDiv.children) {
@@ -818,8 +817,25 @@ function updateAutocomplete(textboxDiv, options, optionsDiv) {
         window.getSelection().collapseToEnd();
         event.stopImmediatePropagation();
         event.preventDefault();
+      } else if (event.key === "Esc" || event.key === "Escape") {
+        textboxDiv.focus()
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      } else if (event.key === "Backspace" || event.key === "Escape") {
+        textboxDiv.focus()
+        event.stopImmediatePropagation();
+        // event.preventDefault(); /* By default the event will actually delete in the textbox. Which we want. */
       }
     }, { capture: true }); /* Run handler beefoooore it triggers a scroll */
+
+    optionClone.addEventListener('focus', event => {
+      document.querySelectorAll(".highlighted").forEach(elem => { elem.classList.remove("highlighted") });
+      optionClone.originalElem.classList.add("highlighted");
+    });
+    optionClone.addEventListener('blur', event => {
+      optionClone.originalElem.classList.remove("highlighted");
+    });
+
     optionsDiv.appendChild(optionClone);
   }
 }

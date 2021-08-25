@@ -227,11 +227,6 @@ table.subvalue-annotations td {
   bottom: -0.1rem;
 }
 
-
-[data-in-place-edit-loc] {
-  cursor: text;
-}
-
 .vbs {
   position: relative;
   /* min-height for .vbs in the the resizeVbHolders() javascript */
@@ -264,14 +259,16 @@ table.subvalue-annotations td {
   opacity: 0.14;
 }
 
-.draggable-hovered {
+.draggable-hovered,
+.highlighted {
   /* background-color: rgba(200,200,200,0.5); */
   box-shadow: 1px 1px 7px rgba(0,0,0,0.3);
 }
 /* For making it clearer which tiny subvalue in an exp_label is hovered. */
-.draggable-hovered.value {
+.draggable-hovered.value,
+.highlighted {
   color: black;
-  background-color: white;
+  background-color: rgb(255, 255, 249);
 }
 
 .current-drop-target {
@@ -323,6 +320,7 @@ table.subvalue-annotations td {
   display: block;
   background-color: rgba(255,255,255,0.95);
 }
+.textbox .value,
 .autocomplete-options .value {
   font-size: 1rem;
 }

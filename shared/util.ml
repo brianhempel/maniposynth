@@ -298,6 +298,10 @@ module String = struct
 
   let replace ~target ~replacement str =
     split target str |> String.concat replacement
+
+  let to_list str = str |> to_seq |> List.of_seq
+  (* Show non-printable chars, so we can see what went wrong somewhere *)
+  let inspect str = str |> to_list |> List.map Char.escaped |> concat ""
 end
 
 
