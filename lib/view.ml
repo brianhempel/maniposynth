@@ -372,7 +372,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
+    | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
     | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
     end
   | _ -> code ^ " "

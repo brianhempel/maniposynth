@@ -634,9 +634,24 @@ function isShown(elem) {
 }
 
 function abortTextEdit(textbox) {
-  if (textbox.originalElem) { show(textbox.originalElem) };
+  // if (textbox.originalElem) { show(textbox.originalElem) };
   textbox.remove();
+  textbox.autocompleteDiv?.remove();
+  decolorizeSubvalues();
   updateInspector();
+}
+
+function colorizeSubvalues() {
+  let hue = 30;
+  document.querySelectorAll(".value").forEach(elem => {
+    elem.style.color = `hsl(${hue}, 90%, 40%)`;
+    hue = (hue + 152) % 360;
+  });
+}
+function decolorizeSubvalues() {
+  document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)").forEach(elem => {
+    elem.style.color = null;
+  });
 }
 
 function transientTextboxes() {
@@ -687,31 +702,128 @@ function transientTextboxes() {
 
 function beginNewCodeEdit(vbsHolder) {
   return function (event) {
+    colorizeSubvalues();
+
     if (event.target !== vbsHolder) { return; }
     event.stopImmediatePropagation();
-    const input = document.createElement("input");
-    input.type = "text";
-    input.classList.add("transient-textbox");
-    input.style.position = "absolute";
+    const textboxDiv = document.createElement("div");
+    textboxDiv.contentEditable = true;
+    textboxDiv.classList.add("transient-textbox");
+    textboxDiv.classList.add("textbox");
+    textboxDiv.style.position = "absolute";
+    // textboxDiv.style.backgroundColor = "white";
     const { dx, dy } = topLeftOffsetFromMouse(vbsHolder, event)
-    input.style.left = `${-dx - 5}px`;
-    input.style.top  = `${-dy - 10}px`;
-    vbsHolder.appendChild(input);
-    input.select();
+    textboxDiv.style.left = `${-dx - 5}px`;
+    textboxDiv.style.top  = `${-dy - 10}px`;
+    vbsHolder.appendChild(textboxDiv);
 
-    input.addEventListener('keydown', event => {
+    const autocompleteDiv = document.createElement("div");
+    autocompleteDiv.classList.add("autocomplete-options");
+    autocompleteDiv.style.position = "absolute";
+    autocompleteDiv.style.left = textboxDiv.style.left;
+    autocompleteDiv.style.top  = `${textboxDiv.offsetTop + textboxDiv.offsetHeight}px`;
+    vbsHolder.appendChild(autocompleteDiv);
+
+    textboxDiv.autocompleteDiv = autocompleteDiv;
+    textboxDiv.focus();
+
+    // START HERE offer all visible values as autocomplete blobs
+    const options = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown);
+
+    // START HERE
+    // 1. can't delete in autocomplete
+    // 2. autocomplete wraps :( :( :(
+
+    textboxDiv.addEventListener('keydown', event => {
       // console.log(event.key);
       if (event.key === "Enter") {
-        if (input.value.length > 0) {
-          insertCode(vbsHolder.dataset.loc, input.value);
+        if (textboxDiv.innerText.length > 0) {
+          let code = "";
+          // Convert autocompleted values to code
+          for (child of textboxDiv.childNodes) {
+            if (child.nodeType === 3) {
+              // Text node
+              code += child.data;
+            } else {
+              // value node
+              code += `(${child.dataset.extractionCode})`
+            }
+          }
+          insertCode(vbsHolder.dataset.loc, code);
+          event.stopImmediatePropagation(); /* does this even do anything? */
+          event.preventDefault(); /* Don't insert a newline character */
         }
       } else if (event.key === "Esc" || event.key === "Escape") {
-        abortTextEdit(input);
+        abortTextEdit(textboxDiv);
+      } else if (event.key === "ArrowDown") {
+        textboxDiv.blur();
+        autocompleteDiv.children[0]?.focus();
+        event.preventDefault();
+      } else if (event.key === "ArrowUp") {
+        textboxDiv.blur();
+        autocompleteDiv.children[autocompleteDiv.children.length - 1]?.focus();
+        event.preventDefault();
       }
-      event.stopImmediatePropagation();
+      // event.stopImmediatePropagation();
+    }, { capture: true }); /* Run this handler befooooorrre the typing happens */
+    textboxDiv.addEventListener('keyup', _ => { updateAutocomplete(textboxDiv, options, autocompleteDiv) });
+    // Prevent click on elem from bubbling to the global deselect/abort handler
+    textboxDiv.addEventListener('click', event => {
+      event.stopPropagation();
     });
   }
 }
+
+// https://stackoverflow.com/a/17323608
+function mod(n, m) {
+  return ((n % m) + m) % m;
+}
+
+function updateAutocomplete(textboxDiv, options, optionsDiv) {
+  // let options = [text];
+  optionsDiv.innerHTML = "";
+  for (const option of options) {
+    const optionDiv = document.createElement("div");
+    // optionDiv.innerText = option;
+    const optionClone = option.cloneNode(true);
+    optionClone.tabIndex = 0; /* Make element focusable, even though below we override tab */
+    optionClone.addEventListener('keydown', event => {
+      let focusedOptionIdx = -1;
+      for (i in optionsDiv.children) {
+        if (document.activeElement === optionsDiv.children[i]) {
+          focusedOptionIdx = parseInt(i);
+        }
+      }
+      console.log(optionsDiv.children.length);
+      console.log(focusedOptionIdx);
+      console.log(focusedOptionIdx + 1);
+      console.log(mod(focusedOptionIdx + 1, optionsDiv.children.length));
+      if (event.key === "ArrowDown") {
+        optionsDiv.children[mod(focusedOptionIdx + 1, optionsDiv.children.length)].focus();
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      } else if (event.key === "ArrowUp") {
+        optionsDiv.children[mod(focusedOptionIdx - 1, optionsDiv.children.length)].focus();
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      } else if (event.key === "Enter" || event.key === "Tab") {
+        optionClone.remove();
+        optionClone.contentEditable = false;
+        textboxDiv.appendChild(optionClone);
+        optionsDiv.innerHTML = "";
+        // label.appendChild(document.createTextNode("Visualize"));
+        textboxDiv.focus()
+        // Set cursor to end of "input" element
+        window.getSelection().selectAllChildren(textboxDiv);
+        window.getSelection().collapseToEnd();
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    }, { capture: true }); /* Run handler beefoooore it triggers a scroll */
+    optionsDiv.appendChild(optionClone);
+  }
+}
+
 
 window.addEventListener('DOMContentLoaded', () => {
   // document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
@@ -942,6 +1054,7 @@ function resizeVbHolders(elem) {
     let maxWidth = 0;
     let maxHeight = 0;
     for (box of vbsHolder.children) {
+      if (!box.classList.contains("vb")) { continue; } /* Skip transient textboxes in the vbs elem */
       resizeVbHolders(box);
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
       maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight + vb_margin_bottom);
@@ -971,10 +1084,7 @@ function reflowUnpositionedElems(elem) {
     const boxes = Array.from(vbsHolder.children);
     const placedBoxes = boxes.filter(box => box.style.left); /* If box has an explicit position */
     for (box of vbsHolder.children) {
-      if (!box.classList.contains("vb")) {
-        console.log("expected only value bindings in a .vbs", box);
-        continue;
-      }
+      if (!box.classList.contains("vb")) { continue; } /* Skip transient textboxes in the vbs elem */
       if (!placedBoxes.includes(box)) {
         box.style.left = `10px`
         let top = 10;
@@ -1034,7 +1144,6 @@ function selfAndParents(elem) {
 
 // // .exp .vb and .pat are littered around the HTML
 // // Messy because Maniposynth's canvas is deliberately not 1-to-1 with the code.
-// // An invariant: A .vb elem is always a child of a .vbs, and all .vbs immediate children are a .vb (no exceptions)
 // function isInPatternPosition(elem) {
 //   for (const el of selfAndParents(elem)) {
 //     if (el.classList.contains("pat")) {
@@ -1107,11 +1216,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Deletion ///////////////////
 
+function isDeletable(elem) {
+  return (elem.classList.contains("vb") || elem.classList.contains("exp")) && (elem.dataset.loc || elem.dataset.inPlaceEditLoc);
+}
+
+function deleteElem(elem) {
+  deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
+}
+
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
     const elem = document.querySelector('.vb.selected,.exp.selected')
     if (elem) {
-      deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
+      deleteElem(elem);
       event.stopImmediatePropagation();
     }
   }

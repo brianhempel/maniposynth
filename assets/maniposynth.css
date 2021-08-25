@@ -10,10 +10,19 @@ body {
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
 }
-input[type=text] {
+input[type=text],
+.textbox {
   padding: var(--padding);
   font-size: 16px;
   font-family: Avenir Next, Avenir, sans-serif;
+  border: 1px solid gray;
+  min-height: 1em;
+  min-width: 2em;
+  background-color: white;
+}
+.textbox[contenteditable=true] {
+  /* Don't wrap to newline at edge of vbs */
+  margin-right: -100em;
 }
 table {
   border-collapse: collapse;
@@ -304,6 +313,19 @@ table.subvalue-annotations td {
   justify-content: space-evenly;
 }
 
+
+.autocomplete-options {
+  min-width: 12rem;
+  z-index: 1;
+  border: solid 1px gray;
+}
+.autocomplete-options > * {
+  display: block;
+  background-color: rgba(255,255,255,0.95);
+}
+.autocomplete-options .value {
+  font-size: 1rem;
+}
 
 #inspector {
   position: fixed;
