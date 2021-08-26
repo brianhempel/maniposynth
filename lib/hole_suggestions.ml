@@ -1,4 +1,0 @@
-
-let suggestions =
-  [ "fun x -> (??)"
-  ]

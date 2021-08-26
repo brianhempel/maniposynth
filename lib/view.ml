@@ -166,7 +166,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
     match value.type_opt with
-    | Some val_typ -> Vis.possible_vises_for_type val_typ type_env |>@ Vis.to_string
+    | Some val_typ -> Suggestions.possible_functions_on_type val_typ type_env |>@ (fun exp -> { Vis.exp = exp }) |>@ Vis.to_string
     | None -> [] in
   let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
@@ -356,12 +356,11 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   let code = if infix then uninfix code else code in
   (* let code_to_edit = Exp.to_string { exp_to_edit with pexp_attributes = [] } in Don't show pos/vis attrs. *)
   let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
-  let perhaps_suggestions_attr = if Exp.is_hole exp then [("data-suggestions", String.concat "  " Hole_suggestions.suggestions)] else [] in
   let wrap inner = span ~attrs:(
     [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
     ; ("data-in-place-edit-code", code)
     ; ("class","exp")
-    ] @ perhaps_type_attr @ perhaps_suggestions_attr)
+    ] @ perhaps_type_attr)
     [inner]
   in
   (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp stuff None exp else "") ^
@@ -543,10 +542,6 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
           ; textbox ~attrs:[("id", "assert-textbox")] []
           ]
         ; div ~attrs:[("id", "type-of-selected")] []
-        ; div ~attrs:[("id", "suggestions-pane")]
-          [ h2 ["Suggestions"]
-          ; div ~attrs:[("id", "suggestions-for-selected")] []
-          ]
         ; div ~attrs:[("id", "exps-pane")]
           [ label ~attrs:[("for","exps-textbox")] ["Use"]
           ; textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []

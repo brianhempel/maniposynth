@@ -372,32 +372,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/////////////////// Suggestions ///////////////////
-
-// The Inspector code later also displays filling suggestions.
-
-function elemSuggestions(elem) {
-  return elem.dataset.suggestions?.split("  ") || [];
-}
-
-function useSuggestionNumber(elem, i) {
-  replaceLoc(elem.dataset.inPlaceEditLoc, elemSuggestions(elem)[i-1]);
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  document.addEventListener("keydown", event => {
-    const elem = document.querySelector('.selected[data-suggestions]');
-    if (elem) {
-      const suggestions = elemSuggestions(elem);
-      const i = parseInt(event.key);
-      if (!isNaN(i) && i >= 1 && i <= suggestions.length) {
-        useSuggestionNumber(elem, i);
-        event.stopImmediatePropagation();
-      }
-    }
-  });
-});
-
 
 /////////////////// Inspector ///////////////////
 
@@ -472,9 +446,7 @@ function updateInspector() {
   const assertTextbox          = document.getElementById("assert-textbox");
   const typeOfSelected         = document.getElementById("type-of-selected");
   const expsList               = document.getElementById("exps-list");
-  const suggestionsForSelected = document.getElementById("suggestions-for-selected");
   const expsPane               = document.getElementById("exps-pane");
-  const suggestionsPane        = document.getElementById("suggestions-pane");
   const addVisTextbox          = document.getElementById("exps-textbox");
 
   const elem = selectedElems()[0];
@@ -583,22 +555,7 @@ function updateInspector() {
     } else {
       hide(typeOfSelected);
     }
-    suggestionsForSelected.innerHTML = "";
-    expsList.innerHTML = "";
-    const suggestions = elemSuggestions(elem);
-    if (suggestions.length > 0) {
-      show(suggestionsPane);
-      let i = 1;
-      suggestions.forEach(code => {
-        const suggestion = document.createElement("button");
-        suggestion.classList.add("suggestion");
-        suggestion.innerHTML = `${i}. ${code}`;
-        suggestion.addEventListener("click", _ => { useSuggestionNumber(elem, i) });
-        suggestionsForSelected.appendChild(suggestion);
-      });
-    } else {
-      hide(suggestionsPane);
-    }
+
     if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
       addVisTextbox.targetElem = elem;
       show(expsPane);

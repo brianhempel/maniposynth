@@ -971,21 +971,21 @@ let add_missing_cases final_tenv prog =
   end
 
 let fixup_matches final_tenv prog =
-  let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in
+  (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
   prog
-  |> log
+  (* |> log *)
   |> move_vbs_into_all_relevant_branches
-  |> log
+  (* |> log *)
   |> simplify_nested_matches_on_same_thing (* A match statement may have been inserted inside a match branch that already matches on the same scrutinee. Simplify. *)
-  |> log
+  (* |> log *)
   |> remove_matches_with_no_cases
-  |> log
+  (* |> log *)
   |> move_matches_outside
-  |> log
+  (* |> log *)
   |> move_up_duplicated_bindings
-  |> log
+  (* |> log *)
   |> add_missing_cases final_tenv
-  |> log
+  (* |> log *)
 
 (* Need final tenv to know what constructors exist *)
 let fixup final_tenv prog =
