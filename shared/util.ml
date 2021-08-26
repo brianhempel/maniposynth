@@ -226,8 +226,8 @@ module String = struct
     let safe_j = clamp 0 (String.length str) (i + len) in
     sub str safe_i (safe_j - safe_i)
 
-  let prefix len str = safe_sub 0 len str
-  let suffix len str = safe_sub (length str - len) len str
+  let prefix len str = Str.first_chars str len
+  let suffix len str = Str.last_chars str len
 
   let drop len str = suffix (length str - len) str
 
@@ -240,7 +240,7 @@ module String = struct
     else
       false
 
-  let matches_at_index str_i target str  =
+  let matches_at_index str_i target str =
     let str_len    = length str in
     let target_len = length target in
     if str_i < 0 || str_i > str_len - target_len then
@@ -285,16 +285,10 @@ module String = struct
   let includes target str : bool =
     find_index target str <> None
 
-  let rec split ?(limit = -1) ?(start_index = 0) sep str =
-    if limit = 1 then
-      [sub str start_index (length str - start_index)]
-    else
-      match find_index ~start_index sep str with
-      | Some i ->
-          sub str start_index (i - start_index)
-          :: split ~limit:(limit - 1) ~start_index:(i + length sep) sep str
-      | None ->
-          [sub str start_index (length str - start_index)]
+  let split ?limit sep str =
+    match  limit with
+    | None       -> Str.split_delim         (Str.regexp_string sep) str
+    | Some limit -> Str.bounded_split_delim (Str.regexp_string sep) str limit
 
   let replace ~target ~replacement str =
     split target str |> String.concat replacement
