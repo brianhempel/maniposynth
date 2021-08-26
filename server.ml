@@ -1,16 +1,16 @@
 open Maniposynth_lib
-open Core
+open Shared.Util
 
 let port = 1111
 
 let respond ?(content_type = "text/html") ?(status_str = "200 OK") out_chan content_str =
   if not @@ String.equal status_str "200 OK" then print_endline status_str;
-  Out_channel.output_string out_chan ("HTTP/1.1 " ^ status_str ^ "\r\n");
-  Out_channel.output_string out_chan "Connection: close\r\n";
-  Out_channel.output_string out_chan ("Content-Type: " ^ content_type ^ "\r\n");
-  Out_channel.output_string out_chan ("Content-Length: " ^ string_of_int (String.length content_str) ^ "\r\n");
-  Out_channel.output_string out_chan "\r\n";
-  Out_channel.output_string out_chan content_str
+  output_string out_chan ("HTTP/1.1 " ^ status_str ^ "\r\n");
+  output_string out_chan "Connection: close\r\n";
+  output_string out_chan ("Content-Type: " ^ content_type ^ "\r\n");
+  output_string out_chan ("Content-Length: " ^ string_of_int (String.length content_str) ^ "\r\n");
+  output_string out_chan "\r\n";
+  output_string out_chan content_str
 
 let respond_not_found out_chan =
   respond ~status_str:"404 Not Found" out_chan "<html><head><title>Not found.</title></head><body>Not found.</body></html>"
@@ -33,20 +33,27 @@ let file_extension_content_types =
 
 let content_type_opt_of_path path =
   file_extension_content_types
-  |> List.find
-      ~f:(fun (extn, _) -> String.is_suffix path ~suffix:extn)
-  |> Option.map ~f:snd
+  |> List.find_opt (fun (extn, _) -> String.ends_with extn path)
+  |>& snd
+
+(* https://stackoverflow.com/a/53840784 *)
+let string_of_file path =
+  let in_chan = open_in path in
+  let str = really_input_string in_chan (in_channel_length in_chan) in
+  close_in in_chan;
+  str
+
 
 let serve_asset out_chan url =
   try
-    let content_str = In_channel.read_all ("./" ^ url) in
+    let content_str = string_of_file ("./" ^ url) in
     match content_type_opt_of_path url with
     | Some content_type -> respond ~content_type out_chan content_str
     | None -> respond ~content_type:"application/yolo" out_chan content_str
   with Sys_error _ -> respond_not_found out_chan
 
 let render_maniposynth out_chan url =
-  let path = String.drop_prefix url 1 in
+  let path = String.drop 1 url in
   let parsed = Camlboot_interpreter.Interp.parse path in
   (* let parsed_with_comments = Parse_unparse.parse_file path in
   let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
@@ -66,62 +73,49 @@ let render_maniposynth out_chan url =
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
   respond out_chan html_str
 
+let render_suggestions out_chan _url =
+  respond out_chan ""
 
-
-let colon_space = String.Search_pattern.create ": "
+(* let colon_space = String.Search_pattern.create ": " *)
 
 let handle_connection in_chan out_chan =
   let rec read_header_lines chan : (string * string) list =
-    let line = In_channel.input_line_exn chan in
-    let trim = String.strip ~drop:Char.is_whitespace in
-    if String.length (trim line) = 0 then
+    let line = input_line chan in
+    if String.length (String.trim line) = 0 then
       []
     else
-      match String.Search_pattern.index colon_space ~in_:line with
-      | Some i ->
-        let key = String.slice line 0 i in
-        let value = String.slice line (i+2) (String.length line) in
-        (key, trim value) :: read_header_lines chan
-      | None ->
-        print_endline ("Bad header line: " ^ line);
-        read_header_lines chan
-
-
-        (*
-      match String_utils.split ~limit:2 line ": " with
-      | [key; value] ->
-          (* print_endline (key ^ "\t" ^ value); *)
-          (key, String.trim value) :: read_header_lines chan
-      | _ ->
-          print_endline ("Bad header line: " ^ line);
-          read_header_lines chan *)
+      match String.split ~limit:2 ": " line with
+      | [key; value] -> (key, String.trim value) :: read_header_lines chan
+      | _            -> print_endline ("Bad header line: " ^ line); read_header_lines chan
   in
-  let request_str = In_channel.input_line_exn in_chan in
+  let request_str = input_line in_chan in
   let headers = read_header_lines in_chan in
-  let content_length = int_of_string (List.Assoc.find headers ~equal:String.equal "Content-Length" |> Option.value ~default:"0") in
+  let content_length = int_of_string (List.assoc_opt "Content-Length" headers ||& "0") in
   (* print_endline request_str; "GET /path HTTP/1.1" *)
-  (match String.split ~on:' ' request_str with
+  (match String.split_on_char ' ' request_str with
   | "GET"::url::_ ->
-      if String.is_prefix url ~prefix:"/assets/" then
+      if String.starts_with "/assets/" url then
         serve_asset out_chan url
-      else if String.is_suffix url ~suffix:".ml" then
+      else if String.includes ".ml/search?frame_no=" url then
+        render_suggestions out_chan url
+      else if String.ends_with ".ml" url then
         render_maniposynth out_chan url
       else
         respond_not_found out_chan
   | "PATCH"::url::_ ->
-      if String.is_suffix url ~suffix:".ml" then begin
+      if String.ends_with ".ml" url then begin
         (* print_endline "hi"; *)
         (* let content_str = In_channel.input_all in_chan in *)
         let content_str =
           let buf = Bytes.create content_length in
-          In_channel.really_input_exn in_chan ~buf ~pos:0 ~len:content_length;
+          really_input in_chan buf 0 content_length;
           Bytes.to_string buf
         in
         (* print_endline "bye"; *)
         print_endline content_str;
         let action_yojson = Yojson.Safe.from_string content_str in
         let action = Action.t_of_yojson action_yojson in
-        let path = String.drop_prefix url 1 in
+        let path = String.drop 1 url in
         let parsed = Camlboot_interpreter.Interp.parse path in
         let (_, _, final_tenv) = Typing.typedtree_sig_env_of_parsed parsed path in
         let parsed' = Action.f path final_tenv action parsed in
@@ -135,14 +129,14 @@ let handle_connection in_chan out_chan =
       print_endline request_str;
       respond_not_found out_chan
   );
-  Out_channel.flush out_chan;
-  In_channel.close in_chan (* This apparently closes both channels. *)
+  flush out_chan;
+  close_in in_chan (* This apparently closes both channels. *)
 
 let main () =
   let open Unix in
-  let sockaddr = ADDR_INET (Unix.Inet_addr.bind_any, port) in
+  let sockaddr = ADDR_INET (Unix.inet_addr_any, port) in
   print_endline ("Listening for connections on http://localhost:" ^ string_of_int port ^ "/");
-  establish_server handle_connection ~addr:sockaddr
+  establish_server handle_connection sockaddr
 ;;
 
 main ();
