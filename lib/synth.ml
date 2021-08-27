@@ -101,7 +101,7 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
     let ex_fields =
       fieldpats
       |>@ begin fun (lid_loced, fieldpat) -> (Eval.lident_name lid_loced.txt, ref @@ recurse fieldpat) end
-      |> SMap.from_list
+      |> SMap.of_list
     in
     new_vtrace @@ Record ex_fields
   | Ppat_array ps                                              -> new_vtrace @@ Array (ps |>@ recurse |> Array.of_list)

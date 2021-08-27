@@ -1,10 +1,15 @@
 EXCLUDE_QUERY_DIR
+B /Users/brian/.opam/4.07.1/lib/angstrom
 B /Users/brian/.opam/4.07.1/lib/base64
+B /Users/brian/.opam/4.07.1/lib/bigarray-compat
+B /Users/brian/.opam/4.07.1/lib/bigstringaf
 B /Users/brian/.opam/4.07.1/lib/biniou
 B /Users/brian/.opam/4.07.1/lib/bytes
 B /Users/brian/.opam/4.07.1/lib/easy-format
 B /Users/brian/.opam/4.07.1/lib/ocaml
 B /Users/brian/.opam/4.07.1/lib/ocaml/compiler-libs
+B /Users/brian/.opam/4.07.1/lib/stringext
+B /Users/brian/.opam/4.07.1/lib/uri
 B /Users/brian/.opam/4.07.1/lib/yojson
 B _build/default/.interpret_simple_ml.eobjs/byte
 B _build/default/.scratch.eobjs/byte
@@ -12,12 +17,17 @@ B _build/default/.server.eobjs/byte
 B _build/default/camlboot_interpreter/.camlboot_interpreter.objs/byte
 B _build/default/lib/.maniposynth_lib.objs/byte
 B _build/default/shared/.shared.objs/byte
+S /Users/brian/.opam/4.07.1/lib/angstrom
 S /Users/brian/.opam/4.07.1/lib/base64
+S /Users/brian/.opam/4.07.1/lib/bigarray-compat
+S /Users/brian/.opam/4.07.1/lib/bigstringaf
 S /Users/brian/.opam/4.07.1/lib/biniou
 S /Users/brian/.opam/4.07.1/lib/bytes
 S /Users/brian/.opam/4.07.1/lib/easy-format
 S /Users/brian/.opam/4.07.1/lib/ocaml
 S /Users/brian/.opam/4.07.1/lib/ocaml/compiler-libs
+S /Users/brian/.opam/4.07.1/lib/stringext
+S /Users/brian/.opam/4.07.1/lib/uri
 S /Users/brian/.opam/4.07.1/lib/yojson
 S .
 S camlboot_interpreter

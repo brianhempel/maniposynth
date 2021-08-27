@@ -657,6 +657,38 @@ function transientTextboxes() {
 //   }
 // }
 
+  // Convert autocompleted values to code
+  function textboxDivToCode(textboxDiv) {
+  let code = "";
+  for (child of textboxDiv.childNodes) {
+    if (child.nodeType === 3) {
+      // Text node
+      code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+    } else {
+      // value node
+      code += `(${child.dataset.extractionCode})`
+    }
+  }
+  return code;
+}
+
+  // What we send to server to ask for suggestions
+  // Autocompleted (sub)values are turned into (vtrace "hJWmvgAAAg4AAACUAAAB9wAAAfSgoKABANGwwClzaW1wbGUubWxBQE_ABAJBQGRAoLC6Ijo6QJCwmaCwkUCgoKABANCwwAQRRQB_AQCQwAQSRQB_AQCRQEBAkMCWwLOQsEEjaW50QECQQAED70ABAyYBA_BAAQMmoLC6BBlAkLCZoLCRQKCgoAEA0LDABClFAH8BAJPABCpFAH8BAJRAQECQwJYEGAED70ABAyqgsLoEK0CQsJmgsJFAoKCgAQDQsMAEO0UAfwEAlsAEPEUAfwEAl0BAQJDAlgQqAQPvQAEDLqCwuiJbXUBAoKCgAQDQsMAESEUAfwEAmMAESUUAfwEAmUFAQJDAlsCzkLBJJGxpc3RAoMCWBD8BA-9AAQMsQJBAAQPvQAEDLQED70ABAy9AoKCgAQDQsAQfBBFBQEBAoKCgAQDQBARAQJDAs5CwSSRsaXN0QKDABCYBA_BAAQM8QJBAAQPwQAEDO0CgoKABANCwBEEEIUFAQECgoKABANAEBEBAkMCzBBCgwARFAQPwQAEDP0CQQAED8EABAz5AoKCgAQDQsARmBC5BQEBAoKCgAQDQsMAEe0cBAKsBALzABHxHAQCrAQDEQEGgoKABANCwwASBRQB_AQCDwASCRQB_AQCLQKCwBICgoKABANCwwASJRQB_AQCOBEFAQECQwLMELaDABHoBA_BAAQNCQJBAAQPwQAEDQUAECwQGQAQZ")
+function textboxDivToSuggestionQuery(textboxDiv) {
+  let code = "";
+  // Convert autocompleted values to code
+  for (child of textboxDiv.childNodes) {
+    if (child.nodeType === 3) {
+      // Text node
+      code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+    } else {
+      // value node
+      code += `(value_id "${child.dataset.valueId}")`
+    }
+  }
+  return code;
+}
+
 function beginNewCodeEdit(vbsHolder) {
   return function (event) {
     colorizeSubvalues();
@@ -684,24 +716,11 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.autocompleteDiv = autocompleteDiv;
     textboxDiv.focus();
 
-    const options = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown);
-
     textboxDiv.addEventListener('keydown', event => {
       // console.log(event.key);
       if (event.key === "Enter") {
         if (textboxDiv.innerText.length > 0) {
-          let code = "";
-          // Convert autocompleted values to code
-          for (child of textboxDiv.childNodes) {
-            if (child.nodeType === 3) {
-              // Text node
-              code += child.data;
-            } else {
-              // value node
-              code += `(${child.dataset.extractionCode})`
-            }
-          }
-          code = code.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+          const code = textboxDivToCode(textboxDiv);
           insertCode(vbsHolder.dataset.loc, code);
           event.stopImmediatePropagation(); /* does this even do anything? */
           event.preventDefault(); /* Don't insert a newline character */
@@ -721,7 +740,7 @@ function beginNewCodeEdit(vbsHolder) {
       }
       // event.stopImmediatePropagation();
     }, { capture: true }); /* Run this handler befooooorrre the typing happens */
-    textboxDiv.addEventListener('keyup', _ => { updateAutocomplete(textboxDiv, options, autocompleteDiv) });
+    textboxDiv.addEventListener('keyup', _ => { updateAutocompleteAsync(textboxDiv, autocompleteDiv) });
     // Prevent click on elem from bubbling to the global deselect/abort handler
     textboxDiv.addEventListener('click', event => {
       event.stopPropagation();
@@ -734,16 +753,47 @@ function mod(n, m) {
   return ((n % m) + m) % m;
 }
 
-function updateAutocomplete(textboxDiv, options, optionsDiv) {
-  // let options = [text];
+function updateAutocompleteAsync(textboxDiv, optionsDiv) {
+  const frameNo = frameNoForElem(textboxDiv);
+
+  const value_ids_visible = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown).map(elem => elem.dataset.valueId);
+
+  const query = textboxDivToSuggestionQuery(textboxDiv);
+
+  // https://stackoverflow.com/a/57067829
+  const searchURL = new URL(document.location.href + "/search");
+  searchURL.search = new URLSearchParams({ frame_no: frameNo, value_ids_visible: value_ids_visible, q: query }).toString();
+  let request = new XMLHttpRequest();
+  request.open("GET", searchURL);
+  request.addEventListener("loadend", _ => {
+    console.log(request.responseText);
+    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|"), optionsDiv)
+  });
+  request.send();
+}
+
+function updateAutocomplete(textboxDiv, optionStrs, optionsDiv) {
   optionsDiv.innerHTML = "";
-  for (const option of options) {
-    const optionDiv = document.createElement("div");
+  for (const optionStr of optionStrs) {
+    // const optionDiv = document.createElement("div");
     // optionDiv.innerText = option;
-    const optionClone = option.cloneNode(true);
-    optionClone.tabIndex = 0; /* Make element focusable, even though below we override tab */
-    optionClone.originalElem = option;
-    optionClone.addEventListener('keydown', event => {
+    let option = null;
+    let subvalueElem = null;
+    if (optionStr.startsWith('(value_id ')) {
+      // Try to find that subvalue
+      const valueIdStr = "" + optionStr.match(/\(value_id (\d+)\)/)[1];
+      subvalueElem = Array.from(document.querySelectorAll(".value[data-value-id]")).find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr)
+    }
+    if (subvalueElem) {
+      option = subvalueElem.cloneNode(true);
+      option.isValue = true;
+      option.originalElem = subvalueElem;
+    } else {
+      option = document.createElement("div");
+      option.innerText = optionStr;
+    }
+    option.tabIndex = 0; /* Make element focusable, even though below we override tab */
+    option.addEventListener('keydown', event => {
       let focusedOptionIdx = -1;
       for (i in optionsDiv.children) {
         if (document.activeElement === optionsDiv.children[i]) {
@@ -763,9 +813,13 @@ function updateAutocomplete(textboxDiv, options, optionsDiv) {
         event.stopImmediatePropagation();
         event.preventDefault();
       } else if (event.key === "Enter" || event.key === "Tab") {
-        optionClone.remove();
-        optionClone.contentEditable = false;
-        textboxDiv.appendChild(optionClone);
+        if (option.isValue) {
+          option.remove();
+          option.contentEditable = false;
+          textboxDiv.appendChild(option);
+        } else {
+          textboxDiv.appendChild(document.createTextNode(option.innerText));
+        }
         optionsDiv.innerHTML = "";
         // label.appendChild(document.createTextNode("Visualize"));
         textboxDiv.focus()
@@ -785,15 +839,15 @@ function updateAutocomplete(textboxDiv, options, optionsDiv) {
       }
     }, { capture: true }); /* Run handler beefoooore it triggers a scroll */
 
-    optionClone.addEventListener('focus', event => {
+    option.addEventListener('focus', event => {
       document.querySelectorAll(".highlighted").forEach(elem => { elem.classList.remove("highlighted") });
-      optionClone.originalElem.classList.add("highlighted");
+      option.originalElem?.classList?.add("highlighted");
     });
-    optionClone.addEventListener('blur', event => {
-      optionClone.originalElem.classList.remove("highlighted");
+    option.addEventListener('blur', event => {
+      option.originalElem?.classList?.remove("highlighted");
     });
 
-    optionsDiv.appendChild(optionClone);
+    optionsDiv.appendChild(option);
   }
 }
 
@@ -1141,6 +1195,9 @@ function selfAndParents(elem) {
 
 /////////////////// Frame Number Handling ///////////////////
 
+function frameNoForElem(elem) {
+  return findFrameNoElem(elem)?.dataset?.activeFrameNo;
+}
 
 function findFrameNoElem(elem) {
   return elem.closest(".fun");

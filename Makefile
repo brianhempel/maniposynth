@@ -52,7 +52,9 @@ setup:
 	# opam install ppxlib
 	# opam install ppx_yojson_conv
 	# opam install ppx_yojson_conv_lib
-	opam install lz4 base64
+	opam install uri
+	# opam install lz4
+	opam install base64
 	curl -L https://github.com/ocaml/ocaml/archive/4.07.1.zip > ocaml-4.07.1.zip
 	unzip ocaml-4.07.1.zip
 	# Need to make to create certain generated stdlib .ml files

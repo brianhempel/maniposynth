@@ -1,21 +1,28 @@
 (* Convenience methods and filling in missing bits of the Stdlib. *)
 
-module SMap = struct
-  include Map.Make (String)
+module MapPlus (Key : sig type t val compare : t -> t -> int val to_string : t -> string end) = struct
+  include Map.Make (Key)
+
+  let keys   map = bindings map |> List.map fst
+  let values map = bindings map |> List.map snd
 
   let remove_all keys = List.fold_right remove keys
 
   let to_string val_to_string smap =
     bindings smap
-    |> List.map (fun (k, v) -> k ^ " => " ^ val_to_string v)
+    |> List.map (fun (k, v) -> Key.to_string k ^ " => " ^ val_to_string v)
     |> String.concat ",\n"
     |> fun str -> "{\n" ^ str ^ "}"
 
-  let from_list list = list |> List.fold_left (fun smap (k, v) -> add k v smap) empty
+  let of_list list = list |> List.fold_left (fun smap (k, v) -> add k v smap) empty
 end
+
+module SMap   = MapPlus (struct include String let to_string s = s end)
+module IntMap = MapPlus (struct type t = int let compare = compare let to_string = string_of_int end)
 
 
 module SSet    = Set.Make (String)
+module IntSet  = Set.Make (struct type t = int let compare = compare end)
 module CharSet = Set.Make (Char)
 
 let clamp lo hi x =
@@ -141,6 +148,17 @@ module List = struct
         else dedup_ (x :: out) rest
     in
     dedup_ [] list
+
+  let dedup_by f list =
+    let rec dedup_ seen out = function
+      | [] -> rev out
+      | x::rest ->
+        let v = f x in
+        if List.mem v seen
+        then dedup_ seen out rest
+        else dedup_ (v :: seen) (x :: out) rest
+    in
+    dedup_ [] [] list
 
   let sort_by f list =
     list
