@@ -62,6 +62,7 @@ let td      ?(attrs = [])       inners = tag "td" ~attrs inners
 let button  ?(attrs = [])       inners = tag "button" ~attrs inners
 let label ?(attrs = [])         inners = tag "label" ~attrs inners
 let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
+let fancyTextbox ?(attrs = [])  inners = tag "div" ~attrs:(attrs @ [("class","textbox");("contenteditable","true")]) inners
 let checkbox ?(attrs = [])      ()     = tag "input" ~attrs:(attrs @ [("type","checkbox")]) []
 let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let perhaps_pos_attr =
@@ -530,18 +531,19 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         List.map (html_of_structure_item stuff) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ div ~attrs:[("id", "text-edit-pane")]
-          [ span  ~attrs:[("id", "text-edit-root-stuff")]
+          [ span ~attrs:[("id", "text-edit-root-stuff")]
             [ label ~attrs:[("for","root-node-textbox")] ["Root"]
-            ; textbox ~attrs:[("id", "root-node-textbox")] []
-            ; label ~attrs:[("for","node-textbox")] ["Item"]
+            ; fancyTextbox ~attrs:[("id", "root-node-textbox")] []
             ]
-          ; textbox ~attrs:[("id", "node-textbox")] []
+          ; div ~attrs:[("id", "text-edit-node-stuff")]
+            [ label ~attrs:[("for","node-textbox");("id", "type-of-selected")] []
+            ; fancyTextbox ~attrs:[("id", "node-textbox")] []
+            ]
           ]
         ; div ~attrs:[("id", "assert-pane")]
           [ label ~attrs:[("for","assert-textbox")] ["Assert "; span ~attrs:[("id","assert-on")] []; " ="]
           ; textbox ~attrs:[("id", "assert-textbox")] []
           ]
-        ; div ~attrs:[("id", "type-of-selected")] []
         ; div ~attrs:[("id", "exps-pane")]
           [ label ~attrs:[("for","exps-textbox")] ["Use"]
           ; textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []

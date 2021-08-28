@@ -20,7 +20,7 @@ input[type=text],
   min-width: 2em;
   background-color: white;
 }
-.textbox[contenteditable=true] {
+.transient-textbox {
   /* Don't wrap to newline at edge of vbs */
   margin-right: -100em;
 }
@@ -331,11 +331,13 @@ table.subvalue-annotations td {
   border: solid 1px black;
   background-color: white;
   z-index: 2;
+  padding: 1px;
 }
 
 #inspector #type-of-selected {
-  padding: var(--padding);
-  font-weight: bold;
+  /* padding: var(--padding); */
+  /* font-weight: bold; */
+  /* text-align: center; */
 }
 
 #inspector input[type=text] {
@@ -351,6 +353,12 @@ table.subvalue-annotations td {
 #inspector input[type=checkbox] {
   cursor: pointer;
 }
+
+#inspector #text-edit-pane {
+  display: grid;
+  grid-template-columns: auto auto;
+}
+
 
 #inspector .exp-row {
   padding: var(--padding);
