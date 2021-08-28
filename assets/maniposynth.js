@@ -657,8 +657,8 @@ function transientTextboxes() {
 //   }
 // }
 
-  // Convert autocompleted values to code
-  function textboxDivToCode(textboxDiv) {
+// Convert autocompleted values to code
+function textboxDivToCode(textboxDiv) {
   let code = "";
   for (child of textboxDiv.childNodes) {
     if (child.nodeType === 3) {
@@ -672,8 +672,15 @@ function transientTextboxes() {
   return code;
 }
 
-  // What we send to server to ask for suggestions
-  // Autocompleted (sub)values are turned into (vtrace "hJWmvgAAAg4AAACUAAAB9wAAAfSgoKABANGwwClzaW1wbGUubWxBQE_ABAJBQGRAoLC6Ijo6QJCwmaCwkUCgoKABANCwwAQRRQB_AQCQwAQSRQB_AQCRQEBAkMCWwLOQsEEjaW50QECQQAED70ABAyYBA_BAAQMmoLC6BBlAkLCZoLCRQKCgoAEA0LDABClFAH8BAJPABCpFAH8BAJRAQECQwJYEGAED70ABAyqgsLoEK0CQsJmgsJFAoKCgAQDQsMAEO0UAfwEAlsAEPEUAfwEAl0BAQJDAlgQqAQPvQAEDLqCwuiJbXUBAoKCgAQDQsMAESEUAfwEAmMAESUUAfwEAmUFAQJDAlsCzkLBJJGxpc3RAoMCWBD8BA-9AAQMsQJBAAQPvQAEDLQED70ABAy9AoKCgAQDQsAQfBBFBQEBAoKCgAQDQBARAQJDAs5CwSSRsaXN0QKDABCYBA_BAAQM8QJBAAQPwQAEDO0CgoKABANCwBEEEIUFAQECgoKABANAEBEBAkMCzBBCgwARFAQPwQAEDP0CQQAED8EABAz5AoKCgAQDQsARmBC5BQEBAoKCgAQDQsMAEe0cBAKsBALzABHxHAQCrAQDEQEGgoKABANCwwASBRQB_AQCDwASCRQB_AQCLQKCwBICgoKABANCwwASJRQB_AQCOBEFAQECQwLMELaDABHoBA_BAAQNCQJBAAQPwQAEDQUAECwQGQAQZ")
+// if (option.isValue) {
+//   option.remove();
+//   option.contentEditable = false;
+// } else {
+//   textboxDiv.appendChild(document.createTextNode(option.innerText));
+// }
+
+// What we send to server to ask for suggestions
+// Autocompleted (sub)values are turned into (vtrace "hJWmvgAAAg4AAACUAAAB9wAAAfSgoKABANGwwClzaW1wbGUubWxBQE_ABAJBQGRAoLC6Ijo6QJCwmaCwkUCgoKABANCwwAQRRQB_AQCQwAQSRQB_AQCRQEBAkMCWwLOQsEEjaW50QECQQAED70ABAyYBA_BAAQMmoLC6BBlAkLCZoLCRQKCgoAEA0LDABClFAH8BAJPABCpFAH8BAJRAQECQwJYEGAED70ABAyqgsLoEK0CQsJmgsJFAoKCgAQDQsMAEO0UAfwEAlsAEPEUAfwEAl0BAQJDAlgQqAQPvQAEDLqCwuiJbXUBAoKCgAQDQsMAESEUAfwEAmMAESUUAfwEAmUFAQJDAlsCzkLBJJGxpc3RAoMCWBD8BA-9AAQMsQJBAAQPvQAEDLQED70ABAy9AoKCgAQDQsAQfBBFBQEBAoKCgAQDQBARAQJDAs5CwSSRsaXN0QKDABCYBA_BAAQM8QJBAAQPwQAEDO0CgoKABANCwBEEEIUFAQECgoKABANAEBEBAkMCzBBCgwARFAQPwQAEDP0CQQAED8EABAz5AoKCgAQDQsARmBC5BQEBAoKCgAQDQsMAEe0cBAKsBALzABHxHAQCrAQDEQEGgoKABANCwwASBRQB_AQCDwASCRQB_AQCLQKCwBICgoKABANCwwASJRQB_AQCOBEFAQECQwLMELaDABHoBA_BAAQNCQJBAAQPwQAEDQUAECwQGQAQZ")
 function textboxDivToSuggestionQuery(textboxDiv) {
   let code = "";
   // Convert autocompleted values to code
@@ -683,10 +690,42 @@ function textboxDivToSuggestionQuery(textboxDiv) {
       code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
     } else {
       // value node
-      code += `(value_id "${child.dataset.valueId}")`
+      code += `value_id_${child.dataset.valueId}`
     }
   }
   return code;
+}
+
+function subvalueToOptionPart(subvalueElem) {
+  let subvaluePart = subvalueElem.cloneNode(true);
+  subvaluePart.querySelectorAll(".subvalue-annotations").forEach(elem => elem.remove());
+  subvaluePart.isValue = true;
+  subvaluePart.originalElem = subvalueElem;
+  // console.log(subvaluePart);
+  // console.log(subvaluePart.innerText);
+  // console.log(subvaluePart.innerHTML);
+  return subvaluePart;
+}
+
+function optionFromSuggestion(suggestion) {
+  const parts = suggestion.split(/\b/); /* Split on word boundaries */
+  // Convert to nodes, turning value_id_123 into a pretty clone of that subvalue on the screen
+  const nodes = parts.map(part => {
+    let subvalueElem = null;
+    if (part.startsWith('value_id_')) {
+      // Try to find that subvalue
+      const valueIdStr = "" + part.match(/value_id_(\d+)/)[1];
+      subvalueElem = Array.from(document.querySelectorAll(".value[data-value-id]")).find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr)
+    }
+    if (subvalueElem) {
+      return subvalueToOptionPart(subvalueElem);
+    } else {
+      return document.createTextNode(part);
+    }
+  });
+  const option = document.createElement("div");
+  for (const node of nodes) { option.appendChild(node); }
+  return option;
 }
 
 function beginNewCodeEdit(vbsHolder) {
@@ -754,44 +793,32 @@ function mod(n, m) {
 }
 
 function updateAutocompleteAsync(textboxDiv, optionsDiv) {
-  const frameNo = frameNoForElem(textboxDiv);
-
-  const value_ids_visible = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown).map(elem => elem.dataset.valueId);
-
-  const query = textboxDivToSuggestionQuery(textboxDiv);
+  const frameNo         = frameNoForElem(textboxDiv);
+  const vbsLoc          = vbsHolderForInsert(textboxDiv).dataset.loc;
+  const valuesVisible   = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown)
+  const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
+  const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replace(",","~CoMmA~") /* escape commas */ );
+  // console.log(valueStrs);
+  const query           = textboxDivToSuggestionQuery(textboxDiv);
 
   // https://stackoverflow.com/a/57067829
   const searchURL = new URL(document.location.href + "/search");
-  searchURL.search = new URLSearchParams({ frame_no: frameNo, value_ids_visible: value_ids_visible, q: query }).toString();
+  searchURL.search = new URLSearchParams({ frame_no: frameNo, vbs_loc: vbsLoc, value_ids_visible: valueIdsVisible, value_strs: valueStrs, q: query }).toString();
   let request = new XMLHttpRequest();
   request.open("GET", searchURL);
   request.addEventListener("loadend", _ => {
-    console.log(request.responseText);
+    // console.log(request.responseText);
     updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|"), optionsDiv)
   });
   request.send();
 }
 
-function updateAutocomplete(textboxDiv, optionStrs, optionsDiv) {
+function updateAutocomplete(textboxDiv, suggestions, optionsDiv) {
   optionsDiv.innerHTML = "";
-  for (const optionStr of optionStrs) {
+  for (const suggestion of suggestions) {
     // const optionDiv = document.createElement("div");
     // optionDiv.innerText = option;
-    let option = null;
-    let subvalueElem = null;
-    if (optionStr.startsWith('(value_id ')) {
-      // Try to find that subvalue
-      const valueIdStr = "" + optionStr.match(/\(value_id (\d+)\)/)[1];
-      subvalueElem = Array.from(document.querySelectorAll(".value[data-value-id]")).find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr)
-    }
-    if (subvalueElem) {
-      option = subvalueElem.cloneNode(true);
-      option.isValue = true;
-      option.originalElem = subvalueElem;
-    } else {
-      option = document.createElement("div");
-      option.innerText = optionStr;
-    }
+    let option = optionFromSuggestion(suggestion);
     option.tabIndex = 0; /* Make element focusable, even though below we override tab */
     option.addEventListener('keydown', event => {
       let focusedOptionIdx = -1;
@@ -800,10 +827,10 @@ function updateAutocomplete(textboxDiv, optionStrs, optionsDiv) {
           focusedOptionIdx = parseInt(i);
         }
       }
-      console.log(optionsDiv.children.length);
-      console.log(focusedOptionIdx);
-      console.log(focusedOptionIdx + 1);
-      console.log(mod(focusedOptionIdx + 1, optionsDiv.children.length));
+      // console.log(optionsDiv.children.length);
+      // console.log(focusedOptionIdx);
+      // console.log(focusedOptionIdx + 1);
+      // console.log(mod(focusedOptionIdx + 1, optionsDiv.children.length));
       if (event.key === "ArrowDown") {
         optionsDiv.children[mod(focusedOptionIdx + 1, optionsDiv.children.length)].focus();
         event.stopImmediatePropagation();
@@ -813,14 +840,12 @@ function updateAutocomplete(textboxDiv, optionStrs, optionsDiv) {
         event.stopImmediatePropagation();
         event.preventDefault();
       } else if (event.key === "Enter" || event.key === "Tab") {
-        if (option.isValue) {
-          option.remove();
-          option.contentEditable = false;
-          textboxDiv.appendChild(option);
-        } else {
-          textboxDiv.appendChild(document.createTextNode(option.innerText));
-        }
+        option.remove()
         optionsDiv.innerHTML = "";
+        textboxDiv.innerHTML = "";
+        for (const child of Array.from(option.childNodes)) { /* If we don't convert to array, for some reason the whitespace nodes are skipped. */
+          textboxDiv.appendChild(child);
+        }
         // label.appendChild(document.createTextNode("Visualize"));
         textboxDiv.focus()
         // Set cursor to end of "input" element

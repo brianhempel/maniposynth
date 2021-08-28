@@ -412,7 +412,7 @@ let nonconstant_names_at_loc target_loc prog =
     print_endline @@ "nonconstant_names_at_loc: didn't find loc " ^ Loc.to_string target_loc;
     SSet.empty
   with Found_names names ->
-    print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names;
+    (* print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names; *)
     SSet.of_seq (List.to_seq names)
 
 
@@ -425,7 +425,7 @@ type synth_env =
     }
 
 let new_synth_env nonconstant_names tenv =
-  print_endline "------------------------------ new synth env ------------------------------";
+  (* print_endline "------------------------------ new synth env ------------------------------"; *)
   { nonconstant_names        = nonconstant_names
   ; tenv                     = tenv
   ; constants_at_t           = []
@@ -930,7 +930,7 @@ let try_async path =
     | _ -> ()
     end;
     (* |> List.iteri begin fun i result ->
-      let out_path = String.replace ~target:".ml" ~replacement:("-synth" ^ string_of_int i ^ ".ml") path in
+      let out_path = String.replace ".ml" ("-synth" ^ string_of_int i ^ ".ml") path in
       let out_chan = open_out out_path in (* create or truncate file, return channel *)
       let out_str = Shared.Formatter_to_stringifier.f Pprintast.structure result in
       print_endline out_str;

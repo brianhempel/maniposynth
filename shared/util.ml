@@ -308,7 +308,7 @@ module String = struct
     | None       -> Str.split_delim         (Str.regexp_string sep) str
     | Some limit -> Str.bounded_split_delim (Str.regexp_string sep) str limit
 
-  let replace ~target ~replacement str =
+  let replace target replacement str =
     split target str |> String.concat replacement
 
   let to_list str = str |> to_seq |> List.of_seq

@@ -84,17 +84,20 @@ let render_suggestions out_chan uri =
   let url_path = uri |> Uri.path |> Uri.pct_decode in
   let file_path = url_path |> String.drop 1 |> String.drop_suffix "/search" in
   let query_params = uri |> Uri.query in
-
-  match List.assoc_opt "frame_no" query_params, List.assoc_opt "value_ids_visible" query_params, List.assoc_opt "q" query_params with
-  | Some [frame_no_str], Some [value_ids_visible_comma_separated], Some [q_str] ->
-    let value_ids_visible = value_ids_visible_comma_separated |> String.split_on_char ',' |>@ int_of_string |> List.dedup in
+  match ["frame_no"; "vbs_loc"; "value_ids_visible"; "value_strs"; "q"] |>@ (fun key -> List.assoc_opt key query_params) |> Option.project with
+  | Some [[frame_no_str]; [vbs_loc_str]; [value_ids_visible_comma_separated]; [value_strs_comma_separated]; [q_str]] ->
+    (* print_endline value_ids_visible_comma_separated; *)
+    let value_ids_visible = value_ids_visible_comma_separated |> String.split_on_char ',' |>@ int_of_string in
+    (* print_endline value_strs_comma_separated; *)
+    let value_strs = value_strs_comma_separated |> String.split_on_char ',' |>@ String.replace "~CoMmA~" "," in
+    let vbs_loc = Serialize.loc_of_string vbs_loc_str in
     let parsed = Camlboot_interpreter.Interp.parse file_path in
     (* let parsed_with_comments = Parse_unparse.parse_file file_path in
     let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
     let callables = Read_execution_env.callables_of_file file_path in
     let trace = Tracing.run_with_tracing file_path in
     let html_str = View.html_str callables trace bindings_skels in *)
-    let (typed_struct, _, _final_tenv) = Typing.typedtree_sig_env_of_file file_path in
+    let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file file_path in
     let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
     let (trace, _assert_results) =
       let open Camlboot_interpreter in
@@ -104,7 +107,7 @@ let render_suggestions out_chan uri =
       end
     in
     let frame_no = int_of_string frame_no_str in
-    let suggestions = Suggestions.suggestions trace type_lookups parsed frame_no value_ids_visible q_str in
+    let suggestions = Suggestions.suggestions trace type_lookups final_tenv parsed frame_no vbs_loc value_ids_visible value_strs q_str in
     (* print_endline @@ string_of_int (List.length assert_results); *)
     (* let html_str = View.html_str parsed trace assert_results type_lookups final_tenv in *)
     (* Utils.save_file (file_path ^ ".html") html_str; *)

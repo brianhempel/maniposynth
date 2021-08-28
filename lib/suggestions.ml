@@ -4,6 +4,8 @@ open Camlboot_interpreter
 
 let exclude_from_suggestions = ["Stdlib.__POS_OF__"; "Stdlib.__LOC_OF__"; "Stdlib.__LINE_OF__"]
 
+let modules_to_search = [None; Some (Longident.parse "Stdlib.List")]
+
 (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the type given. *)
 let possible_functions_on_type typ type_env =
   let f _name path value_desc out =
@@ -23,8 +25,7 @@ let possible_functions_on_type typ type_env =
         end *)
       end
     | _ -> out in
-  let modules = [None; Some (Longident.parse "Stdlib.List")] in
-  modules
+  modules_to_search
   |>@@ fun module_lid_opt -> Env.fold_values f module_lid_opt type_env []
 
 
@@ -60,13 +61,81 @@ let rec flatten_value (value : Data.value) =
   in
   value :: (children |>@@ flatten_value)
 
+let rec terminal_exps exp = (* Dual of gather_vbs *)
+  let open Parsetree in
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)       -> terminal_exps e
+  | Pexp_sequence (_, e2)    -> terminal_exps e2
+  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
+  | Pexp_letmodule (_, _, e) -> terminal_exps e
+  | _                        -> [exp]
 
-let suggestions (trace : Trace.t) (_type_lookups : Typing.lookups) (_parsed : program) frame_no value_ids_visible (_query : string) =
-  let values_for_suggestion =
+(* KISS for now: lexical completions of last word typed *)
+let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) frame_no vbs_loc value_ids_visible value_strs (query : string) =
+  let visible_values_in_frame =
     let value_in_frame_by_id = Trace.entries_in_frame frame_no trace |>@ Trace.Entry.value |>@@ flatten_value |>@ (fun v -> (v.Data.id, v)) |> IntMap.of_list in
-    value_ids_visible
-    |>@& (fun v_id -> IntMap.find_opt v_id value_in_frame_by_id)
+    List.combine value_strs value_ids_visible
+    |>@& (fun (v_str, v_id) -> IntMap.find_opt v_id value_in_frame_by_id |>& (fun v -> (v_str, v)))
+    |> List.dedup_by snd
   in
-  (* START HERE: FINALLY do something *)
-  values_for_suggestion
-  |>@ (fun v -> "(value_id " ^ string_of_int v.id ^ ")")
+  let locs = prog |> Exp.find_opt vbs_loc |>& terminal_exps ||& [] |>@ Exp.loc in
+  let tenvs =
+    (locs |>@& type_lookups.lookup_exp |>@ fun texp -> texp.Typedtree.exp_env)
+    @ [final_tenv]
+  in
+  let nonconstant_variableset =
+    locs
+    |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
+    |> List.fold_left SSet.union SSet.empty
+  in
+  (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
+  let other_variableset =
+    let f name path desc out =
+      (* let target_is_var = Type.is_var_type typ in *)
+      if Synth.is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+      if SSet.mem name Synth.unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
+      if SSet.mem name Synth.dont_bother_names then out else
+      if SSet.mem name nonconstant_variableset then out else
+      String.drop_prefix "Stdlib." (Path.name path) :: out
+    in
+    modules_to_search
+    |>@@ begin fun module_lid_opt ->
+      tenvs |>@@ (fun tenv -> Env.fold_values f module_lid_opt tenv [])
+    end
+    |> SSet.of_list
+  in
+  let ctorset =
+    let f {Types.cstr_name; cstr_arity; cstr_res; _} out =
+      let _ = cstr_arity in
+      if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
+      cstr_name :: out
+    in
+    modules_to_search
+    |>@@ begin fun module_lid_opt ->
+      tenvs |>@@ (fun tenv -> Env.fold_constructors f module_lid_opt tenv [])
+    end
+    |> SSet.of_list
+  in
+  let lexical_options =
+    List.dedup @@
+      SSet.elements nonconstant_variableset
+      @ SSet.elements ctorset
+      @ SSet.elements other_variableset
+  in
+  let subvalue_options =
+    visible_values_in_frame
+    |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
+  in
+  let options =
+    subvalue_options
+    @ (lexical_options |>@ fun code -> (code, code))
+  in
+  (* subvalue_options |>@ fst |> List.iter print_endline; *)
+  match String.split " " query |> List.rev with
+  | [] -> options |>@ snd
+  | lastWord::restRev ->
+    options
+    |>@? (fun (shown_str, _) -> String.starts_with lastWord shown_str)
+    |>@ begin fun (_, completion) ->
+      completion::restRev |> List.rev |> String.concat " "
+    end
