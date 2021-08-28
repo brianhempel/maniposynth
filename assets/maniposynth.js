@@ -784,6 +784,8 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.addEventListener('click', event => {
       event.stopPropagation();
     });
+
+    updateAutocompleteAsync(textboxDiv, autocompleteDiv);
   }
 }
 

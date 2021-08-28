@@ -6,6 +6,32 @@ let exclude_from_suggestions = ["Stdlib.__POS_OF__"; "Stdlib.__LOC_OF__"; "Stdli
 
 let modules_to_search = [None; Some (Longident.parse "Stdlib.List")]
 
+let ctors_in_modules tenv mods =
+  let f ({Types.cstr_res; _} as ctor_desc) out =
+    (* let _ = cstr_arity in *)
+    if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
+    ctor_desc :: out
+  in
+  mods |>@@ (fun module_lid_opt -> Env.fold_constructors f module_lid_opt tenv [])
+
+let var_names_in_modules tenv mods =
+  let f name path desc out =
+    (* let target_is_var = Type.is_var_type typ in *)
+    if Synth.is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
+    if SSet.mem name Synth.unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
+    if SSet.mem name Synth.dont_bother_names then out else
+    String.drop_prefix "Stdlib." (Path.name path) :: out
+  in
+  mods |>@@ (fun module_lid_opt -> Env.fold_values f module_lid_opt tenv [])
+
+let initial_ctor_names =
+  ctors_in_modules Typing.initial_env modules_to_search
+  |>@ (fun { Types.cstr_name; _ } -> cstr_name)
+  |> SSet.of_list
+let initial_var_names =
+  var_names_in_modules Typing.initial_env modules_to_search
+  |> SSet.of_list
+
 (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the type given. *)
 let possible_functions_on_type typ type_env =
   let f _name path value_desc out =
@@ -89,38 +115,26 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     |> List.fold_left SSet.union SSet.empty
   in
   (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
-  let other_variableset =
-    let f name path desc out =
-      (* let target_is_var = Type.is_var_type typ in *)
-      if Synth.is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
-      if SSet.mem name Synth.unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
-      if SSet.mem name Synth.dont_bother_names then out else
-      if SSet.mem name nonconstant_variableset then out else
-      String.drop_prefix "Stdlib." (Path.name path) :: out
-    in
-    modules_to_search
-    |>@@ begin fun module_lid_opt ->
-      tenvs |>@@ (fun tenv -> Env.fold_values f module_lid_opt tenv [])
-    end
-    |> SSet.of_list
-  in
   let ctorset =
-    let f {Types.cstr_name; cstr_arity; cstr_res; _} out =
-      let _ = cstr_arity in
-      if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
-      cstr_name :: out
-    in
-    modules_to_search
-    |>@@ begin fun module_lid_opt ->
-      tenvs |>@@ (fun tenv -> Env.fold_constructors f module_lid_opt tenv [])
-    end
+    tenvs
+    |>@@ (fun tenv -> ctors_in_modules tenv modules_to_search)
+    |>@ (fun { Types.cstr_name; _ } -> cstr_name)
     |> SSet.of_list
+    |> (fun s -> SSet.diff s initial_ctor_names)
+  in
+  let other_variableset =
+    tenvs
+    |>@@ (fun tenv -> var_names_in_modules tenv modules_to_search)
+    |> SSet.of_list
+    |> (fun s -> SSet.diff s initial_var_names)
   in
   let lexical_options =
     List.dedup @@
       SSet.elements nonconstant_variableset
       @ SSet.elements ctorset
       @ SSet.elements other_variableset
+      @ SSet.elements initial_ctor_names
+      @ SSet.elements initial_var_names
   in
   let subvalue_options =
     visible_values_in_frame
