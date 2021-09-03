@@ -96,8 +96,26 @@ let rec terminal_exps exp = (* Dual of gather_vbs *)
   | Pexp_letmodule (_, _, e) -> terminal_exps e
   | _                        -> [exp]
 
+
+let options_for_value_id tenvs visible_values_in_frame selected_value_id =
+  match visible_values_in_frame |> List.find_opt (fun (_v_str, v) -> v.Data.id = selected_value_id) with
+  | Some (v_str, v) ->
+    begin match v.Data.type_opt with
+    | Some typ ->
+      tenvs
+      |>@@ possible_functions_on_type typ
+      |> List.dedup
+      |>@ Exp.to_string
+      |>@ (fun code -> (code ^ " " ^ v_str, code ^ " value_id_" ^ string_of_int v.id))
+      |> List.cons (v_str, "value_id_" ^ string_of_int v.id) (* include the value as an autocomplete option *)
+    | _ ->
+      []
+    end
+  | None ->
+    []
+
 (* KISS for now: lexical completions of last word typed *)
-let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) frame_no vbs_loc value_ids_visible value_strs (query : string) =
+let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) frame_no vbs_loc value_ids_visible value_strs ?selected_value_id (query : string) =
   let visible_values_in_frame =
     let value_in_frame_by_id = Trace.entries_in_frame frame_no trace |>@ Trace.Entry.value |>@@ flatten_value |>@ (fun v -> (v.Data.id, v)) |> IntMap.of_list in
     List.combine value_strs value_ids_visible
@@ -109,43 +127,46 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     (locs |>@& type_lookups.lookup_exp |>@ fun texp -> texp.Typedtree.exp_env)
     @ [final_tenv]
   in
-  let nonconstant_variableset =
-    locs
-    |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
-    |> List.fold_left SSet.union SSet.empty
-  in
-  (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
-  let ctorset =
-    tenvs
-    |>@@ (fun tenv -> ctors_in_modules tenv modules_to_search)
-    |>@ (fun { Types.cstr_name; _ } -> cstr_name)
-    |> SSet.of_list
-    |> (fun s -> SSet.diff s initial_ctor_names)
-  in
-  let other_variableset =
-    tenvs
-    |>@@ (fun tenv -> var_names_in_modules tenv modules_to_search)
-    |> SSet.of_list
-    |> (fun s -> SSet.diff s initial_var_names)
-  in
-  let lexical_options =
-    List.dedup @@
-      SSet.elements nonconstant_variableset
-      @ SSet.elements ctorset
-      @ SSet.elements other_variableset
-      @ SSet.elements initial_ctor_names
-      @ SSet.elements initial_var_names
-  in
-  let subvalue_options =
-    visible_values_in_frame
-    |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
-  in
   let options =
-    subvalue_options
-    @ (lexical_options |>@ fun code -> (code, code))
+    match selected_value_id with
+    | Some selected_value_id -> options_for_value_id tenvs visible_values_in_frame selected_value_id
+    | _ ->
+      let nonconstant_variableset =
+        locs
+        |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
+        |> List.fold_left SSet.union SSet.empty
+      in
+      (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
+      let ctorset =
+        tenvs
+        |>@@ (fun tenv -> ctors_in_modules tenv modules_to_search)
+        |>@ (fun { Types.cstr_name; _ } -> cstr_name)
+        |> SSet.of_list
+        |> (fun s -> SSet.diff s initial_ctor_names)
+      in
+      let other_variableset =
+        tenvs
+        |>@@ (fun tenv -> var_names_in_modules tenv modules_to_search)
+        |> SSet.of_list
+        |> (fun s -> SSet.diff s initial_var_names)
+      in
+      let lexical_options =
+        List.dedup @@
+          SSet.elements nonconstant_variableset
+          @ SSet.elements ctorset
+          @ SSet.elements other_variableset
+          @ SSet.elements initial_ctor_names
+          @ SSet.elements initial_var_names
+      in
+      let subvalue_options =
+        visible_values_in_frame
+        |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
+      in
+      subvalue_options
+      @ (lexical_options |>@ fun code -> (code, code))
   in
   (* subvalue_options |>@ fst |> List.iter print_endline; *)
-  match String.split " " query |> List.rev with
+  begin match String.split " " query |> List.rev with
   | [] -> options |>@ snd
   | lastWord::restRev ->
     options
@@ -153,3 +174,4 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     |>@ begin fun (_, completion) ->
       completion::restRev |> List.rev |> String.concat " "
     end
+  end

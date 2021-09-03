@@ -323,10 +323,18 @@ table.subvalue-annotations td {
   display: block;
   background-color: rgba(255,255,255,0.95);
   padding: 0 var(--padding);
+  cursor: pointer;
 }
+/* Undo some styles... */
 .textbox .value,
 .autocomplete-options .value {
   font-size: 1rem;
+  box-shadow: none;
+}
+/* Undo some styles... */
+.textbox .selected,
+.autocomplete-options .selected {
+  box-shadow: none;
 }
 
 #inspector {

@@ -547,7 +547,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
           ]
         ; div ~attrs:[("id", "exps-pane")]
           [ label ~attrs:[("for","exps-textbox")] ["Use"]
-          ; textbox ~attrs:[("id", "exps-textbox");("placeholder","Enter Custom Vis")] []
+          ; fancyTextbox ~attrs:[("id", "exps-textbox")] []
           ; div ~attrs:[("id", "exps-list")] []
           ]
         ]

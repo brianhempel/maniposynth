@@ -107,7 +107,8 @@ let render_suggestions out_chan uri =
       end
     in
     let frame_no = int_of_string frame_no_str in
-    let suggestions = Suggestions.suggestions trace type_lookups final_tenv parsed frame_no vbs_loc value_ids_visible value_strs q_str in
+    let selected_value_id = List.assoc_opt "selected_value_id" query_params |>&& List.hd_opt |>& int_of_string in
+    let suggestions = Suggestions.suggestions trace type_lookups final_tenv parsed frame_no vbs_loc value_ids_visible value_strs ?selected_value_id q_str in
     (* print_endline @@ string_of_int (List.length assert_results); *)
     (* let html_str = View.html_str parsed trace assert_results type_lookups final_tenv in *)
     (* Utils.save_file (file_path ^ ".html") html_str; *)
