@@ -557,7 +557,7 @@ function updateInspector() {
       nodeTextbox.innerText         = nodeCode;
       nodeTextbox.originalValue     = nodeCode;
       // nodeTextbox.targetElem        = elem;
-      if (rootNodeElem === elem) {
+      if (rootNodeElem === elem || elem.classList.contains("pat")) {
         hide(textEditRootStuff);
       } else {
         show(textEditRootStuff);
