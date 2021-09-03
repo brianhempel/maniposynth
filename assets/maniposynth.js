@@ -446,7 +446,7 @@ function selectInspectorTextbox() {
       if (selfAndParents(textbox).every(isShown)) {
         found = true;
         // textbox.select();
-        window.getSelection().selectAllChildren(textbox); /* works for contenteditable divs */
+        textbox.focus();
       }
     }
   });
@@ -623,7 +623,6 @@ function isShown(elem) {
 function abortTextEdit(textbox) {
   // if (textbox.originalElem) { show(textbox.originalElem) };
   textbox.remove();
-  textbox.autocompleteDiv?.remove();
   updateInspector();
 }
 
@@ -759,7 +758,8 @@ function optionFromSuggestion(suggestion) {
 }
 
 // START HERE
-// tons of tab order wonkiness rn
+// change active frame on out-of-frame tv hover
+// figure out use/vis!?!?
 
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort) {
 
@@ -786,6 +786,7 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort) {
     } else if (event.key === "Esc" || event.key === "Escape") {
       decolorizeSubvalues();
       onAbort(event, textboxDiv);
+      autocompleteDiv.remove();
     } else if (event.key === "ArrowDown") {
       textboxDiv.blur();
       autocompleteDiv.children[0]?.focus();
@@ -806,6 +807,7 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort) {
   });
   textboxDiv.addEventListener('focus', event => {
     colorizeSubvalues();
+    window.getSelection().selectAllChildren(textboxDiv);
     updateAutocompleteAsync(textboxDiv);
   });
 }
@@ -895,13 +897,14 @@ function updateAutocompleteAsync(textboxDiv) {
   let request = new XMLHttpRequest();
   request.open("GET", searchURL);
   request.addEventListener("loadend", _ => {
-    // console.log(request.responseText);
-    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|"))
+    console.log(request.responseText);
+    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0))
   });
   request.send();
 }
 
 function updateAutocomplete(textboxDiv, suggestions) {
+  // console.log(suggestions);
   const autocompleteDiv = textboxDiv.autocompleteDiv;
   autocompleteDiv.innerHTML = "";
 

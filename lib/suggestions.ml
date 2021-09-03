@@ -149,7 +149,7 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
   | [] -> options |>@ snd
   | lastWord::restRev ->
     options
-    |>@? (fun (shown_str, _) -> String.starts_with lastWord shown_str)
+    |>@? (fun (shown_str, code) -> String.starts_with lastWord shown_str && lastWord <> code)
     |>@ begin fun (_, completion) ->
       completion::restRev |> List.rev |> String.concat " "
     end
