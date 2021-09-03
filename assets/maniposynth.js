@@ -758,7 +758,6 @@ function optionFromSuggestion(suggestion) {
 }
 
 // START HERE
-// change active frame on out-of-frame tv hover
 // figure out use/vis!?!?
 
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort) {
@@ -1344,20 +1343,34 @@ function initFrameNos() {
   });
 }
 
+// Returns whether any any descendent values are active
 function updateActiveValues(elem, frameNo) {
+  let active = false;
+
   if (elem.classList.contains("fun")) {
     // Stop recursing, new set of nested lambdas
   } else if ("frameNo" in elem.dataset) {
     if (parseInt(elem.dataset.frameNo) === parseInt(frameNo)) {
       elem.classList.remove("not-in-active-frame");
+      active = true;
     } else {
       elem.classList.add("not-in-active-frame");
     }
   } else {
-    for (child of elem.children) { updateActiveValues(child, frameNo) }
+    for (child of elem.children) { active = updateActiveValues(child, frameNo) || active; }
+
+    if (elem.classList.contains("tv")) {
+      if (active) {
+        elem.classList.remove("not-in-active-frame");
+      } else {
+        elem.classList.add("not-in-active-frame");
+      }
+    }
   }
 
   relayout();
+
+  return active;
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -1365,6 +1378,19 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("mouseenter", event => {
       const frameNoElem = findFrameNoElem(elem);
       if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo); }
+    });
+  });
+
+  // Change frame when hovering a tv with no visible values
+  document.querySelectorAll(".tv").forEach(elem => {
+    elem.addEventListener("mouseenter", event => {
+      const tvValues = elem.querySelectorAll(":scope > .values > [data-frame-no]");
+      const visibleValues = Array.from(tvValues).filter(elem => !elem.classList.contains("not-in-active-frame"));
+      if (visibleValues.length == 0 && tvValues.length > 0) {
+        let valueToShow = tvValues[0]
+        const frameNoElem = findFrameNoElem(valueToShow);
+        if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo); }
+      }
     });
   });
 

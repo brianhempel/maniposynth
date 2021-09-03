@@ -250,8 +250,11 @@ table.subvalue-annotations td {
   font-weight: normal;
 }
 
-.not-in-active-frame, .ellipses {
+.root-value-holder.not-in-active-frame, .ellipses {
   display: none;
+}
+.tv.not-in-active-frame {
+  opacity: 0.4;
 }
 .pat .not-in-active-frame,
 .pat .ellipses {
