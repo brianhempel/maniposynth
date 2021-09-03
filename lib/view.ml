@@ -354,12 +354,13 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   (* let exp_to_edit = exp_to_edit ||& exp in *)
   let code         = Exp.to_string { exp         with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
   (* Remove parens around ops rendered infix. *)
-  let code = if infix then uninfix code else code in
+  let code' = if infix then uninfix code else code in
   (* let code_to_edit = Exp.to_string { exp_to_edit with pexp_attributes = [] } in Don't show pos/vis attrs. *)
   let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
   let wrap inner = span ~attrs:(
     [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
-    ; ("data-in-place-edit-code", code)
+    ; ("data-in-place-edit-code", code')
+    ; ("data-extraction-code", code)
     ; ("class","exp")
     ] @ perhaps_type_attr)
     [inner]
@@ -375,7 +376,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
     | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
     end
-  | _ -> code ^ " "
+  | _ -> code' ^ " "
 
 
 let rec terminal_exps exp = (* Dual of gather_vbs *)
