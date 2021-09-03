@@ -300,7 +300,7 @@ function select(elem) {
   elem.classList.add("selected");
   saveSelection();
   updateInspector();
-  selectInspectorTextbox();
+  // selectInspectorTextbox();
 }
 
 function deselect(elem) {
@@ -314,14 +314,20 @@ function deselectAll() {
 }
 
 // Selectable element clicked...
-function toggleSelect(event) {
+function clickSelect(event) {
   const elem = event.currentTarget;
   event.stopImmediatePropagation();
   if (elem.classList.contains("selected")) {
-    deselectAll();
+    // Is this a double click?
+    if (500 >= new Date() - (elem.lastClickTime || 0)) {
+      selectInspectorTextbox();
+    } else {
+      deselectAll();
+    }
   } else {
     deselectAll();
     select(elem);
+    elem.lastClickTime = new Date()
   }
 }
 
@@ -375,7 +381,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Make appropriate items selectable.
   document.querySelectorAll('[data-extraction-code],.vb,.exp[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
-    elem.addEventListener("click", toggleSelect);
+    elem.addEventListener("click", clickSelect);
   });
   document.addEventListener("keydown", event => {
     if (event.key === "Esc" || event.key === "Escape") {
