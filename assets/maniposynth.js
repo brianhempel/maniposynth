@@ -1354,7 +1354,7 @@ function frameNoForElem(elem) {
 }
 
 function findFrameNoElem(elem) {
-  return elem.closest(".fun");
+  return elem.closest(".fun,.top-level");
 }
 
 function setFrameNo(frameRootElem, frameNo) {
