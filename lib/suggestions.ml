@@ -175,3 +175,11 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
       completion::restRev |> List.rev |> String.concat " "
     end
   end
+
+(* START HERE *)
+(* Revisit synth workflow *)
+(* Add missing binding should look in vises to see if name used in function position *)
+(* Simple assert value? *)
+(* "Use" in vis? *)
+(* "Use" in pat? *)
+(* Drag value into value? *)
