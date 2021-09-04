@@ -137,6 +137,14 @@ module List = struct
   let any_overlap xs ys =
     xs |> exists (fun x -> mem x ys)
 
+  (* Removes first *)
+  let rec remove x = function
+    | []                 -> []
+    | y::rest when x = y -> rest
+    | y::rest            -> y :: remove x rest
+
+  let remove_all x = filter ((<>) x)
+
   (* List already has sort_uniq *)
   (* This preserves order. *)
   let dedup list =

@@ -338,23 +338,27 @@ function saveSelection() {
   const selectedIndices = [];
 
   var i = 0
-  document.querySelectorAll('.selectable').forEach(elem => {
+  const selectables = document.querySelectorAll('.selectable');
+  selectables.forEach(elem => {
     if (elem.classList.contains("selected")) {
       selectedIndices.push(i);
     }
     i++;
   });
 
-  window.sessionStorage.setItem("selectedIndices", JSON.stringify(selectedIndices));
+  window.sessionStorage.setItem("selectedIndices",  JSON.stringify(selectedIndices));
+  window.sessionStorage.setItem("selectablesCount", JSON.stringify(selectables.length));
 }
 
 function restoreSelection() {
-  // document.querySelectorAll('.selectable').length
-  const selectedIndices = JSON.parse(window.sessionStorage.getItem("selectedIndices") || "[]");
+  const selectedIndices          = JSON.parse(window.sessionStorage.getItem("selectedIndices") || "[]");
+  const previousSelectablesCount = JSON.parse(window.sessionStorage.getItem("selectablesCount") || "-1");
 
   deselectAll();
   var i = 0
-  document.querySelectorAll('.selectable').forEach(elem => {
+  const selectables = document.querySelectorAll('.selectable');
+  if (previousSelectablesCount != selectables.length) { return; }
+  selectables.forEach(elem => {
     if (selectedIndices.includes(i)) {
       select(elem);
     }
@@ -390,6 +394,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Still not sure when to do this
   // restoreSelection();
 });
 
