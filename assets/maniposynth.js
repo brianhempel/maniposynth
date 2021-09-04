@@ -528,7 +528,7 @@ function updateInspector() {
     });
 
     const row = document.createElement("div");
-    row.classList.add("exp-row");
+    row.classList.add("vis-row");
     row.appendChild(document.createTextNode(vis));
     row.appendChild(label);
     // const addButton = document.createElement("button");
@@ -616,7 +616,7 @@ function updateInspector() {
 
     visList.innerHTML = "";
     const activeVises = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
-    activeVises.forEach(vis => visList.appendChild(makeVisRow(vis)));
+    activeVises.forEach(vis => visList.appendChild(makeVisRow(vis, true)));
 
   } else {
     hide(inspector);
