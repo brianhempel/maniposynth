@@ -369,18 +369,22 @@ table.subvalue-annotations td {
   display: grid;
   grid-template-columns: auto auto;
 }
+#inspector #use-pane {
+  display: grid;
+  grid-template-columns: 60% auto auto;
+}
+#inspector #use-pane label {
+  grid-column: 1/4; /* Use whole row */
+}
 
-
-#inspector .exp-row {
+#inspector .vis-row {
   padding: var(--padding);
   border-top: 1px solid gray;
 }
-
-#inspector .exp-row button {
+/* #inspector .vis-row button {
   float: right;
-  /* margin:var(--padding); */
-}
-#inspector .exp-row label {
+} */
+#inspector .vis-row label {
   float: right;
 }
 

@@ -419,13 +419,19 @@ function textboxKeydownHandler(handleSubmit) {
   };
 }
 
+function onAdd(code) {
+  const elem = selectedElems()[0];
+  const vbsHolder = vbsHolderForInsert(elem);
+  insertCode(vbsHolder.dataset.loc, code);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
 
-  document.getElementById("exps-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
-    const vis = text;
-    addVis(containingLoc(targetElem), vis);
-  }));
+  // document.getElementById("use-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
+  //   const vis = text;
+  //   addVis(containingLoc(targetElem), vis);
+  // }));
 
   // document.getElementById("node-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
   //   replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
@@ -438,6 +444,29 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById("assert-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
     newAssert(containingLoc(targetElem), targetElem.dataset.codeToAssertOn, text);
   }));
+
+  document.getElementById("add-button").addEventListener("click", event => {
+    const code = textboxDivToCode(document.getElementById("use-textbox"));
+    onAdd(code);
+    // event.stopImmediatePropagation();
+    // event.preventDefault();
+  });
+
+  document.getElementById("visualize-button").addEventListener("click", event => {
+    const selectedElem = selectedElems()[0];
+    const useTextbox = document.getElementById("use-textbox")
+    // Visualizers are supposed be code of type 'a -> 'b
+    // But if you provide a simple example application, we'll curry it for you.
+    lastElemInTextbox = useTextbox.childNodes[useTextbox.childNodes.length - 1];
+    if (lastElemInTextbox?.dataset?.valueId) {
+      if (lastElemInTextbox.dataset.valueId === selectedElem?.dataset?.valueId) {
+        lastElemInTextbox.remove()
+      }
+    }
+    const vis = textboxDivToCode(useTextbox);
+    const loc = containingLoc(selectedElem);
+    addVis(loc, vis);
+  });
 
   window.addEventListener("resize", updateInspector);
   window.addEventListener("scroll", updateInspector);
@@ -459,18 +488,18 @@ function selectInspectorTextbox() {
 }
 
 function updateInspector() {
-  const inspector              = window.inspector;
-  const textEditPane           = document.getElementById("text-edit-pane");
-  const textEditRootStuff      = document.getElementById("text-edit-root-stuff");
-  const rootNodeTextbox        = document.getElementById("root-node-textbox");
-  const nodeTextbox            = document.getElementById("node-textbox");
-  const assertPane             = document.getElementById("assert-pane");
-  const assertOn               = document.getElementById("assert-on");
-  const assertTextbox          = document.getElementById("assert-textbox");
-  const typeOfSelected         = document.getElementById("type-of-selected");
-  const expsList               = document.getElementById("exps-list");
-  const expsPane               = document.getElementById("exps-pane");
-  const addVisTextbox          = document.getElementById("exps-textbox");
+  const inspector         = window.inspector;
+  const textEditPane      = document.getElementById("text-edit-pane");
+  const textEditRootStuff = document.getElementById("text-edit-root-stuff");
+  const rootNodeTextbox   = document.getElementById("root-node-textbox");
+  const nodeTextbox       = document.getElementById("node-textbox");
+  const assertPane        = document.getElementById("assert-pane");
+  const assertOn          = document.getElementById("assert-on");
+  const assertTextbox     = document.getElementById("assert-textbox");
+  const typeOfSelected    = document.getElementById("type-of-selected");
+  const usePane           = document.getElementById("use-pane");
+  const useTextbox        = document.getElementById("use-textbox");
+  const visList           = document.getElementById("vis-list");
 
   const elem = selectedElems()[0];
 
@@ -480,7 +509,7 @@ function updateInspector() {
     event.stopImmediatePropagation();
   }
 
-  const makeExpRow = (vis, isVised) => {
+  const makeVisRow = (vis, isVised) => {
     const label = document.createElement("label");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -490,6 +519,8 @@ function updateInspector() {
     checkbox.addEventListener("change", ev => {
       const loc = containingLoc(elem);
       if (checkbox.checked) {
+        // well, there was a time when we needed this
+        // now this isn't even shown if the vis isn't active
         addVis(loc, vis);
       } else {
         removeVis(loc, vis);
@@ -509,26 +540,6 @@ function updateInspector() {
     // });
     // row.appendChild(addButton);
     return row;
-  }
-
-  const makeCheck = (vis, isChecked) => {
-    const label = document.createElement("label");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = isChecked;
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(vis));
-
-    checkbox.addEventListener("change", ev => {
-      const checkbox = ev.target;
-      const loc = containingLoc(elem);
-      if (checkbox.checked) {
-        addVis(loc, vis);
-      } else {
-        removeVis(loc, vis);
-      }
-    });
-    return label;
   }
 
   if (elem && transientTextboxes().length === 0) {
@@ -593,31 +604,20 @@ function updateInspector() {
       hide(typeOfSelected);
     }
 
-    expsList.innerHTML = "";
-    if ("possibleVises" in elem.dataset) { // If the item can have vises (i.e. is a value)
-
-      function onAdd(code) {
-        const vbsHolder = vbsHolderForInsert(elem);
-        // const code = `${vis} (${elem.dataset.extractionCode})`;
-        insertCode(vbsHolder.dataset.loc, code);
-      }
-      addVisTextbox.innerText     = "";
-      addVisTextbox.originalValue = "";
-      attachAutocomplete(addVisTextbox, elem, onAdd, onTextEditAbort, elem.dataset.valueId);
-
-      // addVisTextbox.targetElem = elem;
-      show(expsPane);
-      const activeVises   = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
-      // const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
-      activeVises.forEach(vis => expsList.appendChild(makeExpRow(vis, true)));
-      // possibleVises.forEach(vis => {
-      //   if (!activeVises.includes(vis)) {
-      //     expsList.appendChild(makeExpRow(vis, false));
-      //   }
-      // });
+    if (elem.dataset.valueId) {
+      useTextbox.innerText     = "";
+      useTextbox.originalValue = "";
+      attachAutocomplete(useTextbox, elem, onAdd, onTextEditAbort, elem.dataset.valueId);
+      // useTextbox.targetElem = elem;
+      show(usePane);
     } else {
-      hide(expsPane);
+      hide(usePane);
     }
+
+    visList.innerHTML = "";
+    const activeVises = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
+    activeVises.forEach(vis => visList.appendChild(makeVisRow(vis)));
+
   } else {
     hide(inspector);
   }
@@ -775,9 +775,6 @@ function optionFromSuggestion(suggestion) {
   return option;
 }
 
-// START HERE
-// figure out use/vis!?!?
-
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedValueIdStr) {
 
   const autocompleteDiv = document.createElement("div");
@@ -910,7 +907,7 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
 
   // https://stackoverflow.com/a/57067829
   const searchURL = new URL(document.location.href + "/search");
-  let queryParams = { frame_no: frameNo, vbs_loc: vbsLoc, value_ids_visible: valueIdsVisible, value_strs: valueStrs, q: query };
+  let queryParams = { frame_no: frameNo || -1, vbs_loc: vbsLoc, value_ids_visible: valueIdsVisible, value_strs: valueStrs, q: query };
   if (selectedValueIdStr) { queryParams["selected_value_id"] = selectedValueIdStr; }
   searchURL.search = new URLSearchParams(queryParams).toString();
   let request = new XMLHttpRequest();
