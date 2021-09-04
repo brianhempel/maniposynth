@@ -1,4 +1,4 @@
-
+(*
 (* May not need this. Typedtree tracks binding locations via uniquely stamped Idents *)
 
 (* let (restore_names, old) = assign_unique_names old in *)
@@ -401,4 +401,4 @@ let names_seen flags_and_units =
     !name
 end
 
- *)
+ *) *)

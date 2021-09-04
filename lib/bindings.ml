@@ -186,6 +186,91 @@ and names_in_vis_attrs attrs =
   |>@@ fun { exp } -> free_unqualified_names exp
 
 
+(* Mapping is top-down, rather than bottom-up. *)
+(* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
+let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
+  let rec map_exp scope_info _ e =
+    let e'                       = f scope_info e in
+    let recurse                  = map_exp scope_info  (mapper scope_info) in
+    let recurse'     scope_info' = map_exp scope_info' (mapper scope_info') in
+    let map_children scope_info' = dflt_mapper.expr    (mapper scope_info') in
+    let handle_case case =
+      let scope_info' = handle_pat scope_info case.pc_lhs in
+      let recurse' = recurse' scope_info' in
+      case |> Case.map_guard recurse' |> Case.map_rhs recurse'
+    in
+    let ret desc = { e' with pexp_desc = desc } in
+    begin match e'.pexp_desc with
+    | Pexp_let (Asttypes.Nonrecursive, vbs, body)  -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in ret @@ Pexp_let (Asttypes.Nonrecursive, vbs |>@ Vb.map_exp recurse, recurse' scope_info' body)
+    | Pexp_let (Asttypes.Recursive, vbs, _)        -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in map_children scope_info' e'
+    | Pexp_match (scrutinee, cases)                -> ret @@ Pexp_match (recurse scrutinee, cases |>@ handle_case)
+    | Pexp_try   (body, cases)                     -> ret @@ Pexp_try (recurse body, cases |>@ handle_case)
+    | Pexp_function cases                          -> ret @@ Pexp_function (cases |>@ handle_case)
+    | Pexp_fun (arg_label, default, pat, body)     -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_fun (arg_label, default |>& recurse, pat, recurse' scope_info' body)
+    | Pexp_for (pat, e1, e2, dirflag, body)        -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse' scope_info' body)
+    | Pexp_letmodule (_str_loced, _mod_exp, _body) -> failwith "map_with_scope: letmodule not handled"
+    | Pexp_pack _mod_exp                           -> failwith "map_with_scope: pack not handled"
+    | Pexp_object _                                -> failwith "map_with_scope: classes not handled"
+    | Pexp_open (_, _, _)                          -> failwith "map_with_scope: local opens not handled"
+    | _                                            -> map_children scope_info e'
+    end
+  and map_struct_items scope_info _ sis =
+    let map_si mapper' = dflt_mapper.structure_item mapper' in
+    let sis'_rev, _ =
+      sis
+      |> List.fold_left begin fun (sis'_rev, scope_info) si ->
+        (match si.pstr_desc with
+        | Pstr_value (Asttypes.Nonrecursive, vbs) -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info)  si :: sis'_rev, scope_info')
+        | Pstr_value (Asttypes.Recursive, vbs)    -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info') si :: sis'_rev, scope_info')
+        | _                                       -> (map_si (mapper scope_info) si :: sis'_rev, scope_info)
+        )
+      end ([], scope_info)
+    in
+    List.rev sis'_rev
+  and mapper scope_info = { dflt_mapper with expr = map_exp scope_info; structure = map_struct_items scope_info }
+  in
+  mapper init_scope_info
+
+let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
+  let mapper = mapper_with_scope init_scope_info handle_pat f in
+  mapper.expr mapper exp
+
+let map_exps_with_scope_prog (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) struct_items =
+  let mapper = mapper_with_scope init_scope_info handle_pat f in
+  mapper.structure mapper struct_items
+
+(* Preserves old attrs and locs *)
+let apply_subst_on_exp subst exp =
+  match exp.pexp_desc with
+  | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
+    SMap.find_opt name subst
+    |>& (fun name' -> { exp with pexp_desc = Pexp_ident {lid_loced with txt = Longident.Lident name'} })
+    ||& exp
+  | _ ->
+    exp
+
+(* Preserves old attrs and locs *)
+let rename_unqualified_variables subst exp =
+  let handle_pat subst pat = SMap.remove_all (Pat.names pat) subst in
+  exp
+  |> map_exps_with_scope subst handle_pat apply_subst_on_exp
+
+(* Only handles single name pats for now, not as-pats. *)
+(* Preserves old attrs and locs *)
+let rename_pat_by_loc loc name' prog =
+  let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = loc in
+  let handle_pat subst pat =
+    let subst = SMap.remove_all (Pat.names pat) subst in
+    match pat |> Pat.flatten |> List.find_opt is_target_pat with
+    | Some pat -> SMap.add (Pat.single_name pat ||& "") name' subst
+    | None     -> subst
+  in
+  prog
+  |> map_exps_with_scope_prog SMap.empty handle_pat apply_subst_on_exp
+  |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
+
+
+
 (*
     Need two passes.
 
@@ -404,11 +489,12 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
   | [] -> []
   | si::rest ->
     let add_bindings_and_continue ~names_for_si ~names_after_si ~names_free_si_rhs ~make_si_desc' =
-      let names_needed_si             = List.diff names_free_si_rhs names_for_si in
-      let names_needed_remaining_prog = List.diff (free_unqualified_names_struct_items rest) names_after_si in
-      let names_to_define_here        = List.inter names_needed_si names_needed_remaining_prog |> List.dedup in
-      let new_sis                     = names_to_define_here |>@ (fun name -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) Exp.hole]) in
-      let si'                         = { si with pstr_desc = make_si_desc' (names_to_define_here @ names_for_si) } in
+      let names_needed_si                = List.diff names_free_si_rhs names_for_si in
+      let names_needed_remaining_prog    = List.diff (free_unqualified_names_struct_items rest) names_after_si in
+      let names_to_define_here           = List.inter names_needed_si names_needed_remaining_prog |> List.dedup in
+      let names_to_define_with_arg_count = names_to_define_here |>@ fun name -> (name, find_arg_count_for_name ~struct_items:rest name) in
+      let new_sis                        = names_to_define_with_arg_count |>@ fun (name, arg_count) -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) (make_new_rhs arg_count)] in
+      let si'                            = { si with pstr_desc = make_si_desc' (names_to_define_here @ names_for_si) } in
       new_sis @ [si'] @ recurse (names_to_define_here @ names_after_si) rest
     in
     begin match si.pstr_desc with
@@ -478,9 +564,10 @@ and add_missing_bindings_exp defined_names exp =
     { exp with pexp_desc = Pexp_fun (arg_label, default, pat, add_missing_bindings_exp (Pat.names pat @ defined_names) body) }
   | _ ->
     let names_needed = List.diff (free_unqualified_names exp) defined_names |> List.dedup in
+    let names_to_define_with_arg_count = names_needed |>@ fun name -> (name, find_arg_count_for_name ~exp name) in
     List.fold_right
-      (fun name body -> Exp.let_ Asttypes.Nonrecursive [Vb.mk (Pat.var name) Exp.hole] body)
-      names_needed
+      (fun (name, arg_count) body -> Exp.let_ Asttypes.Nonrecursive [Vb.mk (Pat.var name) (make_new_rhs arg_count)] body)
+      names_to_define_with_arg_count
       exp
 
  and add_missing_bindings_mod defined_names modl =
@@ -493,6 +580,30 @@ and add_missing_bindings_exp defined_names exp =
   | Pmod_constraint (mod_exp, mod_type)        -> { modl with pmod_desc = Pmod_constraint (recurse mod_exp, mod_type) }
   | Pmod_functor (name, mod_type_opt, mod_exp) -> { modl with pmod_desc = Pmod_functor (name, mod_type_opt, recurse mod_exp) }
   | Pmod_apply (m1, m2)                        -> { modl with pmod_desc = Pmod_apply (recurse m1, recurse m2) }
+
+and find_arg_count_for_name ?struct_items ?exp name =
+  (* Look for uses on application lhs to see if we should make a function skeleton *)
+  let arg_count = ref 0 in
+  let iter_exp name_still_visible e =
+    begin match e.pexp_desc with
+      | Pexp_apply (fexp, args) when name_still_visible && Exp.simple_name fexp = Some name ->
+        arg_count := max !arg_count (List.length args)
+      | _ -> ()
+    end;
+    e
+  in
+  begin match struct_items, exp with
+  | Some struct_items, _ -> ignore @@ map_exps_with_scope_prog true (fun name_still_visible pat -> name_still_visible && not (List.mem name (Pat.names pat))) iter_exp struct_items;
+  | _, Some exp          -> ignore @@ map_exps_with_scope      true (fun name_still_visible pat -> name_still_visible && not (List.mem name (Pat.names pat))) iter_exp exp;
+  | _                    -> failwith "you were supposed to provide either struct_items or an exp..."
+  end;
+  !arg_count
+
+(* Based on arg count, generate fun x2 -> fun x1 -> (??) *)
+and make_new_rhs arg_count =
+  if arg_count = 0
+  then Exp.hole
+  else Exp.fun_ Asttypes.Nolabel None (Pat.var ("x" ^ string_of_int arg_count)) (make_new_rhs (arg_count - 1))
 
 
 (*
@@ -580,90 +691,6 @@ let move_vbs_into_all_relevant_branches =
     | Pexp_let (recflag, [vb], body) -> insert_vb_into_all_relevant_branches ~recflag vb body
     | _                              -> exp
   end
-
-(* Mapping is top-down, rather than bottom-up. *)
-(* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
-let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
-  let rec map_exp scope_info _ e =
-    let e'                       = f scope_info e in
-    let recurse                  = map_exp scope_info  (mapper scope_info) in
-    let recurse'     scope_info' = map_exp scope_info' (mapper scope_info') in
-    let map_children scope_info' = dflt_mapper.expr    (mapper scope_info') in
-    let handle_case case =
-      let scope_info' = handle_pat scope_info case.pc_lhs in
-      let recurse' = recurse' scope_info' in
-      case |> Case.map_guard recurse' |> Case.map_rhs recurse'
-    in
-    let ret desc = { e' with pexp_desc = desc } in
-    begin match e'.pexp_desc with
-    | Pexp_let (Asttypes.Nonrecursive, vbs, body)  -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in ret @@ Pexp_let (Asttypes.Nonrecursive, vbs |>@ Vb.map_exp recurse, recurse' scope_info' body)
-    | Pexp_let (Asttypes.Recursive, vbs, _)        -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in map_children scope_info' e'
-    | Pexp_match (scrutinee, cases)                -> ret @@ Pexp_match (recurse scrutinee, cases |>@ handle_case)
-    | Pexp_try   (body, cases)                     -> ret @@ Pexp_try (recurse body, cases |>@ handle_case)
-    | Pexp_function cases                          -> ret @@ Pexp_function (cases |>@ handle_case)
-    | Pexp_fun (arg_label, default, pat, body)     -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_fun (arg_label, default |>& recurse, pat, recurse' scope_info' body)
-    | Pexp_for (pat, e1, e2, dirflag, body)        -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse' scope_info' body)
-    | Pexp_letmodule (_str_loced, _mod_exp, _body) -> failwith "map_with_scope: letmodule not handled"
-    | Pexp_pack _mod_exp                           -> failwith "map_with_scope: pack not handled"
-    | Pexp_object _                                -> failwith "map_with_scope: classes not handled"
-    | Pexp_open (_, _, _)                          -> failwith "map_with_scope: local opens not handled"
-    | _                                            -> map_children scope_info e'
-    end
-  and map_struct_items scope_info _ sis =
-    let map_si mapper' = dflt_mapper.structure_item mapper' in
-    let sis'_rev, _ =
-      sis
-      |> List.fold_left begin fun (sis'_rev, scope_info) si ->
-        (match si.pstr_desc with
-        | Pstr_value (Asttypes.Nonrecursive, vbs) -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info)  si :: sis'_rev, scope_info')
-        | Pstr_value (Asttypes.Recursive, vbs)    -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info') si :: sis'_rev, scope_info')
-        | _                                       -> (map_si (mapper scope_info) si :: sis'_rev, scope_info)
-        )
-      end ([], scope_info)
-    in
-    List.rev sis'_rev
-  and mapper scope_info = { dflt_mapper with expr = map_exp scope_info; structure = map_struct_items scope_info }
-  in
-  mapper init_scope_info
-
-let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
-  let mapper = mapper_with_scope init_scope_info handle_pat f in
-  mapper.expr mapper exp
-
-
-let map_exps_with_scope_prog (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) struct_items =
-  let mapper = mapper_with_scope init_scope_info handle_pat f in
-  mapper.structure mapper struct_items
-
-(* Preserves old attrs and locs *)
-let apply_subst_on_exp subst exp =
-  match exp.pexp_desc with
-  | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
-    SMap.find_opt name subst
-    |>& (fun name' -> { exp with pexp_desc = Pexp_ident {lid_loced with txt = Longident.Lident name'} })
-    ||& exp
-  | _ ->
-    exp
-
-(* Preserves old attrs and locs *)
-let rename_unqualified_variables subst exp =
-  let handle_pat subst pat = SMap.remove_all (Pat.names pat) subst in
-  exp
-  |> map_exps_with_scope subst handle_pat apply_subst_on_exp
-
-(* Only handles single name pats for now, not as-pats. *)
-(* Preserves old attrs and locs *)
-let rename_pat_by_loc loc name' prog =
-  let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = loc in
-  let handle_pat subst pat =
-    let subst = SMap.remove_all (Pat.names pat) subst in
-    match pat |> Pat.flatten |> List.find_opt is_target_pat with
-    | Some pat -> SMap.add (Pat.single_name pat ||& "") name' subst
-    | None     -> subst
-  in
-  prog
-  |> map_exps_with_scope_prog SMap.empty handle_pat apply_subst_on_exp
-  |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
 
 let simplify_nested_matches_on_same_thing prog =
   let simplify scrutinee_name branch_pat branch =
