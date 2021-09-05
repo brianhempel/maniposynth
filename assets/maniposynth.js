@@ -631,6 +631,11 @@ function updateInspector() {
 
 /////////////////// Text Editing ///////////////////
 
+// https://stackoverflow.com/a/17323608
+function mod(n, m) {
+  return ((n % m) + m) % m;
+}
+
 function hide(elem) {
   elem.classList.add("hidden");
 }
@@ -781,6 +786,8 @@ function optionFromSuggestion(suggestion) {
 }
 
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedValueIdStr) {
+  // No autocomplete for pats, for now
+  should_show_autocomplete = !targetElem.classList.contains("pat")
 
   const autocompleteDiv = document.createElement("div");
   autocompleteDiv.classList.add("autocomplete-options");
@@ -819,86 +826,16 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
     }
     // event.stopImmediatePropagation();
   }, { capture: true }); /* Run this handler befooooorrre the typing happens */
-  textboxDiv.addEventListener('keyup', _ => { updateAutocompleteAsync(textboxDiv, selectedValueIdStr) });
+  textboxDiv.addEventListener('keyup', _ => { should_show_autocomplete && updateAutocompleteAsync(textboxDiv, selectedValueIdStr); });
   // Prevent click on elem from bubbling to the global deselect/abort handler
   textboxDiv.addEventListener('click', event => {
     event.stopPropagation();
   });
   textboxDiv.addEventListener('focus', event => {
-    colorizeSubvalues();
+    should_show_autocomplete && colorizeSubvalues();
     window.getSelection().selectAllChildren(textboxDiv);
-    updateAutocompleteAsync(textboxDiv, selectedValueIdStr);
+    should_show_autocomplete && updateAutocompleteAsync(textboxDiv, selectedValueIdStr);
   });
-}
-
-function beginNewCodeEdit(vbsHolder) {
-  return function (event) {
-
-    if (event.target !== vbsHolder) { return; }
-    event.stopImmediatePropagation();
-
-    const textboxDiv = document.createElement("div");
-    textboxDiv.contentEditable = true;
-    textboxDiv.classList.add("transient-textbox");
-    textboxDiv.classList.add("textbox");
-    textboxDiv.style.position = "absolute";
-    // textboxDiv.style.backgroundColor = "white";
-    const { dx, dy } = topLeftOffsetFromMouse(vbsHolder, event)
-    textboxDiv.style.left = `${-dx - 5}px`;
-    textboxDiv.style.top  = `${-dy - 10}px`;
-    vbsHolder.appendChild(textboxDiv);
-
-
-    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code), _ => abortTextEdit(textboxDiv));
-    textboxDiv.focus();
-
-    // const autocompleteDiv = document.createElement("div");
-    // autocompleteDiv.classList.add("autocomplete-options");
-    // autocompleteDiv.style.position = "absolute";
-    // autocompleteDiv.style.left = textboxDiv.style.left;
-    // autocompleteDiv.style.top  = `${textboxDiv.offsetTop + textboxDiv.offsetHeight}px`;
-    // vbsHolder.appendChild(autocompleteDiv);
-
-    // textboxDiv.autocompleteDiv = autocompleteDiv;
-    // textboxDiv.focus();
-
-    // textboxDiv.addEventListener('keydown', event => {
-    //   // console.log(event.key);
-    //   if (event.key === "Enter") {
-    //     if (textboxDiv.innerText.length > 0) {
-    //       const code = textboxDivToCode(textboxDiv);
-
-    //       event.stopImmediatePropagation(); /* does this even do anything? */
-    //       event.preventDefault(); /* Don't insert a newline character */
-    //     }
-    //   } else if (event.key === "Esc" || event.key === "Escape") {
-    //     abortTextEdit(textboxDiv);
-    //   } else if (event.key === "ArrowDown") {
-    //     textboxDiv.blur();
-    //     autocompleteDiv.children[0]?.focus();
-    //     event.preventDefault();
-    //   } else if (event.key === "ArrowUp") {
-    //     textboxDiv.blur();
-    //     autocompleteDiv.children[autocompleteDiv.children.length - 1]?.focus();
-    //     event.preventDefault();
-    //   } else if (event.key === "Backspace" || event.key === "Delete") {
-    //     event.stopImmediatePropagation(); /* Don't hit the global delete handler */
-    //   }
-    //   // event.stopImmediatePropagation();
-    // }, { capture: true }); /* Run this handler befooooorrre the typing happens */
-    // textboxDiv.addEventListener('keyup', _ => { updateAutocompleteAsync(textboxDiv, autocompleteDiv) });
-    // // Prevent click on elem from bubbling to the global deselect/abort handler
-    // textboxDiv.addEventListener('click', event => {
-    //   event.stopPropagation();
-    // });
-
-    // updateAutocompleteAsync(textboxDiv, autocompleteDiv);
-  }
-}
-
-// https://stackoverflow.com/a/17323608
-function mod(n, m) {
-  return ((n % m) + m) % m;
 }
 
 function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
@@ -1004,6 +941,73 @@ function updateAutocomplete(textboxDiv, suggestions) {
     autocompleteDiv.appendChild(option);
   }
 }
+
+
+function beginNewCodeEdit(vbsHolder) {
+  return function (event) {
+
+    if (event.target !== vbsHolder) { return; }
+    event.stopImmediatePropagation();
+
+    const textboxDiv = document.createElement("div");
+    textboxDiv.contentEditable = true;
+    textboxDiv.classList.add("transient-textbox");
+    textboxDiv.classList.add("textbox");
+    textboxDiv.style.position = "absolute";
+    // textboxDiv.style.backgroundColor = "white";
+    const { dx, dy } = topLeftOffsetFromMouse(vbsHolder, event)
+    textboxDiv.style.left = `${-dx - 5}px`;
+    textboxDiv.style.top  = `${-dy - 10}px`;
+    vbsHolder.appendChild(textboxDiv);
+
+
+    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code), _ => abortTextEdit(textboxDiv));
+    textboxDiv.focus();
+
+    // const autocompleteDiv = document.createElement("div");
+    // autocompleteDiv.classList.add("autocomplete-options");
+    // autocompleteDiv.style.position = "absolute";
+    // autocompleteDiv.style.left = textboxDiv.style.left;
+    // autocompleteDiv.style.top  = `${textboxDiv.offsetTop + textboxDiv.offsetHeight}px`;
+    // vbsHolder.appendChild(autocompleteDiv);
+
+    // textboxDiv.autocompleteDiv = autocompleteDiv;
+    // textboxDiv.focus();
+
+    // textboxDiv.addEventListener('keydown', event => {
+    //   // console.log(event.key);
+    //   if (event.key === "Enter") {
+    //     if (textboxDiv.innerText.length > 0) {
+    //       const code = textboxDivToCode(textboxDiv);
+
+    //       event.stopImmediatePropagation(); /* does this even do anything? */
+    //       event.preventDefault(); /* Don't insert a newline character */
+    //     }
+    //   } else if (event.key === "Esc" || event.key === "Escape") {
+    //     abortTextEdit(textboxDiv);
+    //   } else if (event.key === "ArrowDown") {
+    //     textboxDiv.blur();
+    //     autocompleteDiv.children[0]?.focus();
+    //     event.preventDefault();
+    //   } else if (event.key === "ArrowUp") {
+    //     textboxDiv.blur();
+    //     autocompleteDiv.children[autocompleteDiv.children.length - 1]?.focus();
+    //     event.preventDefault();
+    //   } else if (event.key === "Backspace" || event.key === "Delete") {
+    //     event.stopImmediatePropagation(); /* Don't hit the global delete handler */
+    //   }
+    //   // event.stopImmediatePropagation();
+    // }, { capture: true }); /* Run this handler befooooorrre the typing happens */
+    // textboxDiv.addEventListener('keyup', _ => { updateAutocompleteAsync(textboxDiv, autocompleteDiv) });
+    // // Prevent click on elem from bubbling to the global deselect/abort handler
+    // textboxDiv.addEventListener('click', event => {
+    //   event.stopPropagation();
+    // });
+
+    // updateAutocompleteAsync(textboxDiv, autocompleteDiv);
+  }
+}
+
 
 
 window.addEventListener('DOMContentLoaded', () => {
