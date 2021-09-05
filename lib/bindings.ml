@@ -584,7 +584,23 @@ and add_missing_bindings_exp defined_names exp =
 and find_arg_count_for_name ?struct_items ?exp name =
   (* Look for uses on application lhs to see if we should make a function skeleton *)
   let arg_count = ref 0 in
+  let iter_vis_attrs attrs =
+    Vis.all_from_attrs attrs
+    |> List.iter begin fun { Vis.exp } ->
+      if Exp.simple_name exp = Some name then (* Visualizers have type 'a -> 'b, so a bare name will be applied to one arg. *)
+        arg_count := max 1 !arg_count
+      else
+        arg_count := max !arg_count (find_arg_count_for_name ~exp name)
+    end
+  in
+  let handle_pat name_still_visible pat =
+    name_still_visible && begin
+      pat |> Pat.flatten |> List.iter (fun pat -> iter_vis_attrs pat.ppat_attributes);
+      not (List.mem name (Pat.names pat))
+    end
+  in
   let iter_exp name_still_visible e =
+    if name_still_visible then iter_vis_attrs e.pexp_attributes;
     begin match e.pexp_desc with
       | Pexp_apply (fexp, args) when name_still_visible && Exp.simple_name fexp = Some name ->
         arg_count := max !arg_count (List.length args)
@@ -593,8 +609,8 @@ and find_arg_count_for_name ?struct_items ?exp name =
     e
   in
   begin match struct_items, exp with
-  | Some struct_items, _ -> ignore @@ map_exps_with_scope_prog true (fun name_still_visible pat -> name_still_visible && not (List.mem name (Pat.names pat))) iter_exp struct_items;
-  | _, Some exp          -> ignore @@ map_exps_with_scope      true (fun name_still_visible pat -> name_still_visible && not (List.mem name (Pat.names pat))) iter_exp exp;
+  | Some struct_items, _ -> ignore @@ map_exps_with_scope_prog true handle_pat iter_exp struct_items;
+  | _, Some exp          -> ignore @@ map_exps_with_scope      true handle_pat iter_exp exp;
   | _                    -> failwith "you were supposed to provide either struct_items or an exp..."
   end;
   !arg_count
