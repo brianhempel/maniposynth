@@ -451,6 +451,24 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
         local_canvas_vbs_and_returns_htmls stuff body
       end
     ]
+  | Pexp_assert e ->
+    let matching_asserts =
+      begin match Eval.parse_assert e with
+      | Some (lhs, _fexp, _argexp, expected) ->
+        stuff.assert_results
+        |>@? (fun Data.{ lhs_exp; expected_exp; _ } -> (lhs_exp, expected_exp) = (lhs, expected))
+      | None -> []
+      end
+    in
+    (* print_endline @@ string_of_int (List.length assert_results); *)
+    let all_passed = List.for_all (fun Data.{ passed; _ } -> passed) matching_asserts in
+    let any_failures = List.exists (fun Data.{ passed; _ } -> not passed) matching_asserts in
+    let pass_fail_class, pass_fail_icon =
+      if any_failures then (" failing", "✘")
+      else if all_passed && matching_asserts <> [] then (" passing", "✔︎")
+      else ("", "")
+    in
+    div ~attrs:[("class", "exp_label exp" ^ pass_fail_class)] [pass_fail_icon; " "; html_of_exp ~tv_root_exp:true stuff e]
   | _ ->
     div ~attrs:[("class", "tv")] begin
       if should_show_vbs exp then

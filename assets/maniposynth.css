@@ -209,9 +209,11 @@ table.subvalue-annotations td {
   font-size: 0.7rem;
   position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
 }
-.tv > .exp_label {
+.exp_label {
   background-color: var(--color);
   display: inline-block;
+}
+.tv > .exp_label {
   margin-left: -0.9em;
   margin-top: -1.5em;
   margin-right: -1em; /* Make this too negative and the exp_label escapes its vb selection box */
