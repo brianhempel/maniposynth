@@ -177,7 +177,7 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
   end
 
 (* START HERE *)
-(* Revisit synth workflow *)
+(* It may be time to move on to a second example *)
 (* Simple assert value? *)
 (* "Use" in vis? *)
 (* "Use" in pat? *)

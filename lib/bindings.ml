@@ -301,6 +301,18 @@ let rec extract_vb_group_with_name name body =
   | Pexp_letmodule (str_loced, mod_exp, body)                             -> recurse body |>& Tup3.map_thd (fun body' -> { body with pexp_desc = Pexp_letmodule (str_loced, mod_exp, body') })
   | _                                                                     -> None
 
+let move_type_decls_to_top struct_items =
+  let top_sis, rest_sis =
+    struct_items
+    |> List.partition begin function { pstr_desc; _ } ->
+      match pstr_desc with
+      | Pstr_eval (_, _)      -> false
+      | Pstr_value (_, _)     -> false
+      | Pstr_extension (_, _) -> false
+      | _                     -> true
+    end
+  in
+  top_sis @ rest_sis
 
 let rec rearrange_struct_items defined_names struct_items =
   let open Asttypes in
@@ -1035,6 +1047,7 @@ let fixup final_tenv prog =
   let defined_names = SSet.elements Name.pervasives_names in
   prog
   |> fixup_matches final_tenv
+  |> move_type_decls_to_top
   |> rearrange_struct_items defined_names
   |> add_missing_bindings_struct_items defined_names
 
