@@ -510,11 +510,7 @@ let html_of_structure_item stuff (item : structure_item) =
   | Pstr_extension (_, _)     -> failwith "can't handle Pstr_extension"
 
 let drawing_tools tenv =
-  let ctors_folder {Types.cstr_res; _} out =
-    if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
-    if List.exists (Type.equal_ignoring_id_and_scope cstr_res) out then out else cstr_res::out
-  in
-  let ctors_types = Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv [] in
+  let ctors_types = Suggestions.ctors_types tenv in
   span
     ~attrs:[("class", "tools")]
     begin

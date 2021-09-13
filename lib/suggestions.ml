@@ -6,6 +6,13 @@ let exclude_from_suggestions = ["Stdlib.__POS_OF__"; "Stdlib.__LOC_OF__"; "Stdli
 
 let modules_to_search = [None; Some (Longident.parse "Stdlib.List")]
 
+let ctors_types tenv =
+  let ctors_folder {Types.cstr_res; _} out =
+    if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
+    if List.exists (Type.equal_ignoring_id_and_scope cstr_res) out then out else cstr_res::out
+  in
+  Env.fold_constructors ctors_folder None(* not looking in a nested module *) tenv []
+
 let ctors_in_modules tenv mods =
   let f ({Types.cstr_res; _} as ctor_desc) out =
     (* let _ = cstr_arity in *)
@@ -137,12 +144,11 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
         |> List.fold_left SSet.union SSet.empty
       in
       (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
-      let ctorset =
-        tenvs
-        |>@@ (fun tenv -> ctors_in_modules tenv modules_to_search)
-        |>@ (fun { Types.cstr_name; _ } -> cstr_name)
+      let ctor_exampleset =
+        ctors_types final_tenv
+        |>@@ Example_gen.examples 12 final_tenv
+        |>@ (fun (example_exp, _) -> Exp.to_string example_exp)
         |> SSet.of_list
-        |> (fun s -> SSet.diff s initial_ctor_names)
       in
       let other_variableset =
         tenvs
@@ -153,7 +159,7 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
       let lexical_options =
         List.dedup @@
           SSet.elements nonconstant_variableset
-          @ SSet.elements ctorset
+          @ SSet.elements ctor_exampleset
           @ SSet.elements other_variableset
           @ SSet.elements initial_ctor_names
           @ SSet.elements initial_var_names
@@ -169,7 +175,15 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
   begin match String.split " " query |> List.rev with
   | [] -> options |>@ snd
   | lastWord::restRev ->
+    let suggestion_prefix_parens =
+      let n = ref 0 in
+      while !n < String.length lastWord && lastWord.[!n] = '(' do
+        incr n
+      done;
+      String.make !n '('
+    in
     options
+    |>@ (fun (shown_str, code) -> (suggestion_prefix_parens ^ shown_str, suggestion_prefix_parens ^ code))
     |>@? (fun (shown_str, code) -> String.starts_with lastWord shown_str && lastWord <> code)
     |>@ begin fun (_, completion) ->
       completion::restRev |> List.rev |> String.concat " "
