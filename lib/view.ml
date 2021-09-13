@@ -349,8 +349,8 @@ let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
 
 
 (* For exp labels *)
-let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) (stuff : stuff) exp =
-  let recurse ?(show_result = true) ?(infix = false) = html_of_exp ~show_result ~infix stuff in
+let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(in_list = false) (stuff : stuff) exp =
+  let recurse ?(show_result = true) ?(infix = false) ?(in_list = false) = html_of_exp ~show_result ~infix ~in_list stuff in
   (* let exp_to_edit = exp_to_edit ||& exp in *)
   let code         = Exp.to_string { exp         with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
   (* Remove parens around ops rendered infix. *)
@@ -376,7 +376,19 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
     | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
     end
-  | _ -> code' ^ " "
+  | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> if in_list then "]" else "[]"
+  | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
+    if String.starts_with "[" code' && String.ends_with "]" code' then (* Have to make sure this list is suitable to render sugared *)
+      (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
+    else
+      (* Render infix *)
+      recurse head ^ " :: " ^ recurse tail
+  | Pexp_construct ({ txt = lid; _ }, Some arg) ->
+    Longident.to_string lid ^ " " ^ recurse arg
+  | Pexp_tuple exps ->
+    "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
+  | _ ->
+    code' ^ " "
 
 
 let rec terminal_exps exp = (* Dual of gather_vbs *)
