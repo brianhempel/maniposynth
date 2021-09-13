@@ -170,26 +170,41 @@ let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
   |> Exp.map_by_loc loc (Exp.sequence assert_exp)
   |> Bindings.fixup final_tenv
 
+(* Loc could be at top level (need new struct item binding) or an exp (need new let) *)
+(* OR code could be an entire struct item (e.g. "type nat = Z | S of nat") *)
 let insert_code loc code final_tenv old =
-  (* print_endline (String.inspect code); *) (* We were getting non-breaking spaces from JS :/ *)
-  let exp = Exp.from_string code |> Exp.freshen_locs in
-  let name = Name.gen_from_exp exp old in
-  let vb' =  Vb.mk (Pat.var name) exp in
+  let exp_inserter, new_sis, new_exp_loc =
+    try
+      let exp = Exp.from_string code |> Exp.freshen_locs in
+      let name = Name.gen_from_exp exp old in
+      let vb' =  Vb.mk (Pat.var name) exp in
+      ( Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'] (* body unapplied here *)
+      , [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
+      , exp.pexp_loc
+      )
+    with Syntaxerr.Error _ ->
+      (* If we could not parse as an exp, try parsing as a structure item *)
+      let struct_items = StructItems.from_string code in
+      ( (fun exp -> exp)
+      , struct_items
+      , Location.none
+      )
+  in
   let prog =
     Bindings.fixup final_tenv @@
-    if old = [] then
-      [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
+    if old = [] then (* Empty program *)
+      new_sis
     else
       old
-      |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
-      |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
+      |> Exp.map_by_loc loc exp_inserter
+      |> StructItems.concat_map_by_loc loc (fun si -> new_sis @ [si])
   in
   (* Turn inserted bare functions into calls. *)
-  match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" exp.pexp_loc with
+  match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" new_exp_loc with
   | Some { exp_type; _ } when Type.is_arrow_type exp_type ->
     let arg_count = List.length (Type.flatten_arrows exp_type) - 1 in
     prog
-    |> Exp.map_by_loc exp.pexp_loc begin fun fexp ->
+    |> Exp.map_by_loc new_exp_loc begin fun fexp ->
       Exp.apply fexp @@ List.init arg_count (fun _ -> (Asttypes.Nolabel, Exp.hole))
     end
   | _ ->
