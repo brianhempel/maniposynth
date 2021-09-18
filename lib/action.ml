@@ -38,11 +38,11 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String vbs_loc_str; `String code]                  -> InsertCode (vbs_loc_str, code)
-  | `List [`String "SetPos"; `String loc_str; `Int x; `Int y]                        -> SetPos (loc_str, x, y)
+  | `List [`String "SetPos"; `String loc_str; `Float x; `Float y]                    -> SetPos (loc_str, int_of_float x, int_of_float y)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
-          ; `List [`String "Some"; `Int x; `Int y]]                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (x,y))
+          ; `List [`String "Some"; `Float x; `Float y]]                              -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (int_of_float x, int_of_float y))
   | `List [`String "SetRecFlag"; `String vb_loc_str; `Bool is_rec]                   -> SetRecFlag (vb_loc_str, is_rec)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
