@@ -457,12 +457,13 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
     in
     let param_rows, body = get_param_rows_and_body exp in
     (* Technically, a function is value and one can argue the above code should be in html_of_values_for_exp *)
-    div ~attrs:[("class", "tv")] [
+    (* Don't remember why I double wrapped this. But when I do, hovering over a top level value causes other top level functions to gray out because there's no child element that has the same frameNo as the top level. So let's try not double wrapping and see what happens... *)
+    (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
         [ table param_rows ] @
         local_canvas_vbs_and_returns_htmls stuff body
       end
-    ]
+    (* ] *)
   | Pexp_assert e ->
     let matching_asserts =
       begin match Eval.parse_assert e with
