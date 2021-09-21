@@ -26,6 +26,11 @@ type t =
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
+  let float_or_int_to_int = function
+    | `Float x -> int_of_float x
+    | `Int x   -> x
+    | _        -> failwith @@ "bad number in action json " ^ Yojson.Safe.to_string action_yojson
+  in
   match action_yojson with
   (* | `List [`String "DropValueIntoVbs"; `String vbs_loc_str; `String vtrace_str]      -> DropValueIntoVbs (vbs_loc_str, vtrace_str)
   | `List [`String "DropValueIntoExp"; `String loc_str; `String vtrace_str]          -> DropValueIntoExp (loc_str, vtrace_str) *)
@@ -38,11 +43,11 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String vbs_loc_str; `String code]                  -> InsertCode (vbs_loc_str, code)
-  | `List [`String "SetPos"; `String loc_str; `Float x; `Float y]                    -> SetPos (loc_str, int_of_float x, int_of_float y)
+  | `List [`String "SetPos"; `String loc_str; x; y]                                  -> SetPos (loc_str, float_or_int_to_int x, float_or_int_to_int y)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
-          ; `List [`String "Some"; `Float x; `Float y]]                              -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (int_of_float x, int_of_float y))
+          ; `List [`String "Some"; x; y]]                                            -> MoveVb (vbs_loc_str, mobile_vb_loc_str, Some (float_or_int_to_int x, float_or_int_to_int y))
   | `List [`String "SetRecFlag"; `String vb_loc_str; `Bool is_rec]                   -> SetRecFlag (vb_loc_str, is_rec)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
