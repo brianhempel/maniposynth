@@ -106,7 +106,7 @@ let delete_vblike vb_loc old =
       let vb' = Vb.mk (Pat.var (Name.gen old)) (Exp.var name) in
       old
       |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
-      |> StructItems.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
+      |> StructItem.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
       |> Bindings.fixup
     end
   end
@@ -166,6 +166,7 @@ let replace_loc_code loc code final_tenv old =
     |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
     |> try_rename
     |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
+    |> StructItem.map_by_loc loc begin fun si -> { si with pstr_desc = (StructItem.from_string code).pstr_desc } end
     |> Bindings.fixup final_tenv
 
 let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
@@ -202,7 +203,7 @@ let insert_code loc code final_tenv old =
     else
       old
       |> Exp.map_by_loc loc exp_inserter
-      |> StructItems.concat_map_by_loc loc (fun si -> new_sis @ [si])
+      |> StructItem.concat_map_by_loc loc (fun si -> new_sis @ [si])
   in
   (* Turn inserted bare functions into calls. *)
   match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" new_exp_loc with

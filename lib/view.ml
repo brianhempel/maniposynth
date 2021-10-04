@@ -492,7 +492,25 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
         ]
     end
 
-let html_of_structure_item stuff (item : structure_item) =
+let html_of_top_matter_structure_item (item : structure_item) =
+  match item.pstr_desc with
+  | Pstr_eval (_exp, _)   -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
+  | Pstr_value (_, _)     -> ""
+  | Pstr_primitive _      -> failwith "can't handle Pstr_primitive"
+  | Pstr_type (_, _)      -> div ~attrs:[("class", "type-def");("data-in-place-edit-loc", Serialize.string_of_loc item.pstr_loc)] [StructItem.to_string item]
+  | Pstr_typext _         -> failwith "can't handle Pstr_typext"
+  | Pstr_exception _      -> failwith "can't handle Pstr_exception"
+  | Pstr_module _         -> failwith "can't handle Pstr_module"
+  | Pstr_recmodule _      -> failwith "can't handle Pstr_recmodule"
+  | Pstr_modtype _        -> failwith "can't handle Pstr_modtype"
+  | Pstr_open _           -> failwith "can't handle Pstr_open"
+  | Pstr_class _          -> failwith "can't handle Pstr_class"
+  | Pstr_class_type _     -> failwith "can't handle Pstr_class_type"
+  | Pstr_include _        -> failwith "can't handle Pstr_include"
+  | Pstr_attribute _      -> failwith "can't handle Pstr_attribute"
+  | Pstr_extension (_, _) -> failwith "can't handle Pstr_extension"
+
+let html_of_vb_structure_item stuff (item : structure_item) =
   match item.pstr_desc with
   | Pstr_eval (_exp, _)       -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
   | Pstr_value (recflag, vbs) -> String.concat "" (List.map (html_of_vb stuff recflag) vbs)
@@ -555,8 +573,10 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv]
+      ; div ~attrs:[("class", "top-matter")] @@
+        List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
-        List.map (html_of_structure_item stuff) structure_items
+        List.map (html_of_vb_structure_item stuff) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ div ~attrs:[("id", "text-edit-pane")]
           [ span ~attrs:[("id", "text-edit-root-stuff")]

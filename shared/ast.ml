@@ -761,44 +761,6 @@ module VbGroups = struct
   end
 end
 
-(* Structure Item (i.e. top-level clauses) *)
-module StructItem = struct
-  type t = structure_item
-  let all prog = (everything (Sis prog)).struct_items
-  let loc { pstr_loc; _ } = pstr_loc
-
-  include Ast_helper.Str (* Structure item builders *)
-
-  let value_opt { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
-  let vbs_opt                    = value_opt %>& snd
-
-  (* let name_loced { pstr_desc; _ } =
-    match pstr_desc with
-    | Pstr_eval (_, _) -> (??)
-    | Pstr_value (_, _) -> (??)
-    | Pstr_primitive value_desc -> Some value_desc.pval_name
-    | Pstr_type (_, _) -> (??)
-    | Pstr_typext _ -> (??)
-    | Pstr_exception _ -> (??)
-    | Pstr_module _ -> (??)
-    | Pstr_recmodule _ -> (??)
-    | Pstr_modtype _ -> (??)
-    | Pstr_open _ -> (??)
-    | Pstr_class _ -> (??)
-    | Pstr_class_type _ -> (??)
-    | Pstr_include _ -> (??)
-    | Pstr_attribute _ -> (??)
-    | Pstr_extension (_, _) -> (??) *)
-
-  let to_string si = Pprintast.string_of_structure [si]
-
-  let map f struct_items =
-    let map_si mapper si = f (dflt_mapper.structure_item mapper si) in
-    let mapper = { dflt_mapper with structure_item = map_si } in
-    mapper.structure mapper struct_items
-end
-
-
 (* Structure Items ≡ Structure (i.e. a program) *)
 module StructItems = struct
   type t = structure
@@ -821,12 +783,38 @@ module StructItems = struct
     let map_sis mapper sis = f (dflt_mapper.structure mapper sis) in
     let mapper = { dflt_mapper with structure = map_sis } in
     mapper.structure mapper struct_items
+end
+
+(* Structure Item (i.e. top-level clauses) *)
+module StructItem = struct
+  include Common(struct
+    type t = structure_item
+    let loc { pstr_loc; _ } = pstr_loc
+    let iter f struct_items =
+      let iter_si iter si = dflt_iter.structure_item iter si; f si in
+      let iter = { dflt_iter with structure_item = iter_si } in
+      iter.structure iter struct_items
+    let map f struct_items =
+      let map_si mapper si = f (dflt_mapper.structure_item mapper si) in
+      let mapper = { dflt_mapper with structure_item = map_si } in
+      mapper.structure mapper struct_items
+    let iter_dflt = dflt_iter.structure_item
+  end)
+
+  let all prog = (everything (Sis prog)).struct_items
+
+  include Ast_helper.Str (* Structure item builders *)
+
+  let value_opt { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
+  let vbs_opt                    = value_opt %>& snd
+
+  let to_string si = Pprintast.string_of_structure [si]
+  let from_string  = StructItems.from_string %> List.hd
 
   (* Will search the loc of all items in a struct_items list, hand that si to f, and replace the si with the list of sis returned by f...to thereby effect removes and deletions *)
-  let concat_map            f prog = map (fun sis -> sis |>@@ f) prog
-  let concat_map_by pred    f prog = concat_map (fun si -> if pred si then f si else [si]) prog
-  let concat_map_by_loc loc f prog = concat_map_by (StructItem.loc %> (=) loc) f prog
-
+  let concat_map             f prog = StructItems.map (fun si -> si |>@@ f) prog
+  let concat_map_by pred     f prog = concat_map (fun si -> if pred si then f si else [si]) prog
+  let concat_map_by_loc loc' f prog = concat_map_by (loc %> (=) loc') f prog
 end
 
 

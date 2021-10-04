@@ -46,11 +46,17 @@ nav {
   background-color: white;
   z-index: 3;
 }
-.top-level {
+div.top-matter {
   margin-top: 2.75rem;
-  min-height: calc(100vh - 2.75rem);
 }
-
+div.top-matter div {
+  padding: 1rem;
+}
+.top-level {
+  /* margin-top: 2.75rem; */
+  min-height: calc(100vh - 2.75rem);
+  min-height: 100vh;
+}
 nav img {
   margin: 0 0.4rem 0 0.5rem;
   height: 3.8rem;
