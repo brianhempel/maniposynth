@@ -720,6 +720,8 @@ function textboxDivToCode(textboxDiv) {
     if (child.nodeType === 3) {
       // Text node
       code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+    } else if (child.tagName === "BR") {
+      code += "\n"
     } else {
       // value node
       code += `(${child.dataset.extractionCode})`
@@ -1441,7 +1443,7 @@ function deleteElem(elem) {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
-    const elem = document.querySelector('.vb.selected,.exp.selected')
+    const elem = document.querySelector('.vb.selected,.scrutinee.selected,.match.selected')
     if (elem) {
       deleteElem(elem);
       event.stopImmediatePropagation();

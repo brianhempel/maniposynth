@@ -346,25 +346,26 @@ let html_of_values_for_pat stuff pat =
 (* "(+)" -> "+" *)
 let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
 
-
-
-(* For exp labels *)
-let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(in_list = false) (stuff : stuff) exp =
-  let recurse ?(show_result = true) ?(infix = false) ?(in_list = false) = html_of_exp ~show_result ~infix ~in_list stuff in
+let exp_gunk ?(infix = false) stuff exp =
   (* let exp_to_edit = exp_to_edit ||& exp in *)
   let code         = Exp.to_string { exp         with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
   (* Remove parens around ops rendered infix. *)
   let code' = if infix then uninfix code else code in
   (* let code_to_edit = Exp.to_string { exp_to_edit with pexp_attributes = [] } in Don't show pos/vis attrs. *)
   let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
-  let wrap inner = span ~attrs:(
+  let attrs =
     [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
     ; ("data-in-place-edit-code", code')
     ; ("data-extraction-code", code)
-    ; ("class","exp")
-    ] @ perhaps_type_attr)
-    [inner]
+    ] @ perhaps_type_attr
   in
+  (code', attrs)
+
+(* For exp labels *)
+let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(in_list = false) (stuff : stuff) exp =
+  let recurse ?(show_result = true) ?(infix = false) ?(in_list = false) = html_of_exp ~show_result ~infix ~in_list stuff in
+  let (code', attrs) = exp_gunk ~infix stuff exp in
+  let wrap inner = span ~attrs:([("class","exp")] @ attrs) [inner] in
   (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp stuff None exp else "") ^
   wrap @@
   match exp.pexp_desc with
@@ -391,15 +392,28 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     code' ^ " "
 
 
-let rec terminal_exps exp = (* Dual of gather_vbs *)
+(* let rec terminal_exps exp = (* Dual of gather_vbs *)
   match exp.pexp_desc with
   | Pexp_let (_, _, e)       -> terminal_exps e
   | Pexp_sequence (_, e2)    -> terminal_exps e2
   | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
   | Pexp_letmodule (_, _, e) -> terminal_exps e
-  | _                        -> [exp]
+  | _                        -> [exp] *)
 
-let rec gather_vbs exp = (* Dual of terminal_exp *)
+(* Gather list of (scrutinee, case pat, guard opt) for each terminal exp
+let rec terminal_match_paths exp =
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)       -> terminal_match_paths e
+  | Pexp_sequence (_, e2)    -> terminal_match_paths e2
+  | Pexp_letmodule (_, _, e) -> terminal_match_paths e
+  | Pexp_match (scrutinee, cases) ->
+    cases
+    |>@@ begin fun {pc_lhs; pc_guard; pc_rhs } ->
+      terminal_match_paths pc_rhs |>@ (fun path -> (scrutinee, pc_lhs, pc_guard)::path)
+    end
+  | _                        -> [[]] *)
+
+let rec gather_vbs exp = (* Dual of ret_tree_html *)
   let tag_rec recflag vb = (recflag, vb) in
   match exp.pexp_desc with
   | Pexp_let (recflag, vbs, e) -> (vbs |>@ tag_rec recflag) @ gather_vbs e
@@ -430,11 +444,27 @@ let rec html_of_vb stuff recflag vb =
 and local_canvas_vbs_and_returns_htmls stuff exp =
   let html_of_vb (recflag, vb) = html_of_vb stuff recflag vb in
   let vbs = gather_vbs exp in
-  let terminal_exps = terminal_exps exp in
-  let ret_tv_htmls  = terminal_exps |>@ render_tv stuff None in
+  (* let terminal_exps = terminal_exps exp in *)
+  (* let ret_tv_path_descs = terminal_match_paths exps |>@ fun (_, pat, _) -> Pat.to_string pat in *)
+  (* let ret_tv_htmls  = terminal_exps |>@ render_tv stuff None in *)
   [ div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)
-  ; div ~attrs:[("class", "returns")] ret_tv_htmls
+  ; div ~attrs:[("class", "returns")] [ret_tree_html stuff exp]
   ]
+
+and ret_tree_html stuff exp =
+  let recurse = ret_tree_html stuff in
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)            -> recurse e
+  | Pexp_sequence (_, e2)         -> recurse e2
+  | Pexp_letmodule (_, _, e)      -> recurse e
+  | Pexp_match (scrutinee, cases) ->
+    let (_, attrs) = exp_gunk stuff exp in
+    div ~attrs:[("class","match")]
+      [ div ~attrs:(attrs @ [("class","scrutinee")]) ["⇠ "; html_of_exp ~show_result:false stuff scrutinee; " ⇢"]
+      ; div ~attrs:[("class","cases")] (cases |>@ Case.rhs |>@ recurse)
+      ]
+  | _ -> div ~attrs:[("class", "return")] [render_tv stuff None exp]
+
 
 (* Actually renders all values, but only one is displayed at a time (via Javascript). *)
 and render_tv ?(show_output = true) stuff vb_pat_opt exp =

@@ -105,12 +105,12 @@ nav img {
 }
 
 .box > *,
-.returns > .tv {
+.return > .tv {
   background-color: white;
 }
 
 .box > .tv,
-.returns > .tv {
+.return > .tv {
   box-shadow: 0px 0px 5px rgba(0,0,0,0.15);
 }
 
@@ -315,10 +315,18 @@ table.subvalue-annotations td {
 
 
 .returns {
-  padding: 1.5rem 1rem 0.5rem;
   border-top: solid 1px lightgray;
+}
+.scrutinee {
+  text-align: center;
+  font-size: 0.7em;
+}
+.cases {
   display: flex;
   justify-content: space-evenly;
+}
+.return {
+  padding: 1.5rem 1rem 0.5rem;
 }
 
 

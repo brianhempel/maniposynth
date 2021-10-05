@@ -271,8 +271,14 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     replace_loc_code loc code final_tenv
   | DeleteLoc loc_str ->
     let loc = Serialize.loc_of_string loc_str in
+    let delete exp =
+      (* Replace match with first non-empty branch *)
+      match exp.pexp_desc with
+      | Pexp_match (_, cases) -> cases |>@ Case.rhs |> List.find_opt (Exp.is_hole %> not) ||& Exp.hole
+      | _                     -> Exp.hole
+    in
     delete_vblike loc
-    %> Exp.replace loc Exp.hole
+    %> Exp.map_by_loc loc delete
     %> clear_asserts_with_hole_rhs (* The above step may produce e.g. `assert (x = (??))` which is a sign to delete the whole assert. *)
     %> Bindings.fixup final_tenv
   | NewAssert (loc_str, lhs_code, rhs_code) ->
