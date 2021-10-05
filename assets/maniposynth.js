@@ -383,7 +383,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-extraction-code],.vb,.exp[data-in-place-edit-loc],.type-def[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,.exp[data-in-place-edit-loc],.type-def[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", clickSelect);
   });
@@ -1115,13 +1115,30 @@ function vbsHolderForInsert(elem) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll("[data-insert-code]").forEach(elem => {
+  document.querySelectorAll(".tool[data-extraction-code]").forEach(elem => {
     elem.addEventListener("click", _ => {
+      const code = elem.dataset.extractionCode;
       const selected = selectedElems()[0] || document.querySelector(".top-level");
-      console.log(selected);
-      console.log(vbsHolderForInsert(selected));
-      insertCode(vbsHolderForInsert(selected).dataset.loc, elem.dataset.insertCode);
+      // console.log(selected);
+      // console.log(vbsHolderForInsert(selected));
+      let mainToolElem = elem.closest(".tool-menu")?.previousSibling;
+      // console.log(mainToolElem);
+      if (mainToolElem) {
+        mainToolElem.innerText              = code;
+        mainToolElem.dataset.extractionCode = code;
+        window.sessionStorage.setItem("selected tool " + mainToolElem.dataset.toolKey,  code);
+      }
+      insertCode(vbsHolderForInsert(selected).dataset.loc, code);
     });
+  });
+
+  // Restore most recently used tools
+  document.querySelectorAll("[data-tool-key]").forEach(elem => {
+    const code = window.sessionStorage.getItem("selected tool " + elem.dataset.toolKey);
+    if (code) {
+      elem.innerText              = code;
+      elem.dataset.extractionCode = code;
+    }
   });
 });
 

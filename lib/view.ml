@@ -565,15 +565,17 @@ let drawing_tools tenv =
     begin
       ctors_types
       |> List.sort_by Type.to_string
-      |>@ begin fun typ ->
+      |>@@ begin fun typ ->
+        let codes = Example_gen.examples 12 tenv typ |>@ fun (example_exp, _) -> Exp.to_string example_exp in
         let tools =
-          Example_gen.examples 12 tenv typ
-          |>@ begin fun (example_exp, _) ->
-            let code = Exp.to_string example_exp in
-            span ~attrs:[("class", "tool"); ("data-insert-code", code)] [code]
+          codes |>@ begin fun code ->
+            span ~attrs:[("class", "tool"); ("data-extraction-code", code)] [code]
           end
         in
-        span ~attrs:[("class", "tool")] [Type.to_string typ ^ " ▾"; span ~attrs:[("class", "tools")] tools]
+        let first_code = List.hd codes in
+        [ span ~attrs:[("class", "tool left-of-menu"); ("data-extraction-code", first_code); ("data-tool-key", Type.to_string typ)] [first_code]
+        ; span ~attrs:[("class", "tool tool-menu")] [" ▾"; span ~attrs:[("class", "tools")] tools]
+        ]
       end
     end
 

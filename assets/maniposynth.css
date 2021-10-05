@@ -74,21 +74,31 @@ nav img {
   margin: 0;
   cursor: default;
 }
-
-.tool > .tools {
+.tool:hover {
+  background: var(--color);
+}
+.tool.left-of-menu {
+  padding: 0 1.5rem 0 1rem;
+}
+.tool.tool-menu {
+  width: 1.5rem;
+  margin-left: -1.5rem;
+  padding: 0;
+  text-align: center;
+}
+.tool-menu > .tools {
   display: none;
   position: absolute;
   margin-left: -1rem;
   z-index: 100; /* don't ask me why this is needed for the hover not to fail */
+  text-align: left;
 }
-
-.tool:hover {
-  background: var(--color);
-}
-
-.tool:hover > .tools {
+.tool-menu:hover > .tools {
   display: block;
   background: lightgray;
+}
+.tool-menu > .tools > .tool {
+  display: block;
 }
 
 .box {
