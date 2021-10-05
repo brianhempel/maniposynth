@@ -1443,7 +1443,7 @@ function deleteElem(elem) {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
-    const elem = document.querySelector('.vb.selected,.scrutinee.selected,.match.selected')
+    const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected');
     if (elem) {
       deleteElem(elem);
       event.stopImmediatePropagation();
