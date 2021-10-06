@@ -563,6 +563,7 @@ let inital_env_ctor_types = Suggestions.ctors_types Typing.initial_env
 let drawing_tools tenv prog =
   let ctors_types = Suggestions.ctors_types tenv in
   let tool_and_menu tool_key examples =
+    if examples = [] then [] else
     let codes =
       examples
       |>@ fst

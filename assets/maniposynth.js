@@ -211,6 +211,7 @@ function dragstart(event) {
   let node = event.currentTarget;
   // if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
   if (node.dataset.extractionCode) { event.dataTransfer.setData("application/extractionCode", node.dataset.extractionCode); }
+  event.dataTransfer.setData("application/toolKey", getMainToolElem(node)?.dataset?.toolKey);
   // if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
   event.stopImmediatePropagation();
@@ -258,9 +259,13 @@ function drop(event) {
   //   dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
   // } else if (dropTarget.classList.contains("exp") && droppedVTrace) {
   //   dropValueIntoExp(dropTarget.dataset.inPlaceEditLoc, droppedVTrace);
+  const toolKey = event.dataTransfer.getData("application/toolKey");
+  const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
+    setMainTool(droppedExtractionCode, mainToolElem);
     insertCode(dropTarget.dataset.loc, droppedExtractionCode);
   } else if (dropTarget.classList.contains("exp") && droppedExtractionCode) {
+    setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
   } else {
     console.warn("No valid actions for drop on ", dropTarget);
@@ -1114,6 +1119,18 @@ function vbsHolderForInsert(elem) {
   }
 }
 
+function setMainTool(code, mainToolElem) {
+  // console.log(mainToolElem);
+  if (mainToolElem) {
+    mainToolElem.innerText              = code;
+    mainToolElem.dataset.extractionCode = code;
+    window.sessionStorage.setItem("selected tool " + mainToolElem.dataset.toolKey,  code);
+  }
+}
+function getMainToolElem(toolElem) {
+  return toolElem.closest(".tool-menu")?.previousSibling;
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".tool[data-extraction-code]").forEach(elem => {
     elem.addEventListener("click", _ => {
@@ -1121,13 +1138,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const selected = selectedElems()[0] || document.querySelector(".top-level");
       // console.log(selected);
       // console.log(vbsHolderForInsert(selected));
-      let mainToolElem = elem.closest(".tool-menu")?.previousSibling;
-      // console.log(mainToolElem);
-      if (mainToolElem) {
-        mainToolElem.innerText              = code;
-        mainToolElem.dataset.extractionCode = code;
-        window.sessionStorage.setItem("selected tool " + mainToolElem.dataset.toolKey,  code);
-      }
+      setMainTool(code, getMainToolElem(elem));
       insertCode(vbsHolderForInsert(selected).dataset.loc, code);
     });
   });
