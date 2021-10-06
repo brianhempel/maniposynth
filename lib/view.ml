@@ -375,7 +375,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
     | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
-    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat "")
+    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat " ")
     end
   | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> if in_list then "]" else "[]"
   | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
@@ -388,6 +388,8 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     Longident.to_string lid ^ " " ^ recurse arg
   | Pexp_tuple exps ->
     "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
+  | Pexp_ifthenelse (e1, e2, e3_opt) ->
+    "if " ^ recurse e1 ^ " then " ^ recurse e2 ^ (e3_opt |>& (fun e3 -> " else " ^ recurse e3) ||& "")
   | _ ->
     code' ^ " "
 
@@ -565,14 +567,9 @@ let html_of_vb_structure_item stuff (item : structure_item) =
 let inital_env_ctor_types = Suggestions.ctors_types Typing.initial_env
 let drawing_tools tenv prog =
   let ctors_types = Suggestions.ctors_types tenv in
-  let tool_and_menu tool_key examples =
-    if examples = [] then [] else
-    let codes =
-      examples
-      |>@ fst
-      |>@ Exp.to_string
-      |> List.dedup
-    in
+  let tool_and_menu tool_key codes =
+    if codes = [] then [] else
+    let codes = List.dedup codes in
     let tools =
       codes |>@ begin fun code ->
         span ~attrs:[("class", "tool"); ("data-extraction-code", code)] [code]
@@ -583,20 +580,25 @@ let drawing_tools tenv prog =
     ; span ~attrs:[("class", "tool tool-menu")] [" ▾"; span ~attrs:[("class", "tools")] tools]
     ]
   in
-  let functions_menu =
-    tool_and_menu "prog functions" (Example_gen.func_calls tenv prog)
+  let common_phrases_menu =
+    tool_and_menu "common phrases" Suggestions.common_suggestions
+  in
+  let prog_funcs_menu =
+    tool_and_menu "prog functions" (Example_gen.func_calls tenv prog |>@ fst |>@ Exp.to_string)
   in
   let ctor_menus =
     ctors_types
     |> List.sort_by (fun typ -> (List.mem typ inital_env_ctor_types, Type.to_string typ))
     |>@@ begin fun typ ->
       (Example_gen.examples_with_holes tenv typ @ Example_gen.examples 12 tenv typ)
+      |>@ fst
+      |>@ Exp.to_string
       |> tool_and_menu (Type.to_string typ)
     end
   in
   span
     ~attrs:[("class", "tools")]
-    (functions_menu @ ctor_menus)
+    (common_phrases_menu @ prog_funcs_menu @ ctor_menus)
 
 
 let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_tenv =

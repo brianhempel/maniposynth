@@ -114,7 +114,7 @@ let render_suggestions out_chan uri =
     (* Utils.save_file (file_path ^ ".html") html_str; *)
     (* List.iter (print_string % Skeleton.show) skeletons; *)
     (* print_string @@ Parse_unparse.unparse file_path parsed_with_comments; *)
-    respond out_chan (String.concat "|$SEPARATOR$|" suggestions)
+    respond out_chan (String.concat "|$SEPARATOR$|" (List.prefix 20 suggestions))
   | _ ->
     respond_bad_request out_chan
 

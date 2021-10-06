@@ -205,7 +205,10 @@ nav img {
   padding: 1px;
   color: #555;
 }
-.fun-param > td > .values > .root-value-holder,
+.exp_label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
+  display: none;
+}
+  .fun-param > td > .values > .root-value-holder,
 .fun-param > td > .values > .ellipses {
   margin-right: 1.2em;
 }

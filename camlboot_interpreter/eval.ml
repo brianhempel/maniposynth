@@ -322,6 +322,16 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Function (cl, ref env)
   | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
   | Pexp_apply (f, l) -> ret @@
+    let perhaps_add_type_opt v =
+      (* Try to recover types for values introduced in library code *)
+      if v.type_opt = None then
+        match lookup_type_opt lookup_exp_typed expr.pexp_loc with
+        | Some typ when not (Shared.Ast.Type.is_var_type typ) -> add_type_opt (Some typ) v
+        | _                                                   -> v
+      else
+        v
+    in
+    perhaps_add_type_opt @@
     (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no f with
     | { v_ = Fexpr fexpr; _ } ->
       (* print_endline (Shared.Ast.Exp.to_string f);

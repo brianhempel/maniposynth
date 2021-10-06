@@ -6,6 +6,22 @@ let exclude_from_suggestions = ["Stdlib.__POS_OF__"; "Stdlib.__LOC_OF__"; "Stdli
 
 let modules_to_search = [None; Some (Longident.parse "Stdlib.List")]
 
+let common_suggestions =
+  [ "if (??) then (??) else (??)"
+  ; "(??) = (??)"
+  ; "(??) + (??)"
+  ; "List.map (??) (??)"
+  ; "List.filter (??) (??)"
+  ]
+
+let common_suggestions_and_suffixes =
+  common_suggestions @
+  [ "then (??) else (??)"
+  ; "else (??)"
+  ; "= (??)"
+  ; "+ (??)"
+  ]
+
 let ctors_types tenv =
   let ctors_folder {Types.cstr_res; _} out =
     if Type.is_exn_type cstr_res then out else (* Exclude exceptions. *)
@@ -109,12 +125,20 @@ let options_for_value_id tenvs visible_values_in_frame selected_value_id =
   | Some (v_str, v) ->
     begin match v.Data.type_opt with
     | Some typ ->
-      tenvs
-      |>@@ possible_functions_on_type typ
-      |> List.dedup
-      |>@ Exp.to_string
-      |>@ (fun code -> (code ^ " " ^ v_str, code ^ " value_id_" ^ string_of_int v.id))
-      |> List.cons (v_str, "value_id_" ^ string_of_int v.id) (* include the value as an autocomplete option *)
+      let ite_opt () =
+        ( "if " ^ v_str ^ " then (??) else (??)"
+        , "if value_id_" ^ string_of_int v.id ^ " then (??) else (??)"
+        )
+      in
+      (if Type.is_bool_type typ then [ite_opt ()] else []) @
+      begin
+        tenvs
+        |>@@ possible_functions_on_type typ
+        |> List.dedup
+        |>@ Exp.to_string
+        |>@ (fun code -> (code ^ " " ^ v_str, code ^ " value_id_" ^ string_of_int v.id))
+        |> List.cons (v_str, "value_id_" ^ string_of_int v.id) (* include the value as an autocomplete option *)
+      end
     | _ ->
       []
     end
@@ -135,43 +159,48 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     @ [final_tenv]
   in
   let options =
-    match selected_value_id with
-    | Some selected_value_id -> options_for_value_id tenvs visible_values_in_frame selected_value_id
-    | _ ->
-      let nonconstant_variableset =
-        locs
-        |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
-        |> List.fold_left SSet.union SSet.empty
-      in
-      (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
-      let ctor_exampleset =
-        ctors_types final_tenv
-        |>@@ Example_gen.examples 12 final_tenv
-        |>@ (fun (example_exp, _) -> Exp.to_string example_exp)
-        |> SSet.of_list
-      in
-      let other_variableset =
-        tenvs
-        |>@@ (fun tenv -> var_names_in_modules tenv modules_to_search)
-        |> SSet.of_list
-        |> (fun s -> SSet.diff s initial_var_names)
-      in
-      let lexical_options =
-        List.dedup @@
-          SSet.elements nonconstant_variableset
-          @ SSet.elements ctor_exampleset
-          @ SSet.elements other_variableset
-          @ SSet.elements initial_ctor_names
-          @ SSet.elements initial_var_names
-      in
-      let subvalue_options =
-        visible_values_in_frame
-        |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
-      in
-      subvalue_options
-      @ (lexical_options |>@ fun code -> (code, code))
+    let selected_value_options =
+      match selected_value_id with
+      | Some selected_value_id -> options_for_value_id tenvs visible_values_in_frame selected_value_id
+      | _                      -> []
+    in
+    let nonconstant_variableset =
+      locs
+      |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
+      |> List.fold_left SSet.union SSet.empty
+    in
+    (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)
+    let ctor_exampleset =
+      ctors_types final_tenv
+      |>@@ Example_gen.examples 12 final_tenv
+      |>@ (fun (example_exp, _) -> Exp.to_string example_exp)
+      |> SSet.of_list
+    in
+    let other_variableset =
+      tenvs
+      |>@@ (fun tenv -> var_names_in_modules tenv modules_to_search)
+      |> SSet.of_list
+      |> (fun s -> SSet.diff s initial_var_names)
+    in
+    let lexical_options =
+      List.dedup @@
+        SSet.elements nonconstant_variableset
+        @ common_suggestions_and_suffixes
+        @ SSet.elements ctor_exampleset
+        @ SSet.elements other_variableset
+        @ SSet.elements initial_ctor_names
+        @ SSet.elements initial_var_names
+    in
+    let subvalue_options =
+      visible_values_in_frame
+      |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
+    in
+    selected_value_options |>@ fst |> List.iter print_endline;
+    (* subvalue_options |>@ fst |> List.iter print_endline; *)
+    selected_value_options
+    @ subvalue_options
+    @ (lexical_options |>@ fun code -> (code, code))
   in
-  (* subvalue_options |>@ fst |> List.iter print_endline; *)
   begin match String.split " " query |> List.rev with
   | [] -> options |>@ snd
   | lastWord::restRev ->
