@@ -319,10 +319,10 @@ let html_of_values_for_loc stuff type_env root_exp_opt visualizers loc =
     span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value stuff frame_no visualizers env type_env root_exp_opt value]
   in
   let inners =
-    if List.length entries >= 5 then
-      (List.prefix 2 entries |>@ html_of_entry) @
+    if List.length entries >= 7 then
+      (List.prefix 3 entries |>@ html_of_entry) @
       [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 4) ^ " more..."]] @
-      (List.suffix 2 entries |>@ html_of_entry)
+      (List.suffix 3 entries |>@ html_of_entry)
     else
       entries |>@ html_of_entry
   in
@@ -459,9 +459,12 @@ and ret_tree_html stuff exp =
   | Pexp_letmodule (_, _, e)      -> recurse e
   | Pexp_match (scrutinee, cases) ->
     let (_, attrs) = exp_gunk stuff exp in
+    let html_of_case case =
+      span ~attrs:[("class","case")] [html_of_pat stuff case.pc_lhs; recurse case.pc_rhs]
+    in
     div ~attrs:[("class","match")]
       [ div ~attrs:(attrs @ [("class","scrutinee")]) ["⇠ "; html_of_exp ~show_result:false stuff scrutinee; " ⇢"]
-      ; div ~attrs:[("class","cases")] (cases |>@ Case.rhs |>@ recurse)
+      ; div ~attrs:[("class","cases")] (cases |>@ html_of_case)
       ]
   | _ -> div ~attrs:[("class", "return")] [render_tv stuff None exp]
 

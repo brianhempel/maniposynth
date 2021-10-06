@@ -388,7 +388,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,.exp[data-in-place-edit-loc],.type-def[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", clickSelect);
   });

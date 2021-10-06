@@ -52,6 +52,11 @@ div.top-matter {
 div.top-matter div {
   padding: 1rem;
 }
+.type-def {
+  font-family: 'SignPainter', cursive;
+  font-size: 2rem;
+  color:rgb(0, 150, 255);
+}
 .top-level {
   /* margin-top: 2.75rem; */
   min-height: calc(100vh - 2.75rem);
@@ -126,6 +131,7 @@ nav img {
 
 .box > .pat,
 .pat_label,
+.case > .pat,
 .subvalue-name {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
@@ -331,12 +337,35 @@ table.subvalue-annotations td {
   text-align: center;
   font-size: 0.7em;
 }
+.case > .match { /* nested match */
+  border: solid 1px #eee;
+}
 .cases {
   display: flex;
-  justify-content: space-evenly;
+  justify-content: space-between;
+  /* justify-content: space-evenly; */
+}
+.case {
+  text-align: center;
+}
+.case > .return {
+  text-align: left;
+}
+.scrutinee + .cases > .case > .pat {
+  font-size: 0.7em;
+  margin-top: -1.2em;
+  color: var(--pat-color);
+  /* font-style: italic; */
+  opacity: 0;
+  position: absolute;
+
+}
+.scrutinee:hover + .cases > .case > .pat,
+.scrutinee + .cases:hover > .case > .pat {
+  opacity: 1;
 }
 .return {
-  padding: 1.5rem 1rem 0.5rem;
+  padding: 1.5rem 3rem 0.5rem;
 }
 
 
