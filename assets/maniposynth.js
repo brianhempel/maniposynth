@@ -850,7 +850,7 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   const vbsLoc          = vbsHolderForInsert(textboxDiv.targetElem).dataset.loc;
   const valuesVisible   = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown)
   const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
-  const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replace(",","~CoMmA~") /* escape commas */ );
+  const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replaceAll(",","~CoMmA~") /* escape commas */ );
   // console.log(valueStrs);
   const query           = textboxDivToSuggestionQuery(textboxDiv);
 
@@ -1146,7 +1146,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Restore most recently used tools
   document.querySelectorAll("[data-tool-key]").forEach(elem => {
     const code = window.sessionStorage.getItem("selected tool " + elem.dataset.toolKey);
-    if (code) {
+    if (code && elem.nextElementSibling.innerHTML.includes(code)) {
       elem.innerText              = code;
       elem.dataset.extractionCode = code;
     }
