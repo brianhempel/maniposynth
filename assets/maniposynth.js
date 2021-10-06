@@ -39,7 +39,7 @@ function doAction(action, reload) {
   let request = new XMLHttpRequest();
   request.open("PATCH", document.location.href);
   request.setRequestHeader("Content-type", "application/json");
-  request.addEventListener("loadend", () => { reload && document.location.reload() });
+  request.addEventListener("loadend", () => { reload && request.status === 200 && document.location.reload() });
   request.send(JSON.stringify(action));
 }
 
