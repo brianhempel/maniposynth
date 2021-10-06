@@ -10,6 +10,7 @@ let common_suggestions =
   [ "if (??) then (??) else (??)"
   ; "(??) = (??)"
   ; "(??) + (??)"
+  ; "(??) @ (??)"
   ; "List.map (??) (??)"
   ; "List.filter (??) (??)"
   ]
@@ -20,6 +21,7 @@ let common_suggestions_and_suffixes =
   ; "else (??)"
   ; "= (??)"
   ; "+ (??)"
+  ; "@ (??)"
   ]
 
 let ctors_types tenv =
@@ -219,8 +221,10 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     end
   end
 
+
 (* START HERE *)
 (* It may be time to move on to a second example *)
+(* Assert in pattern position *)
 (* Simple assert value? *)
 (* "Use" in vis? *)
 (* "Use" in pat? *)

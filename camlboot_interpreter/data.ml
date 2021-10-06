@@ -299,10 +299,10 @@ let value_of_constant const =
 
 let rec value_compare { v_ = v_1; _ } { v_ = v_2; _ } =
   match v_1, v_2 with
-  | Bomb, _ -> failwith "tried to compare 💣"
-  | _, Bomb -> failwith "tried to compare 💣"
-  | Hole _, _ -> failwith "tried to compare holeval"
-  | _, Hole _ -> failwith "tried to compare holeval"
+  | Bomb, _ -> raise BombExn
+  | _, Bomb -> raise BombExn
+  | Hole _, _ -> raise BombExn
+  | _, Hole _ -> raise BombExn
   | Fun _, _
   | Function _, _
   | _, Fun _
@@ -311,13 +311,13 @@ let rec value_compare { v_ = v_1; _ } { v_ = v_2; _ } =
   | _, Lz _
   | Fun_with_extra_args _, _
   | _, Fun_with_extra_args _ ->
-    failwith "tried to compare function"
-  | ModVal _, _ | _, ModVal _ -> failwith "tried to compare module"
+    raise BombExn
+  | ModVal _, _ | _, ModVal _ -> raise BombExn
   | InChannel _, _ | OutChannel _, _ | _, InChannel _ | _, OutChannel _ ->
-    failwith "tried to compare channel"
-  | Fexpr _, _ | _, Fexpr _ -> failwith "tried to compare fexpr"
-  | Prim _, _ | _, Prim _ -> failwith "tried to compare prim"
-  | Object _, _ | _, Object _ -> failwith "tried to compare object"
+    raise BombExn
+  | Fexpr _, _ | _, Fexpr _ -> raise BombExn
+  | Prim _, _ | _, Prim _ -> raise BombExn
+  | Object _, _ | _, Object _ -> raise BombExn
 
   | Int n1, Int n2 -> compare n1 n2
   | Int _, _ -> assert false
