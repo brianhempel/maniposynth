@@ -558,26 +558,41 @@ let html_of_vb_structure_item stuff (item : structure_item) =
   | Pstr_attribute _          -> failwith "can't handle Pstr_attribute"
   | Pstr_extension (_, _)     -> failwith "can't handle Pstr_extension"
 
-let drawing_tools tenv =
+
+let inital_env_ctor_types = Suggestions.ctors_types Typing.initial_env
+let drawing_tools tenv prog =
   let ctors_types = Suggestions.ctors_types tenv in
+  let tool_and_menu tool_key examples =
+    let codes =
+      examples
+      |>@ fst
+      |>@ Exp.to_string
+      |> List.dedup
+    in
+    let tools =
+      codes |>@ begin fun code ->
+        span ~attrs:[("class", "tool"); ("data-extraction-code", code)] [code]
+      end
+    in
+    let first_code = List.hd codes in
+    [ span ~attrs:[("class", "tool left-of-menu"); ("data-extraction-code", first_code); ("data-tool-key", tool_key)] [first_code]
+    ; span ~attrs:[("class", "tool tool-menu")] [" ▾"; span ~attrs:[("class", "tools")] tools]
+    ]
+  in
+  let functions_menu =
+    tool_and_menu "prog functions" (Example_gen.func_calls tenv prog)
+  in
+  let ctor_menus =
+    ctors_types
+    |> List.sort_by (fun typ -> (List.mem typ inital_env_ctor_types, Type.to_string typ))
+    |>@@ begin fun typ ->
+      (Example_gen.examples_with_holes tenv typ @ Example_gen.examples 12 tenv typ)
+      |> tool_and_menu (Type.to_string typ)
+    end
+  in
   span
     ~attrs:[("class", "tools")]
-    begin
-      ctors_types
-      |> List.sort_by Type.to_string
-      |>@@ begin fun typ ->
-        let codes = Example_gen.examples 12 tenv typ |>@ fun (example_exp, _) -> Exp.to_string example_exp in
-        let tools =
-          codes |>@ begin fun code ->
-            span ~attrs:[("class", "tool"); ("data-extraction-code", code)] [code]
-          end
-        in
-        let first_code = List.hd codes in
-        [ span ~attrs:[("class", "tool left-of-menu"); ("data-extraction-code", first_code); ("data-tool-key", Type.to_string typ)] [first_code]
-        ; span ~attrs:[("class", "tool tool-menu")] [" ▾"; span ~attrs:[("class", "tools")] tools]
-        ]
-      end
-    end
+    (functions_menu @ ctor_menus)
 
 
 let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_tenv =
@@ -604,7 +619,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         [ img ~attrs:[("src", "/assets/maniposynth.svg")]
         ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
-        ] @ [drawing_tools final_tenv]
+        ] @ [drawing_tools final_tenv structure_items]
       ; div ~attrs:[("class", "top-matter")] @@
         List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@

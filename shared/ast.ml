@@ -323,6 +323,15 @@ module Type = struct
     | Tlink typ | Tsubst typ              -> flatten_arrows typ
     | _                                   -> [typ]
 
+  (* Stops flattening if a labeled argument is encountered. *)
+  (* e.g. 'a -> 'b -> 'c to (['a, 'b], 'c) *)
+  let rec args_and_ret typ =
+    let open Types in
+    match typ.desc with
+    | Tarrow (Nolabel, ltype, rtype, Cok) -> args_and_ret rtype |> Tup2.map_fst (List.cons ltype)
+    | Tlink typ | Tsubst typ              -> args_and_ret typ
+    | _                                   -> ([], typ)
+
   let arrow t1 t2 =
     Btype.newgenty @@ Tarrow (Nolabel, t1, t2, Cok)
 
@@ -458,6 +467,7 @@ module Exp = struct
     let loc = Loc_.fresh () in
     { (name |> Lexing.from_string |> Parse.expression) with pexp_loc = loc }
   let hole = simple_var "??"
+  let simple_apply name args = apply (var name) (args |>@ fun arg -> (Asttypes.Nolabel, arg))
   let ctor name args =
     construct (Loc_.lident name) @@
     match args with
