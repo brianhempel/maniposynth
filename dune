@@ -12,11 +12,11 @@
  ; (preprocess (pps ppx_yojson_conv))
  )
 
-(executable
- (name scratch)
- (modules scratch)
- (libraries camlboot_interpreter compiler-libs.common maniposynth_lib)
- )
+; (executable
+;  (name scratch)
+;  (modules scratch)
+;  (libraries camlboot_interpreter compiler-libs.common maniposynth_lib)
+;  )
 
 ; (executable
 ;  (name interpret_intepreter_interpreting_simple_ml)
