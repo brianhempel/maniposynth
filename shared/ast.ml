@@ -258,6 +258,7 @@ module Type = struct
     | Types.Tsubst t -> is_tconstr_with_path target_path t
     | _ -> false
   let is_unit_type = is_tconstr_with_path Predef.path_unit
+  let is_bool_type = is_tconstr_with_path Predef.path_bool
   let is_exn_type =  is_tconstr_with_path Predef.path_exn
   let rec is_var_type typ = match typ.Types.desc with
     | Types.Tvar _
