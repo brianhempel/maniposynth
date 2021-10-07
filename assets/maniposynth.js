@@ -1393,8 +1393,10 @@ function findFrameNoElem(elem) {
 }
 
 function setFrameNo(frameRootElem, frameNo) {
+  if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
   frameRootElem.dataset.activeFrameNo = frameNo;
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
+  relayout();
 }
 
 function initFrameNos() {
@@ -1429,8 +1431,6 @@ function updateActiveValues(elem, frameNo) {
     }
   }
 
-  relayout();
-
   return active;
 }
 
@@ -1448,7 +1448,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const tvValues = elem.querySelectorAll(":scope > .values > [data-frame-no]");
       const visibleValues = Array.from(tvValues).filter(elem => !elem.classList.contains("not-in-active-frame"));
       if (visibleValues.length == 0 && tvValues.length > 0) {
-        let valueToShow = tvValues[0]
+        let valueToShow = tvValues[0];
         const frameNoElem = findFrameNoElem(valueToShow);
         if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo); }
       }
@@ -1580,6 +1580,7 @@ function redrawTreeEdges() {
     svg.classList.add("tree-edge");
     return svg;
   }
+  // console.log("redraw edges");
   document.querySelectorAll(".tree-edge").forEach(svg => svg.remove());
   document.querySelectorAll(".tree-kids").forEach(kidsTable => {
     const parent = kidsTable.previousElementSibling;
@@ -1591,7 +1592,7 @@ function redrawTreeEdges() {
       // const childRect = child.getBoundingClientRect();
       const x2 = child.offsetLeft + child.offsetWidth/2;
       const y2 = child.offsetTop + 5;
-      console.log(x1,y1,x2,y2);
+      // console.log(x1,y1,x2,y2);
       parent.parentElement.insertBefore(line(x1,y1,x2,y2), parent);
     });
   });
