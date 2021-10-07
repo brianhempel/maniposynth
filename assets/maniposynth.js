@@ -554,7 +554,7 @@ function updateInspector() {
 
   if (elem && transientTextboxes().length === 0) {
     const rect = elem.getBoundingClientRect();
-    const viewWidth =
+    // const viewWidth =
     inspector.style.width = 280;
     // Position to the right or below.
     if (rect.right + 300 < document.body.clientWidth) {
@@ -1318,6 +1318,7 @@ function reflowUnpositionedElems(elem) {
 function relayout() {
   resizeVbHolders(document);
   reflowUnpositionedElems(document);
+  redrawTreeEdges();
 }
 window.addEventListener('DOMContentLoaded', () => {
   relayout();
@@ -1481,7 +1482,6 @@ document.addEventListener("keydown", function(event) {
 
 
 
-
 /////////////////// Example Management ///////////////////
 
 
@@ -1561,7 +1561,41 @@ document.addEventListener("keydown", function(event) {
 
 
 
+function redrawTreeEdges() {
+  function line(x1, y1, x2, y2) {
+    const baseX = Math.min(x1, x2) - 2;
+    const baseY = Math.min(y1, y2) - 2;
+    const svg  = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("stroke", "black");
+    line.setAttribute("stroke-width", "1");
+    line.setAttribute("x1", x1 - baseX);
+    line.setAttribute("x2", x2 - baseX);
+    line.setAttribute("y1", y1 - baseY);
+    line.setAttribute("y2", y2 - baseY);
+    svg.appendChild(line);
+    svg.style.position = "absolute";
+    svg.style.left = `${baseX}px`;
+    svg.style.top = `${baseY}px`;
+    svg.classList.add("tree-edge");
+    return svg;
+  }
+  document.querySelectorAll(".tree-edge").forEach(svg => svg.remove());
+  document.querySelectorAll(".tree-kids").forEach(kidsTable => {
+    const parent = kidsTable.previousElementSibling;
+    // const parentRect = parent.getBoundingClientRect();
+    const x1 = parent.offsetLeft + parent.offsetWidth/2;
+    const y1 = parent.offsetTop + parent.offsetHeight - 3;
 
+    kidsTable.querySelectorAll(":scope > tbody > tr > td").forEach(child => {
+      // const childRect = child.getBoundingClientRect();
+      const x2 = child.offsetLeft + child.offsetWidth/2;
+      const y2 = child.offsetTop + 5;
+      console.log(x1,y1,x2,y2);
+      parent.parentElement.insertBefore(line(x1,y1,x2,y2), parent);
+    });
+  });
+}
 
 
 /////////////////// Set Example ///////////////////

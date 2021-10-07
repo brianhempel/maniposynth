@@ -90,7 +90,7 @@ let string_of_arg_label =
 
 let rec apply_visualizers (prog : program) assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
   if visualizers = [] then "" else
-  let html_of_value ?code_to_assert_on extraction_exp_opt value = html_of_value ~code_to_assert_on { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty extraction_exp_opt value in
+  let html_of_value ?code_to_assert_on extraction_exp_opt value = html_of_value ~single_line_only:true ~code_to_assert_on { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty extraction_exp_opt value in
   let result_htmls =
     visualizers
     |>@@ begin fun { exp } ->
@@ -161,8 +161,8 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 
-and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
-  let recurse ?(in_list = false) = html_of_value ~in_list stuff frame_no visualizers env type_env in
+and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+  let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
@@ -261,7 +261,6 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
         | _ -> None
       end
       |>& begin fun (pat, arg_pat) ->
-        (* let ctor_pat_name = if ctor_name = "::" then "(::)" else ctor_name in (* otherwise Pat.to_string loops forever *) *)
         match (arg_pat.ppat_desc, arg.v_) with
         (* Multi arg ctor *)
         | Ppat_tuple arg_pats, Tuple vs ->
@@ -269,14 +268,29 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
             List.combine arg_pats vs |> List.mapi begin fun i (arg_pat, v)->
               Pat.single_name arg_pat
               |>& begin fun name ->
-                recurse ~in_list:(ctor_name = "::" && i = 1 (* tail position *)) (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v
+                (v, recurse ~in_list:(ctor_name = "::" && i = 1 (* tail position *)) (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) v)
               end
-              ||&~ (fun () -> recurse ~in_list:(ctor_name = "::") None v)
+              ||&~ (fun () -> (v, recurse ~in_list:(ctor_name = "::") None v))
             end
           in
+          let _, children_htmls = List.split arg_children in
           if ctor_name = "::"
-          then ctor_name_to_show ^ String.concat "" arg_children
-          else ctor_name_to_show ^ "(" ^ String.concat ", " arg_children ^ ")"
+          then ctor_name_to_show ^ String.concat "" children_htmls
+          else
+            begin match value.type_opt with
+            | Some typ when not single_line_only ->
+              let (same_type_children, other_children) = arg_children |> List.partition (fun ({ Data.type_opt; _ }, _) -> type_opt |>& Type.equal_ignoring_id_and_scope typ ||& false) in
+              let _, same_type_children_htmls = List.split same_type_children in
+              let _, other_children_htmls     = List.split other_children in
+              if List.length same_type_children >= 2 then
+                span ~attrs:[("class","tree-node")] [ctor_name_to_show ^ String.concat " " other_children_htmls] ^
+                table ~attrs:[("class","tree-kids")]
+                  [ tr (same_type_children_htmls |>@ fun child_html -> td [child_html]) ]
+              else
+                ctor_name_to_show ^ "(" ^ String.concat ", " children_htmls ^ ")"
+            | _ ->
+              ctor_name_to_show ^ "(" ^ String.concat ", " children_htmls ^ ")"
+            end
         (* Single arg ctor, should also be a var with our current case generator *)
         | Ppat_var { txt = name; _ }, _ ->
           ctor_name_to_show ^ recurse ~in_list:(ctor_name = "::") (Some (Exp.match_ extraction_exp [Exp.case pat (Exp.var name)])) arg
@@ -313,10 +327,10 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) (stuff : stuff)
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc stuff type_env root_exp_opt visualizers loc =
+let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
   let html_of_entry (_, frame_no, value, env) =
-    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value stuff frame_no visualizers env type_env root_exp_opt value]
+    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
   in
   let inners =
     if List.length entries >= 7 then
@@ -330,18 +344,18 @@ let html_of_values_for_loc stuff type_env root_exp_opt visualizers loc =
     ~attrs:[("class","values");("data-loc", Serialize.string_of_loc loc)] (* View root for visualizers, also for determining where to place new asserts before *)
     inners
 
-let html_of_values_for_exp stuff vb_pat_opt exp =
+let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let type_env = stuff.type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
-  html_of_values_for_loc stuff type_env (Some root_exp) visualizers exp.pexp_loc
+  html_of_values_for_loc ~single_line_only stuff type_env (Some root_exp) visualizers exp.pexp_loc
 
-let html_of_values_for_pat stuff pat =
+let html_of_values_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs pat.ppat_attributes in
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
-  html_of_values_for_loc stuff type_env root_exp_opt visualizers pat.ppat_loc
+  html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
 
 (* "(+)" -> "+" *)
 let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
@@ -366,7 +380,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   let recurse ?(show_result = true) ?(infix = false) ?(in_list = false) = html_of_exp ~show_result ~infix ~in_list stuff in
   let (code', attrs) = exp_gunk ~infix stuff exp in
   let wrap inner = span ~attrs:([("class","exp")] @ attrs) [inner] in
-  (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp stuff None exp else "") ^
+  (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else "") ^
   wrap @@
   match exp.pexp_desc with
   | Pexp_apply (fexp, labeled_args) ->

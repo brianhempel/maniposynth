@@ -208,7 +208,7 @@ nav img {
 .exp_label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
   display: none;
 }
-  .fun-param > td > .values > .root-value-holder,
+.fun-param > td > .values > .root-value-holder,
 .fun-param > td > .values > .ellipses {
   margin-right: 1.2em;
 }
@@ -216,7 +216,7 @@ nav img {
 table.subvalue-annotations {
   display: inline-block;
   vertical-align: middle;
-  margin: -2rem 0;
+  margin: -2em 0;
 }
 table.subvalue-annotations td {
   height: 1rem;
@@ -260,17 +260,41 @@ table.subvalue-annotations td {
 }
 
 .exp_label,
-.derived-vis-value .value {
+.derived-vis-values {
   font-size: 0.8rem;
 }
-.exp_label .value {
+.tree-kids .derived-vis-values {
   font-size: 0.65rem;
+  margin-top: -0.2rem;
+}
+.exp_label .root-value-holder {
+  font-size: 0.65rem;
+}
+.root-value-holder {
+  font-size: 1.5rem;
+  position: relative;
 }
 .value {
   display: inline-block;
-  font-size: 1.5rem;
   cursor: pointer;
   font-weight: bold;
+}
+.value {
+  text-align: center;
+}
+.value > *{
+  text-align: normal;
+}
+.tree-kids {
+  margin-top: 0.4em;
+}
+.tree-kids, .tree-node {
+  font-size: 1rem;
+}
+.tree-kids > tbody > tr > td {
+  padding: var(--padding);
+  vertical-align: top;
+  position: relative;
 }
 .derived-vis-value .value,
 .exp_label .value {

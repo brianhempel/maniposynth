@@ -121,6 +121,11 @@ module List = struct
 
   let concat_map f list =  map f list |> concat
 
+  let rec count pred = function
+    | [] -> 0
+    | x::xs when pred x -> 1 + count pred xs
+    | _::xs             -> count pred xs
+
   let rec assoc_by_opt pred = function
     | [] -> None
     | (k, v)::rest ->
