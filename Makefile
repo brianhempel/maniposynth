@@ -48,7 +48,7 @@ setup:
 	opam install utop
 	# opam install core
 	opam install ocamlformat
-	# opam install yojson
+	opam install yojson
 	# opam install ppxlib
 	# opam install ppx_yojson_conv
 	# opam install ppx_yojson_conv_lib
