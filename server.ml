@@ -39,14 +39,6 @@ let content_type_opt_of_path path =
   |> List.find_opt (fun (extn, _) -> String.ends_with extn path)
   |>& snd
 
-(* https://stackoverflow.com/a/53840784 *)
-let string_of_file path =
-  let in_chan = open_in path in
-  let str = really_input_string in_chan (in_channel_length in_chan) in
-  close_in in_chan;
-  str
-
-
 let serve_asset out_chan url =
   try
     let content_str = string_of_file ("./" ^ url) in

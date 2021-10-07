@@ -363,3 +363,16 @@ let (%>@&) f g = fun x -> f x |>@& g
 
 (* Leftward compositon (like @@, follows the above pattern of replacing the first char with %) *)
 let (%@) g f = f %> g
+
+
+(* https://stackoverflow.com/a/53840784 *)
+let string_of_file path =
+  let in_chan = open_in path in
+  let str = really_input_string in_chan (in_channel_length in_chan) in
+  close_in in_chan;
+  str
+
+let write_file contents path =
+  let out_chan = open_out path in
+  output_string out_chan contents;
+  close_out out_chan
