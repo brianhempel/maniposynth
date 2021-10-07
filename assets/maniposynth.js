@@ -1577,6 +1577,7 @@ function redrawTreeEdges() {
     svg.style.position = "absolute";
     svg.style.left = `${baseX}px`;
     svg.style.top = `${baseY}px`;
+    svg.style.marginBottom = `-1000px`;
     svg.classList.add("tree-edge");
     return svg;
   }
@@ -1584,6 +1585,7 @@ function redrawTreeEdges() {
   document.querySelectorAll(".tree-edge").forEach(svg => svg.remove());
   document.querySelectorAll(".tree-kids").forEach(kidsTable => {
     const parent = kidsTable.previousElementSibling;
+    const root   = parent.parentElement;
     // const parentRect = parent.getBoundingClientRect();
     const x1 = parent.offsetLeft + parent.offsetWidth/2;
     const y1 = parent.offsetTop + parent.offsetHeight - 3;
@@ -1593,7 +1595,7 @@ function redrawTreeEdges() {
       const x2 = child.offsetLeft + child.offsetWidth/2;
       const y2 = child.offsetTop + 5;
       // console.log(x1,y1,x2,y2);
-      parent.parentElement.insertBefore(line(x1,y1,x2,y2), parent);
+      root.insertBefore(line(x1,y1,x2,y2), root.children[0]);
     });
   });
 }

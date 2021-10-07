@@ -304,7 +304,8 @@ table.subvalue-annotations td {
 .root-value-holder.not-in-active-frame, .ellipses {
   display: none;
 }
-.tv.not-in-active-frame {
+.tv.not-in-active-frame,
+.tv.not-in-active-frame + .pat {
   opacity: 0.4;
 }
 .pat .not-in-active-frame,
