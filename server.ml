@@ -41,14 +41,14 @@ let content_type_opt_of_path path =
 
 let serve_asset out_chan url =
   try
-    let content_str = string_of_file ("./" ^ url) in
+    let content_str = string_of_file (Filename.concat executable_dir (nativize_path url)) in
     match content_type_opt_of_path url with
     | Some content_type -> respond ~content_type out_chan content_str
     | None -> respond ~content_type:"application/yolo" out_chan content_str
   with Sys_error _ -> respond_not_found out_chan
 
 let render_maniposynth out_chan url =
-  let path = String.drop 1 url in
+  let path = String.drop 1 url |> nativize_path in
   let parsed = Camlboot_interpreter.Interp.parse path in
   (* let parsed_with_comments = Parse_unparse.parse_file path in
   let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
@@ -74,7 +74,7 @@ let render_maniposynth out_chan url =
 (* /simple.ml/search?frame_no=123&valid_ids_visible=&q=asdf *)
 let render_suggestions out_chan uri =
   let url_path = uri |> Uri.path |> Uri.pct_decode in
-  let file_path = url_path |> String.drop 1 |> String.drop_suffix "/search" in
+  let file_path = url_path |> String.drop 1 |> String.drop_suffix "/search" |> nativize_path in
   let query_params = uri |> Uri.query in
   match ["frame_no"; "vbs_loc"; "value_ids_visible"; "value_strs"; "q"] |>@ (fun key -> List.assoc_opt key query_params) |> Option.project with
   | Some [[frame_no_str]; [vbs_loc_str]; [value_ids_visible_comma_separated]; [value_strs_comma_separated]; [q_str]] ->

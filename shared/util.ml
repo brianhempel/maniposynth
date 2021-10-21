@@ -365,6 +365,9 @@ let (%>@&) f g = fun x -> f x |>@& g
 let (%@) g f = f %> g
 
 
+let executable_dir = Filename.dirname Sys.executable_name
+let nativize_path = String.replace "/" Filename.dir_sep
+
 (* https://stackoverflow.com/a/53840784 *)
 let string_of_file path =
   let in_chan = open_in path in

@@ -19,8 +19,9 @@ let stdlib_path () =
   match Sys.getenv_opt "OCAMLINTERP_STDLIB_PATH" with
   | Some path -> path
   | None ->
-    if Sys.file_exists "ocaml-4.07.1" then
-      Filename.concat "ocaml-4.07.1" "stdlib"
+    let default_location = Filename.concat Shared.Util.executable_dir (Filename.concat "ocaml-4.07.1" "stdlib") in
+    if Sys.file_exists default_location then
+      default_location
     else
       failwith "Error: unable to determine the standard library location"
     (* let input = Unix.open_process_in "ocamlc -where" in

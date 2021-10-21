@@ -8,6 +8,14 @@
 run: ./_build/default/server.exe
 	./_build/default/server.exe
 
+# Artifact for distributing to study participants.
+artifact.zip: ./_build/default/server.exe ./assets/*
+	rm -rf artifact; mkdir artifact; cp ./_build/default/server.exe artifact/maniposynth
+	cp -r assets artifact/assets
+	rm -r artifact/assets/*.amdn; # don't need rich image files
+	mkdir -p artifact/ocaml-4.07.1/stdlib; cp -r ocaml-4.07.1/stdlib/*.ml artifact/ocaml-4.07.1/stdlib/
+	zip artifact -r artifact
+
 # build_and_run: ./_build/default/interpreter.exe
 # 	OCAMLINTERP_DEBUG=true ./_build/default/interpreter.exe
 

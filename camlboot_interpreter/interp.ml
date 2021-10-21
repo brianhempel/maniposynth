@@ -314,7 +314,7 @@ module Compiler_files = struct
   ]
 end
 
-let bytecode_compiler_units =
+let bytecode_compiler_units () =
   let compiler_source_path = compiler_source_path () in
   let fullpath file = Filename.concat compiler_source_path file in
   List.map (fun modfile -> stdlib_flag, fullpath modfile)
@@ -329,7 +329,7 @@ let bytecode_compiler_units =
   @ Compiler_files.bytecode_main
   )
 
-let native_compiler_units =
+let native_compiler_units () =
   let compiler_source_path = compiler_source_path () in
   let fullpath file = Filename.concat compiler_source_path file in
   List.map (fun modfile -> stdlib_flag, fullpath modfile)
@@ -346,10 +346,10 @@ let native_compiler_units =
   )
 
 let run_ocamlc () =
-  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state bytecode_compiler_units)
+  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state (bytecode_compiler_units ()))
 
 let run_ocamlopt () =
-  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state native_compiler_units)
+  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state (native_compiler_units ()))
 
 
 let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
