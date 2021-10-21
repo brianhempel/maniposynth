@@ -659,17 +659,20 @@ function abortTextEdit(textbox) {
   updateInspector();
 }
 
+autocompleteOpen = false;
 function colorizeSubvalues() {
   let hue = 30;
-  document.querySelectorAll(".value").forEach(elem => {
+  document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]").forEach(elem => {
     elem.style.color = `hsl(${hue}, 90%, 40%)`;
     hue = (hue + 152) % 360;
   });
+  autocompleteOpen = true;
 }
 function decolorizeSubvalues() {
-  document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)").forEach(elem => {
+  document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]").forEach(elem => {
     elem.style.color = null;
   });
+  autocompleteOpen = false;
 }
 
 function transientTextboxes() {
@@ -1393,6 +1396,7 @@ function findFrameNoElem(elem) {
 }
 
 function setFrameNo(frameRootElem, frameNo) {
+  if (autocompleteOpen) { return; } // Don't change frame numbers when an autocomplete is open
   if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
   frameRootElem.dataset.activeFrameNo = frameNo;
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }

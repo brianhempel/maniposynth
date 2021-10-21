@@ -41,7 +41,10 @@ let content_type_opt_of_path path =
 
 let serve_asset out_chan url =
   try
-    let content_str = string_of_file (Filename.concat executable_dir (nativize_path url)) in
+    let path1 = nativize_path @@ "./" ^ url in (* Relative to location server started *)
+    let path2 = Filename.concat executable_dir (nativize_path url) in (* Relative to server executable *)
+    let path = if Sys.file_exists path1 then path1 else path2 in
+    let content_str = string_of_file path in
     match content_type_opt_of_path url with
     | Some content_type -> respond ~content_type out_chan content_str
     | None -> respond ~content_type:"application/yolo" out_chan content_str
