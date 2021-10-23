@@ -44,10 +44,17 @@ let parse_assert exp =
 
 exception No_fuel
 let fuel = ref max_int
-let with_fuel count f out_of_fuel_f =
+let with_fuel count f out_of_fuel_f = (* Resets fuel to max after return/failure. *)
   fuel := count;
   let out = try f () with No_fuel -> out_of_fuel_f () | e -> fuel := max_int; raise e in
   fuel := max_int;
+  out
+let alloc_fuel count f out_of_fuel_f = (* Subtracts fuel after return/failure. *)
+  let saved_fuel = max 0 (!fuel - count) in
+  fuel := !fuel - saved_fuel;
+  let reset_fuel () = fuel := !fuel + saved_fuel in
+  let out = try f () with No_fuel -> out_of_fuel_f () | e -> reset_fuel (); raise e in
+  reset_fuel ();
   out
 
 let value_id_counter          = ref 0
@@ -318,7 +325,8 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ value_of_constant c
   | Pexp_let (recflag, vals, e) ->
     (* Don't bother attaching vtrace to let results for now (the body exp will have an entry) *)
-    eval_expr fillings prims (eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag vals) lookup_exp_typed trace_state frame_no e
+    let alloc_fuel_per_binding = if !fuel > 100 then !fuel - 50 else 50 in
+    eval_expr fillings prims (eval_bindings ~alloc_fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag vals) lookup_exp_typed trace_state frame_no e
   | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Function (cl, ref env)
   | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
   | Pexp_apply (f, l) -> ret @@
@@ -560,15 +568,23 @@ and eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no expr 
   try Ok (eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr) with InternalException v -> Error v
 
 (* fuel_per_binding is top-level only and not recursed to children *)
-and eval_bindings ?fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag defs =
+and eval_bindings ?fuel_per_binding ?alloc_fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag defs =
   let bind_value env vb =
     let f () =
       let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
       pattern_bind fillings prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v
     in
     begin match fuel_per_binding with
-    | None -> f ()
+    | None -> begin match alloc_fuel_per_binding with
+      | None -> f ()
+      | Some fuel ->
+        (* Non-top level, we can't exceed our fuel allocation but might not want to spend it all on one binding *)
+        alloc_fuel fuel f
+          (* If out of fuel, set all var names to Bomb *)
+          (fun () -> vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env)
+      end
     | Some fuel ->
+      (* Top level only, set fuel per binding. *)
       with_fuel fuel f
         (* If out of fuel, set all var names to Bomb *)
         (fun () -> vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env)
