@@ -14,11 +14,16 @@ let is_infix name =
   SSet.mem name infix_names ||
   (String.length name >= 1 && CharSet.mem name.[0] infix_init_chars)
 
+let junk_to_name =
+     String.replace "->" "to"
+  %> String.map (fun c -> if Char.is_letter c then c else ' ')
+  %> String.split_on_whitespace
+  %> String.concat "_"
+  %> String.uncapitalize_ascii
+
 let from_type typ =
   (Shared.Formatter_to_stringifier.f Printtyp.type_expr) typ
-  |> String.map (fun c -> if Char.is_alphanum c then c else ' ')
-  |> String.trim
-  |> String.map (fun c -> if Char.is_alphanum c then c else '_')
+  |> junk_to_name
 
 let rec from_val ?(type_env = Typing.initial_env) v =
   let open Camlboot_interpreter.Data in
@@ -70,13 +75,19 @@ let gen ?(avoid = []) ?(base_name = "var") prog =
   let avoid = avoid @ StructItems.deep_names prog in
   gen_ ~avoid ~base_name
 
+(* tries make exp a name if valid, otherwise from type *)
 let gen_from_exp ?(avoid = []) ?type_env exp prog =
-  let type_env =
-    match type_env with
-    | Some type_env -> type_env
-    | None          -> Typing.typedtree_sig_env_of_parsed prog "unknown.ml" |> Tup3.thd
+  let name_from_exp = exp |> Exp.to_string |> junk_to_name in
+  let base_name_opt =
+    if String.length name_from_exp >= 1 then
+      Some name_from_exp
+    else
+      let type_env =
+        match type_env with
+        | Some type_env -> type_env
+        | None          -> Typing.typedtree_sig_env_of_parsed prog "unknown.ml" |> Tup3.thd
+      in
+      Type.of_exp_opt ~type_env exp
+      |>& from_type
   in
-  Type.of_exp_opt ~type_env exp
-  |>& from_type
-  |>& (fun base_name -> gen ~avoid ~base_name prog)
-  ||& gen ~avoid prog
+  gen ~avoid ?base_name:base_name_opt prog

@@ -316,10 +316,16 @@ module String = struct
   let includes target str : bool =
     find_index target str <> None
 
-  let split ?limit sep str =
+
+  let whitespace_regex = Str.regexp "[ \n\r\t\012]+"
+  let split_on_regex ?limit regex str =
     match  limit with
-    | None       -> Str.split_delim         (Str.regexp_string sep) str
-    | Some limit -> Str.bounded_split_delim (Str.regexp_string sep) str limit
+    | None       -> Str.split_delim         regex str
+    | Some limit -> Str.bounded_split_delim regex str limit
+
+  let split_on_regex_str  ?limit regex_str str = split_on_regex ?limit (Str.regexp regex_str)  str
+  let split               ?limit sep       str = split_on_regex ?limit (Str.regexp_string sep) str
+  let split_on_whitespace ?limit           str = split_on_regex ?limit whitespace_regex        (String.trim str)
 
   let replace target replacement str =
     split target str |> String.concat replacement

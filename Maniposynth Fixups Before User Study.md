@@ -4,13 +4,13 @@
 
 - [ ] post the recruitment survey
 
-- [ ] less space for tree fold
-
 - [ ] coloring of autocomplete values is off
 
-- [ ] don't change frame_no when autocomplete open
+- [x] don't change frame_no when autocomplete open
 
-- [ ] when dragging length into itself, divergence is confusing
+- [ ] autocomplete to value: sort by 2D distance on canvas
+
+- [x] when dragging length into itself, divergence is confusing
 
 - [ ] need to reflow absolutely positioned elements
 
@@ -27,6 +27,8 @@
 - [ ] edit values
 
 - [ ] defocus to save (rather than enter)
+
+- [ ] don't insert nested defs for missing vars
 
 - [ ] drag exp to value position
 
@@ -47,6 +49,8 @@
 - [ ] parans for vals?
 
 - [ ] show type errors?
+
+- [ ] less space for tree fold
 
 - [ ] bake undo into the server
 
