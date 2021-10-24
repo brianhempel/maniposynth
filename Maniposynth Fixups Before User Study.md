@@ -10,9 +10,13 @@
 
 - [ ] autocomplete to value: sort by 2D distance on canvas
 
+- [x] slightly better naming?
+
 - [x] when dragging length into itself, divergence is confusing
 
-- [ ] need to reflow absolutely positioned elements
+- [x] need to reflow absolutely positioned elements
+
+- [ ] autocomplete state left on when deselecting a box
 
 - [ ] color TV results background
 
@@ -57,3 +61,4 @@
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
 - [ ] synth!
+

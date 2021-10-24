@@ -1286,8 +1286,8 @@ function resizeVbHolders(elem) {
     }
   });
 };
-function reflowUnpositionedElems(elem) {
-  const vbsHolders = elem.querySelectorAll(".vbs");
+function reflow() {
+  const vbsHolders = document.querySelectorAll(".vbs");
   function left(box)  { return box.offsetLeft; }
   function top(box)   { return box.offsetTop; }
   function right(box) { return box.offsetLeft + box.offsetWidth; }
@@ -1298,29 +1298,39 @@ function reflowUnpositionedElems(elem) {
     if (bot(box1)   < top(box2)  || bot(box2)   < top(box1))  { return false; }
     return true;
   }
+  function size(box) { return box.offsetWidth * box.offsetHeight; }
   vbsHolders.forEach(vbsHolder => {
-    const boxes = Array.from(vbsHolder.children);
-    const placedBoxes = boxes.filter(box => box.style.left); /* If box has an explicit position */
-    for (box of vbsHolder.children) {
-      if (!box.classList.contains("vb")) { continue; } /* Skip transient textboxes in the vbs elem */
-      if (!placedBoxes.includes(box)) {
-        box.style.left = `10px`
-        let top = 10;
-        box.style.top = `${top}px`
-        while (placedBoxes.find(box2 => areOverlapping(box, box2))) {
-          top += 10
-          // console.log(top);
-          box.style.top = `${top}px`
+    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("vb")); /* Skip transient textboxes in the vbs elem */
+    // Move smallest stuff first.
+    boxes.sort((box1, box2) => size(box1) - size(box2));
+    console.log(boxes);
+    for (box of boxes) {
+      const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box); /* If box has an explicit position */
+      var left0 = parseInt(box.style.left);
+      var top0  = parseInt(box.style.top);
+      if (isNaN(left0)) { left0 = 10 };
+      if (isNaN(top0))  { top0  = 10 };
+
+      // More or less, move in the cardinal direction that moves the box the least.
+      var r = 0;
+      var theta = 0;
+      box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`
+      box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`
+      while (boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+        r += 10;
+        theta = 0;
+        while (boxesToDodge.find(box2 => areOverlapping(box, box2)) && theta < 2*Math.PI) {
+          box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`;
+          box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`;
+          theta += Math.PI/2;
         }
-        box.style.top = `${top + 10}px`
-        placedBoxes.push(box)
       }
     }
   });
 }
 function relayout() {
   resizeVbHolders(document);
-  reflowUnpositionedElems(document);
+  reflow();
   redrawTreeEdges();
 }
 window.addEventListener('DOMContentLoaded', () => {
