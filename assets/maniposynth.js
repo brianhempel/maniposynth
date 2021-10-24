@@ -784,12 +784,13 @@ function subvalueToOptionPart(subvalueElem) {
 function optionFromSuggestion(suggestion) {
   const parts = suggestion.split(/\b/); /* Split on word boundaries */
   // Convert to nodes, turning value_id_123 into a pretty clone of that subvalue on the screen
+  const visibleValues = valuesShownInFrame();
   const nodes = parts.map(part => {
     let subvalueElem = null;
     if (part.startsWith('value_id_')) {
       // Try to find that subvalue
       const valueIdStr = "" + part.match(/value_id_(\d+)/)[1];
-      subvalueElem = Array.from(document.querySelectorAll(".value[data-value-id]")).find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr)
+      subvalueElem = valuesShownInFrame().find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr);
     }
     if (subvalueElem) {
       return subvalueToOptionPart(subvalueElem);
@@ -871,7 +872,7 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   let request = new XMLHttpRequest();
   request.open("GET", searchURL);
   request.addEventListener("loadend", _ => {
-    console.log(request.responseText);
+    // console.log(request.responseText);
     updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0))
   });
   request.send();
@@ -1309,7 +1310,6 @@ function reflow() {
     const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("vb")); /* Skip transient textboxes in the vbs elem */
     // Move smallest stuff first.
     boxes.sort((box1, box2) => size(box1) - size(box2));
-    console.log(boxes);
     for (box of boxes) {
       const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box); /* If box has an explicit position */
       var left0 = parseInt(box.style.left);

@@ -4,7 +4,7 @@
 
 - [ ] post the recruitment survey
 
-- [ ] coloring of autocomplete values is off
+- [x] coloring of autocomplete values is off
 
 - [x] don't change frame_no when autocomplete open
 
