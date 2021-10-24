@@ -513,6 +513,8 @@ function updateInspector() {
 
   const elem = selectedElems()[0];
 
+  inspector.querySelectorAll(".autocomplete-options").forEach(autocompleteDiv => autocompleteDiv.remove()); decolorizeSubvalues();
+
   function onTextEditAbort(event, textboxDiv) {
     textboxDiv.innerText = textboxDiv.originalValue;
     textboxDiv.blur();
@@ -655,21 +657,26 @@ function isShown(elem) {
 
 function abortTextEdit(textbox) {
   // if (textbox.originalElem) { show(textbox.originalElem) };
+  textbox.autocompleteDiv?.remove(); decolorizeSubvalues();
   textbox.remove();
   updateInspector();
+}
+
+function valuesShownInFrame() {
+  return Array.from(document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown);
 }
 
 autocompleteOpen = false;
 function colorizeSubvalues() {
   let hue = 30;
-  document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]").forEach(elem => {
+  valuesShownInFrame().forEach(elem => {
     elem.style.color = `hsl(${hue}, 90%, 40%)`;
     hue = (hue + 152) % 360;
   });
   autocompleteOpen = true;
 }
 function decolorizeSubvalues() {
-  document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]").forEach(elem => {
+  valuesShownInFrame().forEach(elem => {
     elem.style.color = null;
   });
   autocompleteOpen = false;
@@ -797,7 +804,7 @@ function optionFromSuggestion(suggestion) {
 
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedValueIdStr) {
   // No autocomplete for pats, for now
-  should_show_autocomplete = !targetElem.classList.contains("pat")
+  const should_show_autocomplete = !targetElem.classList.contains("pat")
 
   const autocompleteDiv = document.createElement("div");
   autocompleteDiv.classList.add("autocomplete-options");
@@ -822,7 +829,6 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
     } else if (event.key === "Esc" || event.key === "Escape") {
       decolorizeSubvalues();
       onAbort(event, textboxDiv);
-      autocompleteDiv.remove();
     } else if (event.key === "ArrowDown") {
       textboxDiv.blur();
       autocompleteDiv.children[0]?.focus();
@@ -851,7 +857,7 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
 function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   const frameNo         = frameNoForElem(textboxDiv.targetElem);
   const vbsLoc          = vbsHolderForInsert(textboxDiv.targetElem).dataset.loc;
-  const valuesVisible   = Array.from(document.querySelectorAll(".value[data-extraction-code]:not(.not-in-active-frame)")).filter(isShown)
+  const valuesVisible   = valuesShownInFrame();
   const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
   const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replaceAll(",","~CoMmA~") /* escape commas */ );
   // console.log(valueStrs);

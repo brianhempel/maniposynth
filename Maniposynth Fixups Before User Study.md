@@ -16,7 +16,9 @@
 
 - [x] need to reflow absolutely positioned elements
 
-- [ ] autocomplete state left on when deselecting a box
+- [x] autocomplete state left on when deselecting a box
+
+- [x] autocomplete left open when clicking away from a new code entry
 
 - [ ] color TV results background
 
