@@ -40,7 +40,7 @@
 
 - [ ] differing semantics for use/vis ... split apart?
 
-- [ ] hover border for movable boxes
+- [x] hover border for movable boxes
 
 - [ ] selecting vis shouldn't show submit buttons
 

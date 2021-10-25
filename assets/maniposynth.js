@@ -1191,6 +1191,18 @@ function vbDropTarget(event) {
   }
 }
 
+// Need to only show movability border when hovering over the box but NOT any of its children.
+function moveableMaybeHover(boxElem) {
+  return function(event) {
+    // https://stackoverflow.com/questions/8813051/determine-which-element-the-mouse-pointer-is-on-top-of-in-javascript
+    if (boxElem === document.elementFromPoint(event.clientX, event.clientY)) {
+      boxElem.classList.add("moveable-hovered");
+    } else {
+      boxElem.classList.remove("moveable-hovered");
+    }
+  };
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".box").forEach(elem => {
     elem.addEventListener("mousedown", event => {
@@ -1207,6 +1219,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Show border on hover/unhover. Must be JS because we don't want the border when children hovered.
+
+  document.querySelectorAll(".box").forEach(elem => {
+    elem.addEventListener("mouseover", moveableMaybeHover(elem));
+    elem.addEventListener("mouseout",  moveableMaybeHover(elem));
+  });
+
 });
 
 

@@ -3,7 +3,7 @@
   --color: rgb(163, 255, 174);
   --color-light: rgb(215, 255, 220);
   --pat-color: hsl(332deg 76% 53%);
-  --third-color-light: rgb(254, 255, 203);
+  --third-color-light: rgb(254, 255, 220);
 }
 
 body {
@@ -113,8 +113,12 @@ nav img {
   max-width: 100%;
   cursor: move;
   border: solid 10px transparent; /* Makes edges grabbable for relocating. */
+  /* Border color is changed with javascript on mouse over. Couldn't use :hover because needed to unhover on child elements. */
   padding: 1rem;
   /* padding: 0.5em 5em 1em 1em; */
+}
+.moveable-hovered {
+  border-color: #eee;
 }
 .box > * {
   cursor: auto;
