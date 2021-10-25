@@ -2,7 +2,8 @@
   --padding: 4px;
   --color: rgb(163, 255, 174);
   --color-light: rgb(215, 255, 220);
-  --pat-color: rgb(226, 43, 144);
+  --pat-color: hsl(332deg 76% 53%);
+  --third-color-light: rgb(254, 255, 203);
 }
 
 body {
@@ -211,6 +212,9 @@ nav img {
 .fun-param > td > .values > .root-value-holder,
 .fun-param > td > .values > .ellipses {
   margin-right: 1.2em;
+}
+.tv > .values {
+  background-color: var(--third-color-light);
 }
 
 table.subvalue-annotations {

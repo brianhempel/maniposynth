@@ -20,7 +20,7 @@
 
 - [x] autocomplete left open when clicking away from a new code entry
 
-- [ ] color TV results background
+- [x] color TV results background
 
 - [ ] text edit a binding to a var in a branch didn't work
 
