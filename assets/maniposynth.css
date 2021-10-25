@@ -124,8 +124,8 @@ nav img {
   cursor: auto;
 }
 
-.box > *,
-.return > .tv {
+.box > * {
+/* .return > .tv { */
   background-color: white;
 }
 
@@ -166,15 +166,6 @@ nav img {
   margin: 0;
 }
 
-.tv {
-  min-height: 3rem;
-  min-width: 2rem;
-  /* display: inline-block; */
-}
-/* .exp_label .tv {
-  min-height: 2em;
-  min-width: 1em;
-} */
 .exp_label,
 .pat_label,
 .box > .pat:last-child {
@@ -219,6 +210,9 @@ nav img {
 }
 .tv > .values {
   background-color: var(--third-color-light);
+  padding-top: 0.5rem;
+  min-height: 2.5rem;
+  min-width: 2rem;
 }
 
 table.subvalue-annotations {
@@ -250,6 +244,7 @@ table.subvalue-annotations td {
   margin-left: -0.9em;
   margin-top: -1.5em;
   margin-right: -1em; /* Make this too negative and the exp_label escapes its vb selection box */
+  margin-bottom: -1em;
 }
 /* .exp_label .exp_label {
   border: solid 1px white;

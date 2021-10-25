@@ -2,7 +2,7 @@
 
 - [ ] make sure it can be installed on mac/windows/linux
 
-- [ ] post the recruitment survey
+- [x] post the recruitment survey
 
 - [x] coloring of autocomplete values is off
 
@@ -22,13 +22,15 @@
 
 - [x] color TV results background
 
-- [ ] text edit a binding to a var in a branch didn't work
+- [ ] ~~text edit a binding to a var in a branch didn't work~~
 
   ```ocaml
   let ... = length (??) (* changed (??) to x *)
   match ... with 
   | ... -> let x = ... in
   ```
+
+  wait now it works....why????
 
 - [ ] edit values
 
