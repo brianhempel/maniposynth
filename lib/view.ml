@@ -379,21 +379,60 @@ let html_of_values_for_pat ?(single_line_only = false) stuff pat =
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
   html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
 
+
+type parens_context = NoParens | NormalArg | NextToInfixOp
+
 (* For exp labels *)
-let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(in_list = false) (stuff : stuff) exp =
-  let recurse ?(show_result = true) ?(infix = false) ?(in_list = false) = html_of_exp ~show_result ~infix ~in_list stuff in
+let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) (stuff : stuff) exp =
+  let recurse ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) = html_of_exp ~show_result ~infix ~parens_context ~in_list stuff in
   let (code', attrs) = exp_gunk ~infix stuff exp in
-  let wrap inner = span ~attrs:([("class","exp")] @ attrs) [inner] in
+  let wrap inner =
+    let needs_parens =
+      parens_context != NoParens &&
+      match exp.pexp_desc with
+      | Pexp_tuple _ -> false
+      | Pexp_array _ -> false
+      | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, _) -> false
+      | Pexp_construct ({ txt = Longident.Lident "::"; _ }, _) -> not @@ String.starts_with "[" code' && String.ends_with "]" code'
+      | _ ->
+        let has_infix_app () = Exp.flatten exp |>@& Exp.fexp_of_apply |>@& Exp.simple_name |> List.exists Name.is_infix in
+        begin match parens_context with
+        | NoParens      -> false
+        | NormalArg     -> String.includes " " code'
+        | NextToInfixOp -> has_infix_app ()
+        end
+    in
+    span ~attrs:([("class","exp")] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
+  in
+  (* let recurse_parens ?show_result ?infix exp =
+    let inner = recurse ?show_result ?infix exp in
+    let code = Exp.to_string exp in
+    let needs_parens =
+      match exp.pexp_desc with
+      | Pexp_tuple _ -> false
+      | Pexp_array _ -> false
+      | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, _) -> false
+      | Pexp_construct ({ txt = Longident.Lident "::"; _ }, _) -> not (String.starts_with "[" code && String.ends_with "]" code)
+      | _            -> String.includes " " code
+    in
+    if needs_parens then "(" ^ inner ^ ")" else inner
+  in *)
   (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else "") ^
   wrap @@
   match exp.pexp_desc with
   | Pexp_apply (fexp, labeled_args) ->
-    let html_of_labeled_arg (label, arg) = Asttypes.(match label with Nolabel -> "" | Labelled str -> "~" ^ str | Optional str -> "?" ^ str) ^ recurse arg in
+    let html_of_labeled_arg ~parens_context (label, arg) =
+      let label_str, parens_context =
+        let open Asttypes in
+        match label with Nolabel -> ("", parens_context) | Labelled str -> ("~" ^ str, NormalArg) | Optional str -> ("?" ^ str, NormalArg)
+      in
+      label_str ^ recurse ~parens_context arg
+    in
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true fexp) ^ html_of_labeled_arg la2
-    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg |> String.concat " ")
+    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
+    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
     end
   | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> if in_list then "]" else "[]"
   | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
@@ -401,9 +440,9 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
       (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
     else
       (* Render infix *)
-      recurse head ^ " :: " ^ recurse tail
+      recurse ~parens_context:NextToInfixOp head ^ " :: " ^ recurse ~parens_context:NextToInfixOp tail
   | Pexp_construct ({ txt = lid; _ }, Some arg) ->
-    Longident.to_string lid ^ " " ^ recurse arg
+    Longident.to_string lid ^ " " ^ recurse ~parens_context:NormalArg arg
   | Pexp_tuple exps ->
     "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
   | Pexp_ifthenelse (e1, e2, e3_opt) ->

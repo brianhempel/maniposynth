@@ -50,7 +50,9 @@
 
 - [x] ...x more... math is wrong
 
-- [ ] parens for exps
+- [x] don't color vised values (can't autocomplete to them yet)
+
+- [x] parens for exps
 
 - [ ] less space for tree fold
 
@@ -67,4 +69,6 @@
 - [ ] show type errors?
 
 - [ ] add submit button for all textboxes (with hotkey noted)?
+
+- [ ] autocomplete to vised values?
 

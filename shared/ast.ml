@@ -497,6 +497,10 @@ module Exp = struct
     | _                    -> None
   let ident_lid = ident_lid_loced %>& Loc_.txt
   let simple_name = ident_lid %>&& Longident.simple_name
+  let fexp_of_apply (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_apply (fexp, _) -> Some fexp
+    | _                    -> None
 
   let ctor_lid_loced (exp : expression) =
     match exp.pexp_desc with

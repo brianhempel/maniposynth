@@ -711,8 +711,12 @@ function abortTextEdit(textbox) {
   updateInspector();
 }
 
+function isNotVis(elem) {
+  return !elem.closest(".derived-vis-value");
+}
+
 function valuesShownInFrame() {
-  return Array.from(document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown);
+  return Array.from(document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis);
 }
 
 autocompleteOpen = false;
@@ -928,7 +932,7 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   request.open("GET", searchURL);
   request.addEventListener("loadend", _ => {
     // console.log(request.responseText);
-    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0))
+    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0).filter(str => str !== textboxDiv.originalValue))
   });
   request.send();
 }

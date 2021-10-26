@@ -229,7 +229,7 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
     in
     options
     |>@ (fun (shown_str, code) -> (suggestion_prefix_parens ^ shown_str, suggestion_prefix_parens ^ code))
-    |>@? (fun (shown_str, code) -> String.starts_with lastWord shown_str && lastWord <> code)
+    |>@? (fun (shown_str, _code) -> String.starts_with lastWord shown_str(*  && lastWord <> code *))
     |>@ begin fun (_, completion) ->
       completion::restRev |> List.rev |> String.concat " "
     end
