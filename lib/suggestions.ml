@@ -39,12 +39,15 @@ let ctors_in_modules tenv mods =
   in
   mods |>@@ (fun module_lid_opt -> Env.fold_constructors f module_lid_opt tenv [])
 
+let should_ignore typ name =
+  Synth.is_imperative typ (* Don't use imperative functions *)
+  || SSet.mem name Synth.unimplemented_prim_names (* Interpreter doesn't implement some primitives *)
+  || SSet.mem name Synth.dont_bother_names
+
 let var_names_in_modules tenv mods =
   let f name path desc out =
     (* let target_is_var = Type.is_var_type typ in *)
-    if Synth.is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
-    if SSet.mem name Synth.unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
-    if SSet.mem name Synth.dont_bother_names then out else
+    if should_ignore desc.Types.val_type name then out else
     String.drop_prefix "Stdlib." (Path.name path) :: out
   in
   mods |>@@ (fun module_lid_opt -> Env.fold_values f module_lid_opt tenv [])
@@ -57,15 +60,19 @@ let initial_var_names =
   var_names_in_modules Typing.initial_env modules_to_search
   |> SSet.of_list
 
+(* let _ =
+  print_endline (String.concat " " (initial_var_names |> SSet.elements)) *)
+
 (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the type given. *)
-let possible_functions_on_type typ type_env =
-  let f _name path value_desc out =
+let possible_function_names_on_type typ type_env =
+  let f name path value_desc out =
+    if should_ignore value_desc.Types.val_type name then out else
     (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *) (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
     match Type.flatten_arrows value_desc.Types.val_type with
     | [arg_type; _] ->
       begin try
         if Type.does_unify typ arg_type && not (List.mem (Path.name path) exclude_from_suggestions)
-        then Exp.from_string (String.drop_prefix "Stdlib." (Path.name path)) :: out
+        then String.drop_prefix "Stdlib." (Path.name path) :: out
         else out
       with _exn ->
         out
@@ -75,10 +82,17 @@ let possible_functions_on_type typ type_env =
         | _              -> out
         end *)
       end
-    | _ -> out in
-  modules_to_search
-  |>@@ fun module_lid_opt -> Env.fold_values f module_lid_opt type_env []
-
+    | _ -> out
+  in
+  (* Put names in this file first. *)
+  let names_in_this_file, other_names =
+    modules_to_search
+    |>@@ (fun module_lid_opt -> Env.fold_values f module_lid_opt type_env [])
+    |> List.partition begin fun name ->
+      not @@ SSet.mem name initial_var_names
+    end
+  in
+  names_in_this_file @ other_names
 
 let rec flatten_value (value : Data.value) =
   let open Camlboot_interpreter.Data in
@@ -122,7 +136,7 @@ let rec terminal_exps exp = (* Dual of gather_vbs *)
   | _                        -> [exp]
 
 
-let options_for_value_id tenvs visible_values_in_frame selected_value_id =
+(* let options_for_value_id tenvs visible_values_in_frame selected_value_id =
   match visible_values_in_frame |> List.find_opt (fun (_v_str, v) -> v.Data.id = selected_value_id) with
   | Some (v_str, v) ->
     begin match v.Data.type_opt with
@@ -145,7 +159,7 @@ let options_for_value_id tenvs visible_values_in_frame selected_value_id =
       []
     end
   | None ->
-    []
+    [] *)
 
 (* KISS for now: lexical completions of last word typed *)
 let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) frame_no vbs_loc value_ids_visible value_strs ?selected_value_id (query : string) =
@@ -163,8 +177,8 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
   let options =
     let selected_value_options =
       match selected_value_id with
-      | Some selected_value_id -> options_for_value_id tenvs visible_values_in_frame selected_value_id
-      | _                      -> []
+      | Some _selected_value_id -> failwith "not currently handling value use" (* options_for_value_id tenvs visible_values_in_frame selected_value_id *)
+      | _                       -> []
     in
     let nonconstant_variableset =
       locs

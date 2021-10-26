@@ -429,10 +429,23 @@ function textboxKeydownHandler(handleSubmit) {
   };
 }
 
-function onAdd(code) {
-  const elem = selectedElems()[0];
-  const vbsHolder = vbsHolderForInsert(elem);
-  insertCode(vbsHolder.dataset.loc, code);
+// function onAdd(code) {
+//   const elem = selectedElems()[0];
+//   const vbsHolder = vbsHolderForInsert(elem);
+//   insertCode(vbsHolder.dataset.loc, code);
+// }
+
+function onVisualize(code) {
+  const selectedElem = selectedElems()[0];
+  // lastElemInTextbox = visTextbox.childNodes[visTextbox.childNodes.length - 1];
+  // if (lastElemInTextbox?.dataset?.valueId) {
+  //   if (lastElemInTextbox.dataset.valueId === selectedElem?.dataset?.valueId) {
+  //     lastElemInTextbox.remove()
+  //   }
+  // }
+  const vis = code;
+  const loc = containingLoc(selectedElem);
+  addVis(loc, vis);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -455,27 +468,32 @@ window.addEventListener('DOMContentLoaded', () => {
     newAssert(containingLoc(targetElem), targetElem.dataset.codeToAssertOn, text);
   }));
 
-  document.getElementById("add-button").addEventListener("click", event => {
-    const code = textboxDivToCode(document.getElementById("use-textbox"));
-    onAdd(code);
-    // event.stopImmediatePropagation();
-    // event.preventDefault();
-  });
+  // document.getElementById("add-button").addEventListener("click", event => {
+  //   const code = textboxDivToCode(document.getElementById("use-textbox"));
+  //   onAdd(code);
+  //   // event.stopImmediatePropagation();
+  //   // event.preventDefault();
+  // });
+
+  // document.getElementById("visualize-button").addEventListener("click", event => {
+  //   const selectedElem = selectedElems()[0];
+  //   const useTextbox = document.getElementById("use-textbox")
+  //   // Visualizers are supposed be code of type 'a -> 'b
+  //   // But if you provide a simple example application, we'll curry it for you.
+  //   lastElemInTextbox = useTextbox.childNodes[useTextbox.childNodes.length - 1];
+  //   if (lastElemInTextbox?.dataset?.valueId) {
+  //     if (lastElemInTextbox.dataset.valueId === selectedElem?.dataset?.valueId) {
+  //       lastElemInTextbox.remove()
+  //     }
+  //   }
+  //   const vis = textboxDivToCode(useTextbox);
+  //   const loc = containingLoc(selectedElem);
+  //   addVis(loc, vis);
+  // });
 
   document.getElementById("visualize-button").addEventListener("click", event => {
-    const selectedElem = selectedElems()[0];
-    const useTextbox = document.getElementById("use-textbox")
-    // Visualizers are supposed be code of type 'a -> 'b
-    // But if you provide a simple example application, we'll curry it for you.
-    lastElemInTextbox = useTextbox.childNodes[useTextbox.childNodes.length - 1];
-    if (lastElemInTextbox?.dataset?.valueId) {
-      if (lastElemInTextbox.dataset.valueId === selectedElem?.dataset?.valueId) {
-        lastElemInTextbox.remove()
-      }
-    }
-    const vis = textboxDivToCode(useTextbox);
-    const loc = containingLoc(selectedElem);
-    addVis(loc, vis);
+    const visTextbox = document.getElementById("vis-textbox");
+    onVisualize(textboxDivToCode(visTextbox));
   });
 
   window.addEventListener("resize", updateInspector);
@@ -507,8 +525,10 @@ function updateInspector() {
   const assertOn          = document.getElementById("assert-on");
   const assertTextbox     = document.getElementById("assert-textbox");
   const typeOfSelected    = document.getElementById("type-of-selected");
-  const usePane           = document.getElementById("use-pane");
-  const useTextbox        = document.getElementById("use-textbox");
+  // const usePane           = document.getElementById("use-pane");
+  // const useTextbox        = document.getElementById("use-textbox");
+  const visPane           = document.getElementById("vis-pane");
+  const visTextbox        = document.getElementById("vis-textbox");
   const visList           = document.getElementById("vis-list");
 
   const elem = selectedElems()[0];
@@ -617,18 +637,34 @@ function updateInspector() {
     }
 
     if (elem.dataset.valueId) {
-      useTextbox.innerText     = "";
-      useTextbox.originalValue = "";
-      attachAutocomplete(useTextbox, elem, onAdd, onTextEditAbort, elem.dataset.valueId);
+      // useTextbox.innerText     = "";
+      // useTextbox.originalValue = "";
+      // attachAutocomplete(useTextbox, elem, onAdd, onTextEditAbort, elem.dataset.valueId);
       // useTextbox.targetElem = elem;
-      show(usePane);
+      // show(usePane);
     } else {
-      hide(usePane);
+      // hide(usePane);
     }
 
     visList.innerHTML = "";
     const activeVises = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
     activeVises.forEach(vis => visList.appendChild(makeVisRow(vis, true)));
+
+    if (elem.dataset.hasOwnProperty('activeVises') || activeVises.length > 0) {
+      visTextbox.innerText     = "(* something 'a -> 'b *)";
+      visTextbox.originalValue = "";
+      attachAutocomplete(visTextbox, elem, onVisualize, onTextEditAbort);
+      // useTextbox.targetElem = elem;
+      show(visPane);
+      const possibleVises = (elem.dataset.possibleVises || "").split("  ").removeAsSet("");
+      possibleVises.forEach(vis => {
+        if (!activeVises.includes(vis)) {
+          visList.appendChild(makeVisRow(vis, false));
+        }
+      });
+    } else {
+      hide(visPane);
+    }
 
   } else {
     hide(inspector);
@@ -962,7 +998,6 @@ function updateAutocomplete(textboxDiv, suggestions) {
 
 function beginNewCodeEdit(vbsHolder) {
   return function (event) {
-
     if (event.target !== vbsHolder) { return; }
     event.stopImmediatePropagation();
 
@@ -980,48 +1015,6 @@ function beginNewCodeEdit(vbsHolder) {
 
     attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code), _ => abortTextEdit(textboxDiv));
     textboxDiv.focus();
-
-    // const autocompleteDiv = document.createElement("div");
-    // autocompleteDiv.classList.add("autocomplete-options");
-    // autocompleteDiv.style.position = "absolute";
-    // autocompleteDiv.style.left = textboxDiv.style.left;
-    // autocompleteDiv.style.top  = `${textboxDiv.offsetTop + textboxDiv.offsetHeight}px`;
-    // vbsHolder.appendChild(autocompleteDiv);
-
-    // textboxDiv.autocompleteDiv = autocompleteDiv;
-    // textboxDiv.focus();
-
-    // textboxDiv.addEventListener('keydown', event => {
-    //   // console.log(event.key);
-    //   if (event.key === "Enter") {
-    //     if (textboxDiv.innerText.length > 0) {
-    //       const code = textboxDivToCode(textboxDiv);
-
-    //       event.stopImmediatePropagation(); /* does this even do anything? */
-    //       event.preventDefault(); /* Don't insert a newline character */
-    //     }
-    //   } else if (event.key === "Esc" || event.key === "Escape") {
-    //     abortTextEdit(textboxDiv);
-    //   } else if (event.key === "ArrowDown") {
-    //     textboxDiv.blur();
-    //     autocompleteDiv.children[0]?.focus();
-    //     event.preventDefault();
-    //   } else if (event.key === "ArrowUp") {
-    //     textboxDiv.blur();
-    //     autocompleteDiv.children[autocompleteDiv.children.length - 1]?.focus();
-    //     event.preventDefault();
-    //   } else if (event.key === "Backspace" || event.key === "Delete") {
-    //     event.stopImmediatePropagation(); /* Don't hit the global delete handler */
-    //   }
-    //   // event.stopImmediatePropagation();
-    // }, { capture: true }); /* Run this handler befooooorrre the typing happens */
-    // textboxDiv.addEventListener('keyup', _ => { updateAutocompleteAsync(textboxDiv, autocompleteDiv) });
-    // // Prevent click on elem from bubbling to the global deselect/abort handler
-    // textboxDiv.addEventListener('click', event => {
-    //   event.stopPropagation();
-    // });
-
-    // updateAutocompleteAsync(textboxDiv, autocompleteDiv);
   }
 }
 
@@ -1090,6 +1083,7 @@ function gratuitousLamdas(event) {
   }
   makeLambda();
 }
+
 
 /////////////////// Undo/Redo ///////////////////
 
@@ -1289,7 +1283,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
-const vb_margin_bottom = 20;
 function resizeVbHolders(elem) {
   const vbsHolders = elem.querySelectorAll(".vbs");
   const minVbHolderHeight = 70;
@@ -1302,7 +1295,7 @@ function resizeVbHolders(elem) {
       if (!box.classList.contains("vb")) { continue; } /* Skip transient textboxes in the vbs elem */
       resizeVbHolders(box);
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
-      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight + vb_margin_bottom);
+      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
     }
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
@@ -1318,7 +1311,7 @@ function reflow() {
   function left(box)  { return box.offsetLeft; }
   function top(box)   { return box.offsetTop; }
   function right(box) { return box.offsetLeft + box.offsetWidth; }
-  function bot(box)   { return box.offsetTop + box.offsetHeight + vb_margin_bottom; }
+  function bot(box)   { return box.offsetTop + box.offsetHeight; }
   function areOverlapping(box1, box2) {
     // console.log(left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2),)
     if (right(box1) < left(box2) || right(box2) < left(box1)) { return false; }
@@ -1335,17 +1328,18 @@ function reflow() {
       var left0 = parseInt(box.style.left);
       var top0  = parseInt(box.style.top);
       if (isNaN(left0)) { left0 = 10 };
-      if (isNaN(top0))  { top0  = 10 };
+      if (isNaN(top0) && vbsHolder.classList.contains("top-level")) { top0 = 50 };
+      if (isNaN(top0)) { top0 = 10 };
 
       // More or less, move in the cardinal direction that moves the box the least.
       var r = 0;
       var theta = 0;
       box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`
       box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`
-      while (boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+      while (parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 ||boxesToDodge.find(box2 => areOverlapping(box, box2))) {
         r += 10;
         theta = 0;
-        while (boxesToDodge.find(box2 => areOverlapping(box, box2)) && theta < 2*Math.PI) {
+        while ((parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) && theta < 2*Math.PI) {
           box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`;
           box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`;
           theta += Math.PI/2;
@@ -1600,6 +1594,7 @@ document.addEventListener("keydown", function(event) {
 
 
 
+/////////////////// Pretty trees ///////////////////
 
 function redrawTreeEdges() {
   function line(x1, y1, x2, y2) {

@@ -281,8 +281,7 @@ table.subvalue-annotations td {
   display: inline-block;
   cursor: pointer;
   font-weight: bold;
-}
-.value {
+  font-family: system-ui;
   text-align: center;
 }
 .value > *{
@@ -455,14 +454,21 @@ table.subvalue-annotations td {
   display: grid;
   grid-template-columns: auto auto;
 }
-#inspector #use-pane {
+/* #inspector #use-pane {
   display: grid;
   grid-template-columns: 60% auto auto;
 }
 #inspector #use-pane label {
-  grid-column: 1/4; /* Use whole row */
+  grid-column: 1/4; Use whole row
+} */
+#inspector #vis-pane {
+  display: grid;
+  grid-template-columns: auto auto;
 }
-
+#inspector #vis-pane label,
+#inspector #vis-pane #vis-list {
+  grid-column: 1/3; /* Use whole row */
+}
 #inspector .vis-row {
   padding: var(--padding);
   border-top: 1px solid gray;

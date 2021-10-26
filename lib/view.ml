@@ -167,7 +167,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
     match value.type_opt with
-    | Some val_typ -> Suggestions.possible_functions_on_type val_typ type_env |>@ (fun exp -> { Vis.exp = exp }) |>@ Vis.to_string
+    | Some val_typ -> Suggestions.possible_function_names_on_type val_typ type_env
     | None -> [] in
   let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
@@ -646,26 +646,31 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         List.map (html_of_vb_structure_item stuff) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ div ~attrs:[("id", "text-edit-pane")]
-          [ span ~attrs:[("id", "text-edit-root-stuff")]
-            [ label ~attrs:[("for","root-node-textbox")] ["Root"]
-            ; fancyTextbox ~attrs:[("id", "root-node-textbox")] []
-            ]
-          ; div ~attrs:[("id", "text-edit-node-stuff")]
+          [ div ~attrs:[("id", "text-edit-node-stuff")]
             [ label ~attrs:[("for","node-textbox");("id", "type-of-selected")] []
             ; fancyTextbox ~attrs:[("id", "node-textbox")] []
+            ]
+          ; span ~attrs:[("id", "text-edit-root-stuff")]
+            [ label ~attrs:[("for","root-node-textbox")] ["Root"]
+            ; fancyTextbox ~attrs:[("id", "root-node-textbox")] []
             ]
           ]
         ; div ~attrs:[("id", "assert-pane")]
           [ label ~attrs:[("for","assert-textbox")] ["Assert "; span ~attrs:[("id","assert-on")] []; " ="]
           ; textbox ~attrs:[("id", "assert-textbox")] []
           ]
-        ; div ~attrs:[("id", "use-pane")]
+        (* ; div ~attrs:[("id", "use-pane")]
           [ label ~attrs:[("for","use-textbox")] ["Use"]
           ; fancyTextbox ~attrs:[("id", "use-textbox")] []
           ; button ~attrs:[("id","add-button");("type","submit")] ["Add"]
           ; button ~attrs:[("id","visualize-button");("type","submit")] ["Visualize"]
+          ] *)
+        ; div ~attrs:[("id", "vis-pane")]
+          [ label ~attrs:[("for","vis-textbox")] ["Overlay Visualization"]
+          ; div ~attrs:[("id", "vis-list")] []
+          ; fancyTextbox ~attrs:[("id", "vis-textbox")] []
+          ; button ~attrs:[("id","visualize-button");("type","submit")] ["Visualize"]
           ]
-        ; div ~attrs:[("id", "vis-list")] []
         ]
       ; button ~attrs:[("id", "synth-button")] ["Synth"]
       ]

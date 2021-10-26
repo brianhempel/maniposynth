@@ -14,12 +14,14 @@ let is_infix name =
   SSet.mem name infix_names ||
   (String.length name >= 1 && CharSet.mem name.[0] infix_init_chars)
 
-let junk_to_name =
+let junk_to_name_parts =
      String.replace "->" "to"
   %> String.map (fun c -> if Char.is_letter c then c else ' ')
-  %> String.split_on_whitespace
-  %> String.concat "_"
+  %> String.trim
   %> String.uncapitalize_ascii
+  %> String.split_on_whitespace
+
+let junk_to_name = junk_to_name_parts %> String.concat "_"
 
 let from_type typ =
   (Shared.Formatter_to_stringifier.f Printtyp.type_expr) typ
@@ -77,7 +79,9 @@ let gen ?(avoid = []) ?(base_name = "var") prog =
 
 (* tries make exp a name if valid, otherwise from type *)
 let gen_from_exp ?(avoid = []) ?type_env exp prog =
-  let name_from_exp = exp |> Exp.to_string |> junk_to_name in
+  let code          = Exp.to_string exp in
+  let name_from_exp = junk_to_name code in
+  let avoid         = String.split_on_whitespace code @ avoid in
   let base_name_opt =
     if String.length name_from_exp >= 1 then
       Some name_from_exp
