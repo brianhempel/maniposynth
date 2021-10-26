@@ -320,6 +320,7 @@ function deselectAll() {
 
 // Selectable element clicked...
 function clickSelect(event) {
+  submitAllChangedTextboxes();
   const elem = event.currentTarget;
   event.stopImmediatePropagation();
   if (elem.classList.contains("selected")) {
@@ -371,6 +372,11 @@ function restoreSelection() {
   });
 }
 
+function submitAllChangedTextboxes() {
+  document.querySelectorAll("input[type=text],.textbox").forEach(elem => {
+    elem.submit && elem.submit();
+  });
+}
 
 window.addEventListener('DOMContentLoaded', () => {
 
@@ -384,8 +390,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // When you click out of everything
+  function globalSubmitEscape() {
+    submitAllChangedTextboxes();
+    globalEscape();
+  }
+
   document.querySelectorAll('.vbs').forEach(elem => {
-    elem.addEventListener("click", globalEscape);
+    elem.addEventListener("click", globalSubmitEscape);
   });
   // Make appropriate items selectable.
   document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
@@ -412,21 +424,16 @@ function containingLoc(elem) {
   return elem.closest("[data-loc]").dataset.loc;
 }
 
-function textboxKeydownHandler(handleSubmit) {
-  return function (event) {
-    let textbox = event.currentTarget;
-    if (event.key === "Enter" && textbox.value) {
-      const elem = selectedElems()[0];
-      if (textbox.targetElem) {
-        handleSubmit(textbox.targetElem, textbox.value);
-      }
-    } else if (event.key === "Esc" || event.key === "Escape") {
-      textbox.value = textbox.originalValue || "";
-      textbox.blur();
-      delete textbox.targetElem;
-    }
-    event.stopImmediatePropagation();
-  };
+function textboxKeydownHandler(event) {
+  let textbox = event.currentTarget;
+  if (event.key === "Enter" && textbox.value) {
+    textbox.submit();
+  } else if (event.key === "Esc" || event.key === "Escape") {
+    textbox.value = textbox.originalValue || "";
+    textbox.blur();
+    delete textbox.targetElem;
+  }
+  event.stopImmediatePropagation();
 }
 
 // function onAdd(code) {
@@ -464,9 +471,15 @@ window.addEventListener('DOMContentLoaded', () => {
   //   replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
   // }));
 
-  document.getElementById("assert-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
-    newAssert(containingLoc(targetElem), targetElem.dataset.codeToAssertOn, text);
-  }));
+  const assertTextbox = document.getElementById("assert-textbox");
+  assertTextbox.submit = () => {
+    const code = assertTextbox.value;
+    if (code !== assertTextbox.originalValue) {
+      let elem = assertTextbox.targetElem;
+      elem && newAssert(containingLoc(elem), elem.dataset.codeToAssertOn, code);
+    }
+  };
+  assertTextbox.addEventListener("keydown", textboxKeydownHandler);
 
   // document.getElementById("add-button").addEventListener("click", event => {
   //   const code = textboxDivToCode(document.getElementById("use-textbox"));
@@ -600,12 +613,12 @@ function updateInspector() {
       const rootNodeCode            = rootNodeElem?.dataset?.inPlaceEditCode || rootNodeElem?.innerText;
       // rootNodeTextbox.value         = rootNodeCode;
       rootNodeTextbox.innerText     = rootNodeCode;
-      rootNodeTextbox.originalValue = rootNodeCode;
+      // rootNodeTextbox.originalValue = rootNodeCode;
       // rootNodeTextbox.targetElem    = rootNodeElem;
       const nodeCode                = elem.dataset.inPlaceEditCode || elem.innerText;
       // nodeTextbox.value             = nodeCode;
       nodeTextbox.innerText         = nodeCode;
-      nodeTextbox.originalValue     = nodeCode;
+      // nodeTextbox.originalValue     = nodeCode;
       // nodeTextbox.targetElem        = elem;
       if (rootNodeElem === elem || (elem.classList.contains("pat") && !rootNodeElem.classList.contains("pat"))) {
         hide(textEditRootStuff);
@@ -652,7 +665,7 @@ function updateInspector() {
 
     if (!elem.closest(".derived-vis-value") && (elem.dataset.hasOwnProperty('activeVises') || activeVises.length > 0)) {
       visTextbox.innerText     = "(* something 'a -> 'b *)";
-      visTextbox.originalValue = "";
+      // visTextbox.originalValue = "";
       attachAutocomplete(visTextbox, elem, onVisualize, onTextEditAbort);
       // useTextbox.targetElem = elem;
       show(visPane);
@@ -851,14 +864,20 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
   textboxDiv.autocompleteDiv?.remove();
   textboxDiv.parentElement.appendChild(autocompleteDiv);
   textboxDiv.autocompleteDiv = autocompleteDiv;
+  textboxDiv.originalValue = textboxDivToCode(textboxDiv);
+  textboxDiv.submit = () => {
+    const code = textboxDivToCode(textboxDiv);
+    if (code !== textboxDiv.originalValue) {
+      onSubmit(code);
+    }
+  };
 
   textboxDiv.removeEventListeners();
   textboxDiv.addEventListener('keydown', event => {
     // console.log(event.key);
     if (event.key === "Enter") {
       if (textboxDiv.innerText.length > 0) {
-        const code = textboxDivToCode(textboxDiv);
-        onSubmit(code);
+        textboxDiv.submit();
         // insertCode(vbsHolder.dataset.loc, code);
         event.stopImmediatePropagation(); /* does this even do anything? */
         event.preventDefault(); /* Don't insert a newline character */

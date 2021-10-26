@@ -36,7 +36,7 @@
 
 - [x] drag exp to value position
 
-- [ ] defocus to save (rather than enter)
+- [x] defocus to save (rather than enter)
 
 - [ ] don't insert nested defs for missing vars
 
@@ -45,8 +45,6 @@
 - [x] hover border for movable boxes
 
 - [x] selecting vis shouldn't show submit buttons
-
-- [ ] add submit button for all textboxes (with hotkey noted)
 
 - [x] tooltips showing exp for visualizer, on hover
 
@@ -58,13 +56,15 @@
 
 - [ ] bake undo into the server
 
+- [ ] double-click to insert code should position the new TV
+
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
 - [ ] synth!
 
-- [ ] double-click to insert code should position the new TV
-
 - [ ] parans for vals?
 
 - [ ] show type errors?
+
+- [ ] add submit button for all textboxes (with hotkey noted)?
 
