@@ -32,31 +32,27 @@
 
   wait now it works....why????
 
-- [ ] edit values
+- [x] edit values (associated expression)
+
+- [x] drag exp to value position
 
 - [ ] defocus to save (rather than enter)
 
 - [ ] don't insert nested defs for missing vars
 
-- [ ] drag exp to value position
-
-- [ ] differing semantics for use/vis ... split apart?
+- [x] differing semantics for use/vis ... deactivate use
 
 - [x] hover border for movable boxes
 
-- [ ] selecting vis shouldn't show submit buttons
+- [x] selecting vis shouldn't show submit buttons
 
 - [ ] add submit button for all textboxes (with hotkey noted)
 
-- [ ] tooltips showing exp for visualizer, on hover
+- [x] tooltips showing exp for visualizer, on hover
 
-- [ ] ...x more... math is wrong
+- [x] ...x more... math is wrong
 
 - [ ] parens for exps
-
-- [ ] parans for vals?
-
-- [ ] show type errors?
 
 - [ ] less space for tree fold
 
@@ -65,4 +61,10 @@
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
 - [ ] synth!
+
+- [ ] double-click to insert code should position the new TV
+
+- [ ] parans for vals?
+
+- [ ] show type errors?
 

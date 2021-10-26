@@ -2,7 +2,9 @@
   --padding: 4px;
   --color: rgb(163, 255, 174);
   --color-light: rgb(215, 255, 220);
+  --color-dark: rgb(70, 224, 88);
   --pat-color: hsl(332deg 76% 53%);
+  --third-color-dark: rgb(218, 224, 47);
   --third-color-light: rgb(254, 255, 220);
 }
 
@@ -329,7 +331,14 @@ table.subvalue-annotations td {
 }
 
 .current-drop-target {
+  box-shadow: 1px 1px 7px rgba(0,0,0,0.3);
   background-color: rgb(255, 247, 232);
+}
+.current-drop-target.exp {
+  background-color: var(--color-dark);
+}
+.current-drop-target.value {
+  background-color: var(--third-color-dark);
 }
 
 .selected {
@@ -502,4 +511,17 @@ table.subvalue-annotations td {
   position: fixed;
   z-index: 10;
   font-size: 40px;
+}
+
+
+#tooltip {
+  position: absolute;
+  border: 1px solid var(--color);
+  background-color: rgb(247,247,247);
+  color: #444;
+  padding: 0 2px;
+  height: 1rem;
+  line-height: 1rem;
+  font-size: 0.8rem;
+  overflow: hidden;
 }

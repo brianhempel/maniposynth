@@ -86,6 +86,26 @@ let string_of_arg_label =
   | Labelled label -> "~" ^ label ^ ":"
   | Optional label -> "?" ^ label ^ ":"
 
+(* "(+)" -> "+" *)
+let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
+
+let exp_in_place_edit_attrs ?(infix = false) exp =
+  let code = Exp.to_string { exp with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
+  let code' = if infix then uninfix code else code in   (* Remove parens around ops rendered infix. *)
+  [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
+  ; ("data-in-place-edit-code", code')
+  ]
+
+let exp_gunk ?(infix = false) stuff exp =
+  let code = Exp.to_string { exp with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
+  let code' = if infix then uninfix code else code in (* Remove parens around ops rendered infix. *)
+  let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
+  let attrs =
+    exp_in_place_edit_attrs ~infix exp @
+    [ ("data-extraction-code", code)
+    ] @ perhaps_type_attr
+  in
+  (code', attrs)
 
 
 let rec apply_visualizers (prog : program) assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
@@ -160,8 +180,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   in
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
-
-and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ?associated_exp ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
   let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
@@ -172,6 +191,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let extraction_code = extraction_exp_opt |>& Exp.to_string ||& "" in
+  let perhaps_edit_code_attrs = match associated_exp with Some exp -> exp_in_place_edit_attrs exp | None -> [] in
   let wrap_value str =
     let perhaps_extraction_code =
       extraction_exp_opt |>& begin fun _ ->
@@ -182,6 +202,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
         [("data-possible-vises", String.concat "  " possible_vises)] @
+        perhaps_edit_code_attrs @
         perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
@@ -327,16 +348,17 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
+let html_of_values_for_loc ?associated_exp ~single_line_only stuff type_env root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
   let html_of_entry (_, frame_no, value, env) =
-    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
+    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only ?associated_exp stuff frame_no visualizers env type_env root_exp_opt value]
   in
   let inners =
-    if List.length entries >= 7 then
-      (List.prefix 3 entries |>@ html_of_entry) @
-      [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 4) ^ " more..."]] @
-      (List.suffix 3 entries |>@ html_of_entry)
+    let max_shown = 7 in (* Should be odd. *)
+    if List.length entries >= max_shown then
+      (List.prefix (max_shown/2) entries |>@ html_of_entry) @
+      [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 2*(max_shown/2)) ^ " more..."]] @
+      (List.suffix (max_shown/2) entries |>@ html_of_entry)
     else
       entries |>@ html_of_entry
   in
@@ -349,31 +371,13 @@ let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
-  html_of_values_for_loc ~single_line_only stuff type_env (Some root_exp) visualizers exp.pexp_loc
+  html_of_values_for_loc ~single_line_only ~associated_exp:exp stuff type_env (Some root_exp) visualizers exp.pexp_loc
 
 let html_of_values_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs pat.ppat_attributes in
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
   html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
-
-(* "(+)" -> "+" *)
-let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
-
-let exp_gunk ?(infix = false) stuff exp =
-  (* let exp_to_edit = exp_to_edit ||& exp in *)
-  let code         = Exp.to_string { exp         with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
-  (* Remove parens around ops rendered infix. *)
-  let code' = if infix then uninfix code else code in
-  (* let code_to_edit = Exp.to_string { exp_to_edit with pexp_attributes = [] } in Don't show pos/vis attrs. *)
-  let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
-  let attrs =
-    [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
-    ; ("data-in-place-edit-code", code')
-    ; ("data-extraction-code", code)
-    ] @ perhaps_type_attr
-  in
-  (code', attrs)
 
 (* For exp labels *)
 let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(in_list = false) (stuff : stuff) exp =
@@ -673,5 +677,6 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
           ]
         ]
       ; button ~attrs:[("id", "synth-button")] ["Synth"]
+      ; div ~attrs:[("id", "tooltip")] []
       ]
     ]

@@ -264,7 +264,7 @@ function drop(event) {
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
     insertCode(dropTarget.dataset.loc, droppedExtractionCode);
-  } else if (dropTarget.classList.contains("exp") && droppedExtractionCode) {
+  } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
   } else {
@@ -287,7 +287,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add drop zone events.
-  document.querySelectorAll('.vbs,.exp[data-in-place-edit-loc]').forEach(elem => {
+  document.querySelectorAll('.vbs,.exp[data-in-place-edit-loc],.value[data-in-place-edit-loc]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
     elem.addEventListener("drop", drop);
@@ -650,7 +650,7 @@ function updateInspector() {
     const activeVises = (elem.dataset.activeVises || "").split("  ").removeAsSet("");
     activeVises.forEach(vis => visList.appendChild(makeVisRow(vis, true)));
 
-    if (elem.dataset.hasOwnProperty('activeVises') || activeVises.length > 0) {
+    if (!elem.closest(".derived-vis-value") && (elem.dataset.hasOwnProperty('activeVises') || activeVises.length > 0)) {
       visTextbox.innerText     = "(* something 'a -> 'b *)";
       visTextbox.originalValue = "";
       attachAutocomplete(visTextbox, elem, onVisualize, onTextEditAbort);
@@ -770,7 +770,7 @@ function textboxDivToCode(textboxDiv) {
   for (child of textboxDiv.childNodes) {
     if (child.nodeType === 3) {
       // Text node
-      code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+      code += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
     } else if (child.tagName === "BR") {
       code += "\n"
     } else {
@@ -796,7 +796,7 @@ function textboxDivToSuggestionQuery(textboxDiv) {
   for (child of textboxDiv.childNodes) {
     if (child.nodeType === 3) {
       // Text node
-      code += child.data.replace("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+      code += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
     } else {
       // value node
       code += `value_id_${child.dataset.valueId}`
@@ -1636,21 +1636,37 @@ function redrawTreeEdges() {
 }
 
 
-/////////////////// Set Example ///////////////////
+/////////////////// Tooltips ///////////////////
 
-// window.addEventListener('DOMContentLoaded', () => {
-//   let form = document.getElementById('set-example-form');
+tooltipStack = [];
 
-//   form.addEventListener("submit", (event) => {
-//     console.log("Set example.");
-//     let fd = new FormData(event.target);
-//     setExample(
-//       fd.get("func"),
-//       fd.get("arg1"),
-//       fd.get("arg2"),
-//       fd.get("arg3"),
-//     );
-//     event.preventDefault();
-//     event.stopPropagation();
-//   });
-// });
+window.addEventListener('DOMContentLoaded', () => {
+  const tooltipDiv = document.getElementById("tooltip");
+  hide(tooltipDiv);
+
+  function positionTooltip(event) {
+    if (tooltipStack[0]) {
+      tooltipDiv.style.left = `${event.pageX - 10}px`;
+      tooltipDiv.style.top  = `${event.pageY - 30}px`;
+      tooltipDiv.innerText = tooltipStack[0].dataset.extractionCode.replaceAll(/\s+/g," ");
+      show(tooltipDiv);
+    } else {
+      hide(tooltipDiv);
+    }
+  }
+
+  document.querySelectorAll('[data-extraction-code]:not(.tool):not(.exp)').forEach(elem => {
+    // console.log(elem);
+    // elem.draggable = true;
+    // elem.addEventListener("dragstart", dragstart);
+    // elem.addEventListener("dragend", dragend);
+    elem.addEventListener("mouseenter", event => {
+      tooltipStack.unshift(elem);
+      positionTooltip(event);
+    });
+    elem.addEventListener("mouseleave", event => {
+      tooltipStack.removeAsSet(elem);
+      positionTooltip(event);
+    });
+  });
+});
