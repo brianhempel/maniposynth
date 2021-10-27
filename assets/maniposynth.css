@@ -286,7 +286,7 @@ table.subvalue-annotations td {
   font-family: system-ui;
   text-align: center;
 }
-.value > *{
+.value > * {
   text-align: normal;
 }
 .tree-kids {
@@ -299,6 +299,9 @@ table.subvalue-annotations td {
   padding: var(--padding);
   vertical-align: top;
   position: relative;
+}
+.tree-edge {
+  pointer-events: none;
 }
 .derived-vis-value .value,
 .exp_label .value {

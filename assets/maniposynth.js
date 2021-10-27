@@ -1635,8 +1635,9 @@ function redrawTreeEdges() {
     svg.style.position = "absolute";
     svg.style.left = `${baseX}px`;
     svg.style.top = `${baseY}px`;
-    svg.style.marginBottom = `-1000px`;
     svg.classList.add("tree-edge");
+    svg.style.width  = `${Math.max(x1, x2) - baseX + 2}px`;
+    svg.style.height = `${Math.max(y1, y2) - baseY + 2}px`;
     return svg;
   }
   // console.log("redraw edges");
@@ -1646,7 +1647,7 @@ function redrawTreeEdges() {
     const root   = parent.parentElement;
     // const parentRect = parent.getBoundingClientRect();
     const x1 = parent.offsetLeft + parent.offsetWidth/2;
-    const y1 = parent.offsetTop + parent.offsetHeight - 3;
+    const y1 = parent.offsetTop + parent.offsetHeight - 1;
 
     kidsTable.querySelectorAll(":scope > tbody > tr > td").forEach(child => {
       // const childRect = child.getBoundingClientRect();
