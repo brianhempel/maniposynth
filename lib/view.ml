@@ -180,7 +180,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   in
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
-and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ?associated_exp ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
   let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
@@ -191,7 +191,11 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ?associated_exp
   let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let extraction_code = extraction_exp_opt |>& Exp.to_string ||& "" in
-  let perhaps_edit_code_attrs = match associated_exp with Some exp -> exp_in_place_edit_attrs exp | None -> [] in
+  let perhaps_edit_code_attrs =
+    match value.vtrace with
+    | ((_frame_no, loc), _tp_type)::_ -> Exp.find_opt loc stuff.prog |>& exp_in_place_edit_attrs ||& []
+    | _                               -> []
+  in
   let wrap_value str =
     let perhaps_extraction_code =
       extraction_exp_opt |>& begin fun _ ->
@@ -348,10 +352,10 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ?associated_exp
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc ?associated_exp ~single_line_only stuff type_env root_exp_opt visualizers loc =
+let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
   let html_of_entry (_, frame_no, value, env) =
-    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only ?associated_exp stuff frame_no visualizers env type_env root_exp_opt value]
+    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
   in
   let inners =
     let max_shown = 7 in (* Should be odd. *)
@@ -371,7 +375,7 @@ let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
-  html_of_values_for_loc ~single_line_only ~associated_exp:exp stuff type_env (Some root_exp) visualizers exp.pexp_loc
+  html_of_values_for_loc ~single_line_only stuff type_env (Some root_exp) visualizers exp.pexp_loc
 
 let html_of_values_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
@@ -404,19 +408,6 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     in
     span ~attrs:([("class","exp")] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
   in
-  (* let recurse_parens ?show_result ?infix exp =
-    let inner = recurse ?show_result ?infix exp in
-    let code = Exp.to_string exp in
-    let needs_parens =
-      match exp.pexp_desc with
-      | Pexp_tuple _ -> false
-      | Pexp_array _ -> false
-      | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, _) -> false
-      | Pexp_construct ({ txt = Longident.Lident "::"; _ }, _) -> not (String.starts_with "[" code && String.ends_with "]" code)
-      | _            -> String.includes " " code
-    in
-    if needs_parens then "(" ^ inner ^ ")" else inner
-  in *)
   (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else "") ^
   wrap @@
   match exp.pexp_desc with

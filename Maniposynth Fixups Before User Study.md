@@ -56,9 +56,31 @@
 
 - [ ] less space for tree fold
 
+- [ ] 0 in terminal Leaf 0 is not available for autocomplete
+
+  ```ocaml
+  type 'a tree = Node of 'a tree * 'a tree | Leaf of 'a
+  
+  let tree = Node (Node (Leaf 0, Leaf 0), Leaf 0) [@@pos 552, 539]
+  
+  let rec fold f acc tree =
+    match tree with
+    | Node (a_tree, a_tree2) ->
+        let fold_f = fold f acc a_tree2 [@@pos 20, 46] in
+        let fold2 = fold f fold_f a_tree [@@pos 562, 39] in
+        (??)
+    | Leaf a -> f
+  
+  let fold_List_cons_tree = fold List.cons [] tree [@@pos 143, 641]
+  ```
+
+  
+
 - [ ] bake undo into the server
 
 - [ ] double-click to insert code should position the new TV
+
+- [ ] autocomplete with trees is UUUUUGGGGLLLYYY
 
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
