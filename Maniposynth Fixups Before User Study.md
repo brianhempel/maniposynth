@@ -74,9 +74,11 @@
   let fold_List_cons_tree = fold List.cons [] tree [@@pos 143, 641]
   ```
 
-  
+- [ ] the type for the tree task doesn't work right
 
 - [ ] bake undo into the server
+
+- [ ] highlight var value origins on hover
 
 - [ ] double-click to insert code should position the new TV
 

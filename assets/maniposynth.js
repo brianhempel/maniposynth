@@ -603,11 +603,13 @@ function updateInspector() {
 
     if (elem.dataset.inPlaceEditLoc) {
       let rootNodeElem = undefined;
-      for (const parent of selfAndParents(elem)) {
-        if (parent.dataset.inPlaceEditLoc) {
-          rootNodeElem = parent;
-        } else {
-          break;
+      if (elem.classList.contains('exp')) {
+        for (const parent of selfAndParents(elem)) {
+          if (parent.dataset.inPlaceEditLoc) {
+            rootNodeElem = parent;
+          } else {
+            break;
+          }
         }
       }
       const rootNodeCode            = rootNodeElem?.dataset?.inPlaceEditCode || rootNodeElem?.innerText;
@@ -620,13 +622,13 @@ function updateInspector() {
       nodeTextbox.innerText         = nodeCode;
       // nodeTextbox.originalValue     = nodeCode;
       // nodeTextbox.targetElem        = elem;
-      if (rootNodeElem === elem || (elem.classList.contains("pat") && !rootNodeElem.classList.contains("pat"))) {
+      if (!rootNodeElem || rootNodeElem === elem) {
         hide(textEditRootStuff);
       } else {
         show(textEditRootStuff);
+        attachAutocomplete(rootNodeTextbox, rootNodeElem, code => replaceLoc(rootNodeElem.dataset.inPlaceEditLoc, code), onTextEditAbort);
       }
       show(textEditPane);
-      attachAutocomplete(rootNodeTextbox, rootNodeElem, code => replaceLoc(rootNodeElem.dataset.inPlaceEditLoc, code), onTextEditAbort);
       attachAutocomplete(nodeTextbox,     elem,         code => replaceLoc(elem.dataset.inPlaceEditLoc, code),         onTextEditAbort);
     } else {
       hide(textEditPane);

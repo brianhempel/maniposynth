@@ -192,9 +192,13 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
   let extraction_code = extraction_exp_opt |>& Exp.to_string ||& "" in
   let perhaps_edit_code_attrs =
-    match value.vtrace with
-    | ((_frame_no, loc), _tp_type)::_ -> Exp.find_opt loc stuff.prog |>& exp_in_place_edit_attrs ||& []
-    | _                               -> []
+    value.vtrace
+    |> List.rev
+    |> List.findmap_opt begin function
+      | ((_, loc), (Use | Ret | Intro)) -> Exp.find_opt loc stuff.prog
+      | _                               -> None
+    end
+    |>& exp_in_place_edit_attrs ||& []
   in
   let wrap_value str =
     let perhaps_extraction_code =
