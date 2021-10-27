@@ -490,8 +490,8 @@ and rearrange_mod defined_names modl =
 
 
 
-(* Only add a missing binding to the top level if the name is used in multiple top level bindings. *)
-(* Otherwise, add just inside the top level binding where the name is needed. *)
+(* Only a missing binding to the top level if the name is used in multiple top level bindings OR if the named is used in a top-level let that is not a function. *)
+(* Otherwise, add where the name is needed. *)
 let rec add_missing_bindings_struct_items defined_names struct_items =
   let open Asttypes in
   let recurse = add_missing_bindings_struct_items in
@@ -500,11 +500,11 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
   match struct_items with
   | [] -> []
   | si::rest ->
-    let add_bindings_and_continue ~names_for_si ~names_after_si ~names_free_si_rhs ~make_si_desc' =
+    let add_bindings_and_continue ~names_for_si ~names_after_si ~names_free_si_rhs ~names_free_si_rhs_that_should_be_top_level ~make_si_desc' =
       let names_needed_si                = List.diff names_free_si_rhs names_for_si in
       let names_needed_remaining_prog    = List.diff (free_unqualified_names_struct_items rest) names_after_si in
-      let names_to_define_here           = List.inter names_needed_si names_needed_remaining_prog |> List.dedup in
-      let names_to_define_with_arg_count = names_to_define_here |>@ fun name -> (name, find_arg_count_for_name ~struct_items:rest name) in
+      let names_to_define_here           = List.inter names_needed_si names_needed_remaining_prog @ List.inter names_needed_si names_free_si_rhs_that_should_be_top_level |> List.dedup in
+      let names_to_define_with_arg_count = names_to_define_here |>@ fun name -> (name, find_arg_count_for_name ~struct_items name) in
       let new_sis                        = names_to_define_with_arg_count |>@ fun (name, arg_count) -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) (make_new_rhs arg_count)] in
       let si'                            = { si with pstr_desc = make_si_desc' (names_to_define_here @ names_for_si) } in
       new_sis @ [si'] @ recurse (names_to_define_here @ names_after_si) rest
@@ -515,6 +515,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(free_unqualified_names exp)
+        ~names_free_si_rhs_that_should_be_top_level:[]
         ~make_si_desc':begin fun names_for_si' ->
           Pstr_eval (recurse_exp names_for_si' exp, attrs)
         end
@@ -523,6 +524,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         ~names_for_si:defined_names
         ~names_after_si:((vbs |>@@ Vb.names) @ defined_names)
         ~names_free_si_rhs:(vbs |>@ Vb.exp |>@@ free_unqualified_names)
+        ~names_free_si_rhs_that_should_be_top_level:(vbs |>@ Vb.exp |>@? (Exp.is_fun %> not) |>@@ free_unqualified_names)
         ~make_si_desc':begin fun names_for_si' ->
           Pstr_value (Nonrecursive, vbs |>@ Vb.map_exp (recurse_exp names_for_si'))
         end
@@ -532,6 +534,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         ~names_for_si:defined_names'
         ~names_after_si:defined_names'
         ~names_free_si_rhs:(vbs |>@ Vb.exp |>@@ free_unqualified_names)
+        ~names_free_si_rhs_that_should_be_top_level:(vbs |>@ Vb.exp |>@? (Exp.is_fun %> not) |>@@ free_unqualified_names)
         ~make_si_desc':begin fun names_for_si' ->
           Pstr_value (Recursive, vbs |>@ Vb.map_exp (recurse_exp names_for_si'))
         end
@@ -540,6 +543,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(free_unqualified_names_mod mod_binding.pmb_expr)
+        ~names_free_si_rhs_that_should_be_top_level:[]
         ~make_si_desc':begin fun names_for_si' ->
           Pstr_module { mod_binding with pmb_expr = recurse_mod names_for_si' mod_binding.pmb_expr }
         end
@@ -548,6 +552,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(mod_bindings |>@@ (fun { pmb_expr; _ } -> free_unqualified_names_mod pmb_expr))
+        ~names_free_si_rhs_that_should_be_top_level:[]
         ~make_si_desc':begin fun names_for_si' ->
           let mod_bindings' = mod_bindings |>@ (fun mod_binding -> { mod_binding with pmb_expr = recurse_mod names_for_si' mod_binding.pmb_expr }) in
           Pstr_recmodule mod_bindings'

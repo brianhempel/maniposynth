@@ -38,7 +38,7 @@
 
 - [x] defocus to save (rather than enter)
 
-- [ ] don't insert nested defs for missing vars
+- [x] don't insert nested defs for missing vars
 
 - [x] differing semantics for use/vis ... deactivate use
 
@@ -63,6 +63,8 @@
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
 - [ ] synth!
+
+- [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
 
 - [ ] parans for vals?
 
