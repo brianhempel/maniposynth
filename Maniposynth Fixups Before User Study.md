@@ -54,7 +54,7 @@
 
 - [x] parens for exps
 
-- [ ] less space for tree fold
+- [x] less space for tree fold
 
 - [ ] 0 in terminal Leaf 0 is not available for autocomplete
 

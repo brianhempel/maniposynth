@@ -263,8 +263,20 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   | Int32 int32                              -> Int32.to_string int32
   | Int64 int64                              -> Int64.to_string int64
   | Nativeint nativeint                      -> Nativeint.to_string nativeint
-  | Fun (arg_label, e_opt, pat, body, _)     -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
-  | Function (_, _)                          -> "func"
+  | Fun _ | Function _ ->
+    value.vtrace
+    |> List.rev
+    |> List.findmap_opt begin function
+      | ((_, loc), Use)              -> Exp.find_opt loc stuff.prog |>& Exp.to_string
+      | ((_, loc), PatMatch (_, [])) -> Pat.find_opt loc stuff.prog |>& Pat.to_string
+      | _                            -> None
+    end
+    ||&~ begin fun _ ->
+      match value_ with
+      | Fun (arg_label, e_opt, pat, body, _)     -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
+      | Function (_, _)                          -> "func"
+      | _                                        -> failwith "impossible"
+    end
   | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float                              -> string_of_float float
   | Tuple vs                                 ->
