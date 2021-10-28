@@ -285,6 +285,7 @@ table.subvalue-annotations td {
   font-weight: bold;
   font-family: system-ui;
   text-align: center;
+  position: relative; /* Without this, tree edges are not drawn correctly in the autocomplete list */
 }
 .value > * {
   text-align: normal;

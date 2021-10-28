@@ -19,7 +19,7 @@ type t =
   | Undo
   | Redo
   | DoSynth
-  | InsertCode       of string * string (* vbs loc str, code *)
+  | InsertCode       of string * string * (int * int) option (* vbs loc str, code, pos opt *)
   | SetPos           of string * int * int (* loc str, x, y *)
   | MoveVb           of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
   | SetRecFlag       of string * bool (* vb loc str, is rec *)
@@ -42,7 +42,10 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "DoSynth"]                                                        -> DoSynth
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
-  | `List [`String "InsertCode"; `String vbs_loc_str; `String code]                  -> InsertCode (vbs_loc_str, code)
+  | `List [`String "InsertCode"; `String vbs_loc_str; `String code
+          ; `List [`String "None"]]                                                  -> InsertCode (vbs_loc_str, code, None)
+  | `List [`String "InsertCode"; `String vbs_loc_str; `String code
+          ; `List [`String "Some"; x; y]]                                            -> InsertCode (vbs_loc_str, code, Some (float_or_int_to_int x, float_or_int_to_int y))
   | `List [`String "SetPos"; `String loc_str; x; y]                                  -> SetPos (loc_str, float_or_int_to_int x, float_or_int_to_int y)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
@@ -178,12 +181,13 @@ let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
 
 (* Loc could be at top level (need new struct item binding) or an exp (need new let) *)
 (* OR code could be an entire struct item (e.g. "type nat = Z | S of nat") *)
-let insert_code loc code final_tenv old =
+let insert_code loc code xy_opt final_tenv old =
+  let set_pos vb = match xy_opt with Some (x, y) -> Pos.set_vb_pos x y vb | None -> vb in
   let exp_inserter, new_sis, new_exp_loc =
     try
       let exp = Exp.from_string code |> Exp.freshen_locs in
       let name = Name.gen_from_exp exp old in
-      let vb' =  Vb.mk (Pat.var name) exp in
+      let vb' =  Vb.mk (Pat.var name) exp |> set_pos in
       ( Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'] (* body unapplied here *)
       , [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
       , exp.pexp_loc
@@ -192,7 +196,7 @@ let insert_code loc code final_tenv old =
       (* If we could not parse as an exp, try parsing as a structure item *)
       let struct_items = StructItems.from_string code in
       ( (fun exp -> exp)
-      , struct_items
+      , struct_items |> Vb.map set_pos
       , Location.none
       )
   in
@@ -294,9 +298,9 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   | Redo ->
     if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=redo"|];
     (fun prog -> prog)
-  | InsertCode (loc_str, code) ->
+  | InsertCode (loc_str, code, xy_opt) ->
     let loc = Serialize.loc_of_string loc_str in
-    insert_code loc code final_tenv
+    insert_code loc code xy_opt final_tenv
   | SetPos (loc_str, x, y) ->
     let loc = Serialize.loc_of_string loc_str in
     set_pos loc x y

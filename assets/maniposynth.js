@@ -117,11 +117,14 @@ function redo() {
   ]);
 }
 
-function insertCode(loc, code) {
+function insertCode(loc, code, pos) {
+  let posOpt = ["None"];
+  if (pos) { posOpt = ["Some", pos.x, pos.y] }
   doAction([
     "InsertCode",
     loc,
-    code
+    code,
+    posOpt
   ]);
 }
 
@@ -263,7 +266,7 @@ function drop(event) {
   const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
-    insertCode(dropTarget.dataset.loc, droppedExtractionCode);
+    insertCode(dropTarget.dataset.loc, droppedExtractionCode, mouseReletiveToElem(dropTarget, event));
   } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
@@ -1032,13 +1035,12 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.classList.add("textbox");
     textboxDiv.style.position = "absolute";
     // textboxDiv.style.backgroundColor = "white";
-    const { dx, dy } = topLeftOffsetFromMouse(vbsHolder, event)
-    textboxDiv.style.left = `${-dx - 5}px`;
-    textboxDiv.style.top  = `${-dy - 10}px`;
+    const { x, y } = mouseReletiveToElem(vbsHolder, event);
+    const pos = { x: x - 5, y: y - 10 };
+    textboxDiv.style.left = `${pos.x}px`;
+    textboxDiv.style.top  = `${pos.y}px`;
     vbsHolder.appendChild(textboxDiv);
-
-
-    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code), _ => abortTextEdit(textboxDiv));
+    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code, pos), _ => abortTextEdit(textboxDiv));
     textboxDiv.focus();
   }
 }
@@ -1193,6 +1195,10 @@ function isStartingVbs(vbsElem, boxElem) {
 function topLeftOffsetFromMouse(elem, event) {
   const rect = elem.getBoundingClientRect();
   return { dx: rect.left - event.clientX, dy: rect.top - event.clientY }
+}
+function mouseReletiveToElem(elem, event) {
+  const { dx, dy } = topLeftOffsetFromMouse(elem, event);
+  return { x: -dx, y: -dy };
 }
 function vbDropTarget(event) {
   const descendentVbs = Array.from(window.stuffMoving.elem.querySelectorAll(".vbs"));
