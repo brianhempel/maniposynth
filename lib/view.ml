@@ -224,7 +224,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       let child_pat_names =
         vs
         |> List.fold_left begin fun names v ->
-          let name = Name.gen_ ~avoid:(names @ prior_extraction_names @ stuff.names_in_prog) ~base_name:(Name.from_val ~type_env v) in
+          let name = Name.gen_ ~avoid:(names @ prior_extraction_names @ stuff.names_in_prog) ~base_name:(Name.base_name_from_val ~type_env v) in
           names @ [name]
         end []
       in

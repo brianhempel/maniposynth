@@ -185,22 +185,23 @@ let insert_code loc code xy_opt final_tenv old =
   let set_pos vb = match xy_opt with Some (x, y) -> Pos.set_vb_pos x y vb | None -> vb in
   let exp_inserter, new_sis, new_exp_loc =
     try
-      let exp = Exp.from_string code |> Exp.freshen_locs in
-      let name = Name.gen_from_exp exp old in
-      let vb' =  Vb.mk (Pat.var name) exp |> set_pos in
+      let exp = Exp.from_string code in
+      let name = Name.gen old in
+      let vb' =  Vb.mk (Pat.var name) exp |> Vb.freshen_locs |> set_pos in
       ( Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'] (* body unapplied here *)
       , [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
       , exp.pexp_loc
       )
     with Syntaxerr.Error _ ->
       (* If we could not parse as an exp, try parsing as a structure item *)
-      let struct_items = StructItems.from_string code in
+      let struct_items = StructItems.from_string code |>@ StructItem.freshen_locs in
       ( (fun exp -> exp)
       , struct_items |> Vb.map set_pos
       , Location.none
       )
   in
   let prog =
+    Bindings.name_unnameds ~type_env:final_tenv @@
     Bindings.fixup final_tenv @@
     if old = [] then (* Empty program *)
       new_sis

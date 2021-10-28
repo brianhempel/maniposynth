@@ -1,6 +1,17 @@
 open Shared.Ast
 open Shared.Util
 
+(*
+
+New VBs are inserted as "unnamedN = exp" and then a better name is chosen as a separate step.
+The reason for doing so is to because programs simplifications (particularly, static match flattening) produce simpler
+exps which results in simpler names derived from them.
+The name_unnameds function is in Bindings. (Dependency cycle otherwise.)
+
+The the gen functions do support choosing a name immediately if you need to, which is the case if not inserting a VB.
+
+*)
+
 let pervasives_names =
   Env.fold_values         (fun name _ _              list -> name      :: list) None Typing.initial_env []
   @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
@@ -14,6 +25,8 @@ let is_infix name =
   SSet.mem name infix_names ||
   (String.length name >= 1 && CharSet.mem name.[0] infix_init_chars)
 
+let default_base_name = "unnamed"
+
 let junk_to_name_parts =
      String.replace "->" "to"
   %> String.map (fun c -> if Char.is_letter c then c else ' ')
@@ -23,15 +36,15 @@ let junk_to_name_parts =
 
 let junk_to_name = junk_to_name_parts %> String.concat "_"
 
-let from_type typ =
+let base_name_from_type typ =
   (Shared.Formatter_to_stringifier.f Printtyp.type_expr) typ
   |> junk_to_name
 
-let rec from_val ?(type_env = Typing.initial_env) v =
+let rec base_name_from_val ?(type_env = Typing.initial_env) v =
   let open Camlboot_interpreter.Data in
-  let recurse = from_val ~type_env in
+  let recurse = base_name_from_val ~type_env in
   match v.v_ with
-  | Bomb | Hole _                 -> "var"
+  | Bomb | Hole _                 -> default_base_name
   | Int _                         -> "int"
   | Int32 _                       -> "int32"
   | Int64 _                       -> "int64"
@@ -42,26 +55,26 @@ let rec from_val ?(type_env = Typing.initial_env) v =
   | Float _                       -> "float"
   | Tuple vs                      -> String.concat "_" (vs |>@ recurse)
   | Constructor (ctor_name, _, _) ->
-    begin try from_type (Env.lookup_constructor (Longident.Lident ctor_name) type_env).cstr_res
-    with _ -> "var" end
-  | Prim _                        -> "var"
-  | Fexpr _                       -> "var"
-  | ModVal _                      -> "var"
-  | InChannel _                   -> "var"
-  | OutChannel _                  -> "var"
+    begin try base_name_from_type (Env.lookup_constructor (Longident.Lident ctor_name) type_env).cstr_res
+    with _ -> default_base_name end
+  | Prim _                        -> default_base_name
+  | Fexpr _                       -> default_base_name
+  | ModVal _                      -> default_base_name
+  | InChannel _                   -> default_base_name
+  | OutChannel _                  -> default_base_name
   | Record fields                 ->
     begin match SMap.choose_opt fields with
     | Some (label, _) ->
-      begin try from_type (Env.lookup_label (Longident.Lident label) type_env).lbl_res
+      begin try base_name_from_type (Env.lookup_label (Longident.Lident label) type_env).lbl_res
       with _ -> "record" end
     | _ -> "record"
     end
-  | Lz _                          -> "var"
+  | Lz _                          -> default_base_name
   | Array _                       -> "array"
-  | Fun_with_extra_args (_, _, _) -> "var"
-  | Object _                      -> "var"
-  | ExCall _                      -> "var"
-  | ExDontCare                    -> "var"
+  | Fun_with_extra_args (_, _, _) -> default_base_name
+  | Object _                      -> default_base_name
+  | ExCall _                      -> default_base_name
+  | ExDontCare                    -> default_base_name
 
 
 let gen_ ~avoid ~base_name =
@@ -73,7 +86,7 @@ let gen_ ~avoid ~base_name =
   done;
   !name
 
-let gen ?(avoid = []) ?(base_name = "var") prog =
+let gen ?(avoid = []) ?(base_name = default_base_name) prog =
   let avoid = avoid @ StructItems.deep_names prog in
   gen_ ~avoid ~base_name
 
@@ -92,6 +105,6 @@ let gen_from_exp ?(avoid = []) ?type_env exp prog =
         | None          -> Typing.typedtree_sig_env_of_parsed prog "unknown.ml" |> Tup3.thd
       in
       Type.of_exp_opt ~type_env exp
-      |>& from_type
+      |>& base_name_from_type
   in
   gen ~avoid ?base_name:base_name_opt prog
