@@ -67,7 +67,7 @@ let checkbox ?(attrs = [])      ()     = tag "input" ~attrs:(attrs @ [("type","c
 let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let perhaps_pos_attr =
     match Pos.from_attrs parsetree_attrs with
-    | Some { x; y } -> [("style", "left:" ^ string_of_int x ^ "px;top:" ^ string_of_int y ^ "px;")]
+    | Some { x; y } -> [("data-left", string_of_int x); ("data-top", string_of_int y)]
     | None          -> []
   in
   let attrs = ("class", ("box " ^ klass)) :: loc_attr loc:: perhaps_pos_attr @ attrs in

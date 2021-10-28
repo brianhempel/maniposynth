@@ -76,13 +76,25 @@
 
 - [ ] the type for the tree task doesn't work right
 
+- [ ] too easy to switch frame
+
+- [ ] align values coming into function, one frame per column
+
+- [ ] display rets as a row under the incoming function args
+
 - [ ] bake undo into the server
 
 - [ ] highlight var value origins on hover
 
-- [ ] double-click to insert code should position the new TV
+- [x] double-click to insert code should position the new TV
 
-- [ ] autocomplete with trees is UUUUUGGGGLLLYYY
+- [x] autocomplete with trees is UUUUUGGGGLLLYYY
+
+- [ ] tools offscreen
+
+- [ ] placeholder on function canvas to prompt
+
+- [x] placing left and right extraction vbs was not working
 
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 

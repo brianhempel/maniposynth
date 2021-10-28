@@ -1344,9 +1344,9 @@ function reflow() {
   function right(box) { return box.offsetLeft + box.offsetWidth; }
   function bot(box)   { return box.offsetTop + box.offsetHeight; }
   function areOverlapping(box1, box2) {
-    // console.log(left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2),)
     if (right(box1) < left(box2) || right(box2) < left(box1)) { return false; }
     if (bot(box1)   < top(box2)  || bot(box2)   < top(box1))  { return false; }
+    // console.log(box1, box2, left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2));
     return true;
   }
   function size(box) { return box.offsetWidth * box.offsetHeight; }
@@ -1356,8 +1356,8 @@ function reflow() {
     boxes.sort((box1, box2) => size(box1) - size(box2));
     for (box of boxes) {
       const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box); /* If box has an explicit position */
-      var left0 = parseInt(box.style.left);
-      var top0  = parseInt(box.style.top);
+      var left0 = parseInt(box.dataset.left);
+      var top0  = parseInt(box.dataset.top);
       if (isNaN(left0)) { left0 = 10 };
       if (isNaN(top0) && vbsHolder.classList.contains("top-level")) { top0 = 50 };
       if (isNaN(top0)) { top0 = 10 };
@@ -1367,7 +1367,7 @@ function reflow() {
       var theta = 0;
       box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`
       box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`
-      while (parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 ||boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+      while (parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) {
         r += 10;
         theta = 0;
         while ((parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) && theta < 2*Math.PI) {
@@ -1381,8 +1381,8 @@ function reflow() {
 }
 function relayout() {
   resizeVbHolders(document);
-  reflow();
   redrawTreeEdges();
+  reflow();
 }
 window.addEventListener('DOMContentLoaded', () => {
   relayout();
@@ -1461,6 +1461,9 @@ function setFrameNo(frameRootElem, frameNo) {
   if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
   frameRootElem.dataset.activeFrameNo = frameNo;
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
+  relayout();
+  relayout();
+  relayout();
   relayout();
 }
 
@@ -1627,6 +1630,7 @@ document.addEventListener("keydown", function(event) {
 
 /////////////////// Pretty trees ///////////////////
 
+// Call removeTreeEdges first.
 function redrawTreeEdges() {
   function line(x1, y1, x2, y2) {
     const baseX = Math.min(x1, x2) - 2;
