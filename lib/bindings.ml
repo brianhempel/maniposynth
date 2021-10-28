@@ -188,6 +188,7 @@ and names_in_vis_attrs attrs =
 
 (* Mapping is top-down, rather than bottom-up. *)
 (* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
+(* handle_pat is only given the root pattern of a binding introduction (it's up to handle_pat to flatten&recurse, if need be) *)
 let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
   let rec map_exp scope_info _ e =
     let e'                       = f scope_info e in
@@ -269,6 +270,17 @@ let rename_pat_by_loc loc name' prog =
   |> map_exps_with_scope_prog SMap.empty handle_pat apply_subst_on_exp
   |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
 
+(* Currently, unnamedN is only inserted on the LHS of single pat VBs. *)
+(* Precondition: VB LOCS MUST BE FRESH! *)
+let name_unnameds ?type_env prog =
+  let try_rename vb prog =
+    match vb |> Vb.pat |> Pat.single_name with
+    | Some name when String.starts_with Name.default_base_name name ->
+      rename_pat_by_loc (Pat.loc (Vb.pat vb)) (Name.gen_from_exp ?type_env (Vb.exp vb) prog) prog
+    | _ ->
+      prog
+  in
+  List.fold_right try_rename (Vb.all prog) prog
 
 
 (*

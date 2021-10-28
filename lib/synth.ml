@@ -793,7 +793,7 @@ let refine prog fillings reqs file_name next =
       if reqs_on_hole |> List.for_all (fun (_, _, expected) -> is_ex_call expected) then
         let base_name =
           match List.hd reqs_on_hole with
-          | (_, _, { v_ = ExCall (v, _); _} ) -> Name.from_val v
+          | (_, _, { v_ = ExCall (v, _); _} ) -> Name.base_name_from_val v
           | _ -> "var"
         in
         let sketch = Exp.from_string @@ "fun " ^ Name.gen ~base_name prog ^ " -> (??)" in
