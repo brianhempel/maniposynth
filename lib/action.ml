@@ -190,7 +190,7 @@ let insert_code loc code xy_opt final_tenv old =
       let vb' =  Vb.mk (Pat.var name) exp |> Vb.freshen_locs |> set_pos in
       ( Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'] (* body unapplied here *)
       , [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
-      , exp.pexp_loc
+      , vb'.pvb_expr.pexp_loc
       )
     with Syntaxerr.Error _ ->
       (* If we could not parse as an exp, try parsing as a structure item *)
