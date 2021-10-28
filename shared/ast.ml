@@ -379,7 +379,6 @@ module Common
     val iter : (t -> unit) -> program -> unit
     val map : (t -> t) -> program -> program
     val iter_dflt : Ast_iterator.iterator -> t -> unit
-    val apply_mapper : Ast_mapper.mapper -> t -> t
   end) = struct
 
   (* type t = Node.t *)
@@ -429,23 +428,19 @@ module Common
   let extract     target_loc = extract_by (loc %> (=) target_loc)
   let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
 
-  let child_exps node =
+  let child_exps t =
     let children = ref [] in
     let iter_exp_no_recurse _ e = children := e :: !children in
     let iter_once = { dflt_iter with expr = iter_exp_no_recurse } in
-    Node.iter_dflt iter_once node;
+    Node.iter_dflt iter_once t;
     List.rev !children (* Return the children left-to-right. *)
 
-  let child_pats node =
+  let child_pats t =
     let children = ref [] in
     let iter_pat_no_recurse _ p = children := p :: !children in
     let iter_once = { dflt_iter with pat = iter_pat_no_recurse } in
-    Node.iter_dflt iter_once node;
+    Node.iter_dflt iter_once t;
     List.rev !children (* Return the children left-to-right. *)
-
-  let freshen_locs node =
-    let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
-    Node.apply_mapper mapper node
 end
 
 (* module Const = Ast_helper.Const *)
@@ -463,7 +458,6 @@ module Exp = struct
       let mapper = { dflt_mapper with expr = map_exp } in
       mapper.structure mapper struct_items
     let iter_dflt = dflt_iter.expr
-    let apply_mapper (mapper : Ast_mapper.mapper) exp = mapper.expr mapper exp
   end)
 
   include Ast_helper.Exp (* Exp builders *)
@@ -547,7 +541,6 @@ module Pat = struct
       let mapper = { dflt_mapper with pat = map_pat } in
       mapper.structure mapper struct_items
     let iter_dflt = dflt_iter.pat
-    let apply_mapper (mapper : Ast_mapper.mapper) pat = mapper.pat mapper pat
   end)
 
   let all prog = (everything (Sis prog)).pats
@@ -641,7 +634,6 @@ module Vb = struct
       let mapper = { dflt_mapper with value_binding = map_vb } in
       mapper.structure mapper struct_items
     let iter_dflt = dflt_iter.value_binding
-    let apply_mapper (mapper : Ast_mapper.mapper) vb = mapper.value_binding mapper vb
   end)
 
   let all prog = (everything (Sis prog)).vbs
@@ -822,7 +814,6 @@ module StructItem = struct
       let mapper = { dflt_mapper with structure_item = map_si } in
       mapper.structure mapper struct_items
     let iter_dflt = dflt_iter.structure_item
-    let apply_mapper (mapper : Ast_mapper.mapper) si = mapper.structure_item mapper si
   end)
 
   let all prog = (everything (Sis prog)).struct_items
