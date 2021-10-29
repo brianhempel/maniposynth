@@ -8,7 +8,7 @@
 
 - [x] don't change frame_no when autocomplete open
 
-- [ ] autocomplete to value: sort by 2D distance on canvas
+- [ ] autocomplete to value: sort by 2D distance on canvas? or by scope distance?
 
 - [x] slightly better naming?
 
@@ -80,6 +80,8 @@
 
 - [ ] align values coming into function, one frame per column
 
+- [ ] click to switch frame?
+
 - [ ] display rets as a row under the incoming function args
 
 - [ ] bake undo into the server
@@ -96,6 +98,18 @@
 
 - [x] placing left and right extraction vbs was not working
 
+- [ ] represent func valus as unapplied val tools?
+
+- [ ] divergence produces junk frames: combine identical frames?
+
+- [ ] click on canvas vals to insert code into textbox
+
+- [ ] automatically visualize recurse calls and rets?
+
+- [ ] highlight hole returns
+
+- [ ] setting to hide vals in exp labels?
+
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 
 - [ ] synth!
@@ -109,4 +123,6 @@
 - [ ] add submit button for all textboxes (with hotkey noted)?
 
 - [ ] autocomplete to vised values?
+
+- [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 

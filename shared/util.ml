@@ -71,6 +71,8 @@ end
 module List = struct
   include List
 
+  let singleton x = [x]
+
   (* List.for_all2 but returns false when lists have different lengths *)
   let for_all2_safe pred xs ys =
     try for_all2 pred xs ys

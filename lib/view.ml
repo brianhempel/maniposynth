@@ -368,23 +368,26 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
+let value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
   let html_of_entry (_, frame_no, value, env) =
-    span ~attrs:[("class","root-value-holder"); ("data-frame-no", string_of_int frame_no)] [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
+    span
+      (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
+      ~attrs:[("class","root-value-holder"); ("data-loc", Serialize.string_of_loc loc); ("data-frame-no", string_of_int frame_no)]
+      [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
   in
-  let inners =
-    let max_shown = 7 in (* Should be odd. *)
-    if List.length entries >= max_shown then
-      (List.prefix (max_shown/2) entries |>@ html_of_entry) @
-      [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 2*(max_shown/2)) ^ " more..."]] @
-      (List.suffix (max_shown/2) entries |>@ html_of_entry)
-    else
-      entries |>@ html_of_entry
-  in
-  div
-    ~attrs:[("class","values");("data-loc", Serialize.string_of_loc loc)] (* View root for visualizers, also for determining where to place new asserts before *)
-    inners
+  let max_shown = 7 in (* Should be odd. *)
+  if List.length entries >= max_shown then
+    (List.prefix (max_shown/2) entries |>@ html_of_entry) @
+    [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 2*(max_shown/2)) ^ " more..."]] @
+    (List.suffix (max_shown/2) entries |>@ html_of_entry)
+  else
+    entries |>@ html_of_entry
+
+(* This is a separate function because the table view for function params needs the value htmls separately *)
+let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
+  let inners = value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc in
+  div ~attrs:[("class","values")] inners
 
 let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let type_env = stuff.type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
@@ -393,11 +396,11 @@ let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
   html_of_values_for_loc ~single_line_only stuff type_env (Some root_exp) visualizers exp.pexp_loc
 
-let html_of_values_for_pat ?(single_line_only = false) stuff pat =
+let value_htmls_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs pat.ppat_attributes in
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
-  html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
+  value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
 
 
 type parens_context = NoParens | NormalArg | NextToInfixOp
@@ -546,10 +549,9 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
         let later_rows, final_body = get_param_rows_and_body body in
         let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp stuff default_exp) ||& "" in
         let row =
-          tr ~attrs:[("class", "pat fun-param")]
+          tr ~attrs:[("class", "pat fun-param")] @@
             [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat stuff pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-            ; td [html_of_values_for_pat stuff pat]
-            ]
+            ] @ (value_htmls_for_pat stuff pat |>@ List.singleton |>@ td)
         in
         (row::later_rows, final_body)
       | _ -> ([], exp)
