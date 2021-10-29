@@ -60,6 +60,7 @@ function doAction(action, reload) {
 // }
 
 function addVis(loc, vis) {
+  if ("" + vis === "undefined") { console.error("removeVis(): undefined vis"); return; };
   doAction([
     "AddVis",
     loc,
@@ -68,6 +69,7 @@ function addVis(loc, vis) {
 }
 
 function removeVis(loc, vis) {
+  if ("" + vis === "undefined") { console.error("removeVis(): undefined vis"); return; };
   doAction([
     "RemoveVis",
     loc,
@@ -76,6 +78,7 @@ function removeVis(loc, vis) {
 }
 
 function replaceLoc(loc, code) {
+  if ("" + code === "undefined") { console.error("replaceLoc(): undefined code"); return; };
   doAction([
     "ReplaceLoc",
     loc,
@@ -118,6 +121,7 @@ function redo() {
 }
 
 function insertCode(loc, code, pos) {
+  if ("" + code === "undefined") { console.error("insertCode(): undefined code"); return; };
   let posOpt = ["None"];
   if (pos) { posOpt = ["Some", pos.x, pos.y] }
   doAction([
