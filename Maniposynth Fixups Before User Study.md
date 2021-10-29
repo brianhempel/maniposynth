@@ -78,9 +78,9 @@
 
 - [ ] too easy to switch frame
 
-- [ ] align values coming into function, one frame per column
+- [x] align values coming into function, one frame per column
 
-- [ ] click to switch frame?
+- [x] click to switch frame?
 
 - [ ] display rets as a row under the incoming function args
 

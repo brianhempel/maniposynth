@@ -329,6 +329,10 @@ function deselectAll() {
 function clickSelect(event) {
   submitAllChangedTextboxes();
   const elem = event.currentTarget;
+  if (elem.closest(".not-in-active-frame")) {
+    // Don't select. Instead let the click bubble to the handler that will set the active frame.
+    return;
+  }
   event.stopImmediatePropagation();
   if (elem.classList.contains("selected")) {
     // Is this a double click?
@@ -1508,21 +1512,21 @@ function updateActiveValues(elem, frameNo) {
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll("[data-frame-no]").forEach(elem => {
-    elem.addEventListener("mouseenter", event => {
+    elem.addEventListener("click", event => {
       const frameNoElem = findFrameNoElem(elem);
-      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo); }
+      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo); updateTooltip(event); event.stopImmediatePropagation() }
     });
   });
 
   // Change frame when hovering a tv with no visible values
   document.querySelectorAll(".tv").forEach(elem => {
-    elem.addEventListener("mouseenter", event => {
+    elem.addEventListener("click", event => {
       const tvValues = elem.querySelectorAll(":scope > .values > [data-frame-no]");
       const visibleValues = Array.from(tvValues).filter(elem => !elem.classList.contains("not-in-active-frame"));
       if (visibleValues.length == 0 && tvValues.length > 0) {
         let valueToShow = tvValues[0];
         const frameNoElem = findFrameNoElem(valueToShow);
-        if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo); }
+        if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo); updateTooltip(event); event.stopImmediatePropagation() }
       }
     });
   });
@@ -1678,22 +1682,25 @@ function redrawTreeEdges() {
 
 /////////////////// Tooltips ///////////////////
 
+
+tooltipDiv = undefined;
 tooltipStack = [];
 
-window.addEventListener('DOMContentLoaded', () => {
-  const tooltipDiv = document.getElementById("tooltip");
-  hide(tooltipDiv);
-
-  function positionTooltip(event) {
-    if (tooltipStack[0]) {
-      tooltipDiv.style.left = `${event.pageX - 10}px`;
-      tooltipDiv.style.top  = `${event.pageY - 30}px`;
-      tooltipDiv.innerText = tooltipStack[0].dataset.extractionCode.replaceAll(/\s+/g," ");
-      show(tooltipDiv);
-    } else {
-      hide(tooltipDiv);
-    }
+function updateTooltip(event) {
+  if (tooltipStack[0] && !tooltipStack[0].closest(".not-in-active-frame")) { /* Don't show tooltip if the hovered element is no in an active execution frame. */
+    tooltipDiv.style.left = `${event.pageX - 10}px`;
+    tooltipDiv.style.top  = `${event.pageY - 30}px`;
+    tooltipDiv.innerText = tooltipStack[0].dataset.extractionCode.replaceAll(/\s+/g," ");
+    show(tooltipDiv);
+  } else {
+    hide(tooltipDiv);
   }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  tooltipDiv = document.getElementById("tooltip");
+
+  hide(tooltipDiv);
 
   document.querySelectorAll('[data-extraction-code]:not(.tool):not(.exp)').forEach(elem => {
     // console.log(elem);
@@ -1702,11 +1709,11 @@ window.addEventListener('DOMContentLoaded', () => {
     // elem.addEventListener("dragend", dragend);
     elem.addEventListener("mouseenter", event => {
       tooltipStack.unshift(elem);
-      positionTooltip(event);
+      updateTooltip(event);
     });
     elem.addEventListener("mouseleave", event => {
       tooltipStack.removeAsSet(elem);
-      positionTooltip(event);
+      updateTooltip(event);
     });
   });
 });

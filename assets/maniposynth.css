@@ -4,6 +4,7 @@
   --color-light: rgb(215, 255, 220);
   --color-dark: rgb(70, 224, 88);
   --pat-color: hsl(332deg 76% 53%);
+  --pat-color-light: hsl(332deg 100% 88%);
   --third-color-dark: rgb(218, 224, 47);
   --third-color-light: rgb(254, 255, 220);
 }
@@ -184,7 +185,11 @@ nav img {
   background-color: var(--pat-color);
 }
 .fun-param > td {
-  border: solid 1px var(--pat-color);
+  border: solid 1px var(--pat-color-light);
+  /* border-left: none; */
+  /* border-right: none; */
+  /* border-top: none; */
+  /* border-bottom: none; */
 }
 .root-value-holder {
   padding: var(--padding);
