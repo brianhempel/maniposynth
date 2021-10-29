@@ -320,9 +320,18 @@ module Type = struct
   let rec flatten_arrows typ =
     let open Types in
     match typ.desc with
-    | Tarrow (Nolabel, ltype, rtype, Cok) -> ltype :: flatten_arrows rtype
-    | Tlink typ | Tsubst typ              -> flatten_arrows typ
-    | _                                   -> [typ]
+    | Tarrow (Nolabel, ltype, rtype, _) -> ltype :: flatten_arrows rtype
+    | Tlink typ | Tsubst typ            -> flatten_arrows typ
+    | _                                 -> [typ]
+
+  (* Arg count for arrow types. (Not type arg count). *)
+  (* Stops if a labeled argument is encountered. *)
+  let rec arrow_arg_count typ =
+    let open Types in
+    match typ.desc with
+    | Tarrow (Nolabel, _ltype, rtype, _) -> 1 + arrow_arg_count rtype
+    | Tlink typ | Tsubst typ             -> arrow_arg_count typ
+    | _                                  -> 0
 
   (* Stops flattening if a labeled argument is encountered. *)
   (* e.g. 'a -> 'b -> 'c to (['a, 'b], 'c) *)
@@ -484,6 +493,7 @@ module Exp = struct
   let int_lit n = constant (Ast_helper.Const.int n)
   let string_lit str = constant (Ast_helper.Const.string str)
   let unit = construct (Longident.lident "()") None
+  let apply_with_hole_args fexp n_args =  apply fexp @@ List.init n_args (fun _ -> (Asttypes.Nolabel, hole))
 
   let all prog = (everything (Sis prog)).exps
   let flatten exp = (everything (Exp exp)).exps

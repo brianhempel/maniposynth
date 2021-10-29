@@ -76,7 +76,7 @@
 
 - [ ] the type for the tree task doesn't work right
 
-- [ ] too easy to switch frame
+- [x] too easy to switch frame
 
 - [x] align values coming into function, one frame per column
 
@@ -98,7 +98,9 @@
 
 - [x] placing left and right extraction vbs was not working
 
-- [ ] represent func valus as unapplied val tools?
+- [ ] bigger things not pushing smaller things out of the way
+
+- [x] represent func values as unapplied val tools? Make sure they always insert calls
 
 - [ ] divergence produces junk frames: combine identical frames?
 

@@ -75,8 +75,16 @@ let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
 
 let html_of_pat ?(attrs = []) stuff pat =
   let code = Pat.to_string { pat with ppat_attributes = [] } in (* Don't show vis attrs. *)
-  let perhaps_type_attr = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.pat_type)]) ||& [] in
-  let perhaps_extraction_attr = if Pat.is_single_name pat then [("data-extraction-code", code)] else [] in
+  let pat_type_opt = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> texp.Typedtree.pat_type) in
+  let perhaps_type_attr = pat_type_opt |>& (fun pat_type -> [("data-type", Type.to_string pat_type)]) ||& [] in
+  let perhaps_extraction_attr =
+    if Pat.is_single_name pat then
+      match pat_type_opt |>& Type.arrow_arg_count with
+      | Some n when n >= 1 -> [("data-extraction-code", Exp.apply_with_hole_args (Exp.from_string code) n |> Exp.to_string)]
+      | _                  -> [("data-extraction-code", code)]
+    else
+      []
+  in
   span ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_type_attr @ perhaps_extraction_attr)
     [code]
 
@@ -202,9 +210,26 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   in
   let wrap_value str =
     let perhaps_extraction_code =
-      extraction_exp_opt |>& begin fun _ ->
-        ("data-extraction-code", extraction_code)
-      end |> Option.to_list
+      extraction_exp_opt
+      |>& begin fun extraction_exp ->
+        (* Add hole args to a function value to make a call. *)
+        let arg_count = (* By examing value. We won't always have value.type_opt (in the current implementation). *)
+          let rec exp_arg_count exp =
+            match exp.pexp_desc with
+            | Pexp_fun (Asttypes.Nolabel, _, _, body) -> 1 + exp_arg_count body
+            | Pexp_function _                         -> 1
+            | _                                       -> 0
+          in
+          match value_ with
+          | Fun (Asttypes.Nolabel, _, _, body, _) -> 1 + exp_arg_count body
+          | Function (_, _)                       -> 1
+          | _                                     -> 0
+        in
+        if arg_count >= 1
+        then ("data-extraction-code", Exp.apply_with_hole_args extraction_exp arg_count |> Exp.to_string)
+        else ("data-extraction-code", extraction_code)
+      end
+      |> Option.to_list
     in
     span
       ~attrs:(

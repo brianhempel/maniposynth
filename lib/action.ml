@@ -212,11 +212,10 @@ let insert_code loc code xy_opt final_tenv old =
   in
   (* Turn inserted bare functions into calls. *)
   match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" new_exp_loc with
-  | Some { exp_type; _ } when Type.is_arrow_type exp_type ->
-    let arg_count = List.length (Type.flatten_arrows exp_type) - 1 in
+  | Some { exp_type; _ } when Type.arrow_arg_count exp_type >= 1 ->
     prog
     |> Exp.map_by_loc new_exp_loc begin fun fexp ->
-      Exp.apply fexp @@ List.init arg_count (fun _ -> (Asttypes.Nolabel, Exp.hole))
+      Exp.apply_with_hole_args fexp (Type.arrow_arg_count exp_type)
     end
   | _ ->
     prog
