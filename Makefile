@@ -14,6 +14,7 @@ artifact.zip: ./_build/default/server.exe ./assets/*
 	cp -r assets artifact/assets
 	rm -r artifact/assets/*.amdn; # don't need rich image files
 	mkdir -p artifact/ocaml-4.07.1/stdlib; cp -r ocaml-4.07.1/stdlib/*.ml artifact/ocaml-4.07.1/stdlib/
+	cp ocaml-4.07.1/stdlib/*.cmi artifact/
 	zip artifact -r artifact
 
 # build_and_run: ./_build/default/interpreter.exe
