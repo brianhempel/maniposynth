@@ -62,7 +62,7 @@
 
 - [x] ensure it can run without ruby
 
-- [ ] preserve frame across changes
+- [x] preserve frame across changes
 
 - [ ] the type for the tree task doesn't work right
 

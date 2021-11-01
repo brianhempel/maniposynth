@@ -1464,10 +1464,36 @@ function findFrameNoElem(elem) {
   return elem.closest(".fun,.top-level");
 }
 
+function frameNos(frameRootElem) {
+  return Array.from(frameRootElem.querySelectorAll("[data-frame-no]")).map(elem => elem.dataset.frameNo).sort((fn1, fn2) => parseInt(fn1) - parseInt(fn2));
+}
+
+// keyed by function name, e.g. "/top-level/fold"
+function frameRootElemKey(frameRootElem) {
+  // Find vb holding the .fun
+  const vb = frameRootElem.closest(".vb");
+  // Recurse
+  const vb_frame_elem = vb && findFrameNoElem(vb);
+  const prior_key = (vb_frame_elem && frameRootElemKey(vb_frame_elem)) || "";
+
+  return prior_key + "/" + (vb?.querySelector(".pat")?.innerText || "top-level");
+}
+
+function saveFrameNo(frameRootElem) {
+  const frameIndex = frameNos(frameRootElem).indexOf(frameRootElem.dataset.activeFrameNo);
+  sessionStorage.setItem(frameRootElemKey(frameRootElem), frameIndex);
+}
+
+function savedFrameNo(frameRootElem) {
+  const frameIndex = sessionStorage.getItem(frameRootElemKey(frameRootElem));
+  return frameNos(frameRootElem)[frameIndex];
+}
+
 function setFrameNo(frameRootElem, frameNo) {
   if (autocompleteOpen) { return; } // Don't change frame numbers when an autocomplete is open
   if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
   frameRootElem.dataset.activeFrameNo = frameNo;
+  saveFrameNo(frameRootElem);
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
   relayout();
   relayout();
@@ -1477,7 +1503,8 @@ function setFrameNo(frameRootElem, frameNo) {
 
 function initFrameNos() {
   document.querySelectorAll(".fun").forEach(frameNoElem => {
-    const frameNo = frameNoElem.querySelector("[data-frame-no]")?.dataset?.frameNo;
+    const priorFrameNo = savedFrameNo(frameNoElem);
+    const frameNo = priorFrameNo || frameNoElem.querySelector("[data-frame-no]")?.dataset?.frameNo;
     if (frameNo) { setFrameNo(frameNoElem, frameNo); }
   });
 }
