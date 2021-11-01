@@ -387,3 +387,7 @@ let write_file contents path =
   let out_chan = open_out path in
   output_string out_chan contents;
   close_out out_chan
+
+let rec ensure_dir path =
+  if Filename.dirname path <> "." then ensure_dir (Filename.dirname path);
+  try Unix.mkdir path 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()

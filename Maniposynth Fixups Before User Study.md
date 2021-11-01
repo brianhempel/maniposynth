@@ -56,6 +56,16 @@
 
 - [x] less space for tree fold
 
+- [x] bake undo into the server
+
+- [x] ensure it can run without ocamlformat
+
+- [x] ensure it can run without ruby
+
+- [ ] preserve frame across changes
+
+- [ ] the type for the tree task doesn't work right
+
 - [ ] 0 in terminal Leaf 0 is not available for autocomplete
 
   ```ocaml
@@ -74,7 +84,9 @@
   let fold_List_cons_tree = fold List.cons [] tree [@@pos 143, 641]
   ```
 
-- [ ] the type for the tree task doesn't work right
+- [ ] tools offscreen
+
+- [ ] ensure tool works if subdirs have spaces
 
 - [x] too easy to switch frame
 
@@ -84,15 +96,11 @@
 
 - [ ] display rets as a row under the incoming function args
 
-- [ ] bake undo into the server
-
 - [ ] highlight var value origins on hover
 
 - [x] double-click to insert code should position the new TV
 
 - [x] autocomplete with trees is UUUUUGGGGLLLYYY
-
-- [ ] tools offscreen
 
 - [ ] placeholder on function canvas to prompt
 

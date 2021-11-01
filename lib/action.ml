@@ -293,11 +293,9 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     Synth.try_async path;
     (fun prog -> prog)
   | Undo ->
-    if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=undo"|];
-    (fun prog -> prog)
+    Undo_redo.undo path
   | Redo ->
-    if Unix.fork () = 0 then Unix.execve "./UndoRedo.app/Contents/MacOS/applet" [||] [|"EDITOR=Visual Studio Code"; "CMD=redo"|];
-    (fun prog -> prog)
+    Undo_redo.redo path
   | InsertCode (loc_str, code, xy_opt) ->
     let loc = Serialize.loc_of_string loc_str in
     insert_code loc code xy_opt final_tenv
