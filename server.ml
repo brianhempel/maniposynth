@@ -52,7 +52,6 @@ let serve_asset out_chan url =
 
 let render_maniposynth out_chan url =
   let path = String.drop 1 url |> nativize_path in
-  Undo_redo.perhaps_log_revision path;
   let parsed = Camlboot_interpreter.Interp.parse path in
   (* let parsed_with_comments = Parse_unparse.parse_file path in
   let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
@@ -152,7 +151,11 @@ let handle_connection in_chan out_chan =
         let (_, _, final_tenv) = Typing.typedtree_sig_env_of_parsed parsed path in
         let parsed' = Action.f path final_tenv action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
-        if parsed <> parsed' then Pretty_code.output_code parsed' path; (* This was overwriting synth results! :o *)
+        Undo_redo.perhaps_initialize_undo_history path;
+        if parsed <> parsed' then begin
+          Pretty_code.output_code parsed' path; (* This was overwriting synth results! :o *)
+          Undo_redo.perhaps_log_revision path
+        end;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan
