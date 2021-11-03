@@ -64,7 +64,8 @@ let label ?(attrs = [])         inners = tag "label" ~attrs inners
 let textbox ?(attrs = [])       inners = tag "input" ~attrs:(attrs @ [("type","text")]) inners
 let fancyTextbox ?(attrs = [])  inners = tag "div" ~attrs:(attrs @ [("class","textbox");("contenteditable","true")]) inners
 let checkbox ?(attrs = [])      ()     = tag "input" ~attrs:(attrs @ [("type","checkbox")]) []
-let box     ?(attrs = []) ~loc ~parsetree_attrs klass inners =
+(* box is the movable wrapper that contains a TV and makes it positionable. (Return TVs do not have a box.) *)
+let box ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let perhaps_pos_attr =
     match Pos.from_attrs parsetree_attrs with
     | Some { x; y } -> [("data-left", string_of_int x); ("data-top", string_of_int y)]
@@ -427,6 +428,9 @@ let value_htmls_for_pat ?(single_line_only = false) stuff pat =
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
   value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
 
+let html_of_values_for_pat ?(single_line_only = false) stuff pat =
+  div ~attrs:[("class","values")] (value_htmls_for_pat ~single_line_only stuff pat)
+
 
 type parens_context = NoParens | NormalArg | NextToInfixOp
 
@@ -518,6 +522,14 @@ let rec gather_vbs exp = (* Dual of ret_tree_html *)
   | Pexp_letmodule (_, _, e)   -> gather_vbs e
   | _                          -> []
 
+let rec gather_case_pats exp =
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)       -> gather_case_pats e
+  | Pexp_sequence (_, e)     -> gather_case_pats e
+  | Pexp_match (_, cases)    -> (cases |>@ Case.lhs |>@@ Pat.flatten |>@? Pat.is_name) @ (cases |>@ Case.rhs |>@@ gather_case_pats)
+  | Pexp_letmodule (_, _, e) -> gather_case_pats e
+  | _                        -> []
+
 let should_show_vbs { pexp_desc; _ } =
   match pexp_desc with
   | Pexp_let _ | Pexp_sequence _ | Pexp_match _ | Pexp_letmodule _ -> true
@@ -533,17 +545,24 @@ let rec html_of_vb stuff recflag vb =
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes ~attrs "vb" @@
     (if show_pat && show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) @
     (if show_pat && Exp.is_funlike vb.pvb_expr then [label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
-    [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) vb.pvb_expr](*  @
+    [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) (Some vb.pvb_expr)](*  @
     (if show_pat && not show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) *)
+
+and html_tv_of_case_pat stuff pat =
+  let perhaps_type_attr = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.pat_type)]) ||& [] in
+  let attrs             = [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc); ("data-in-place-edit-code", Pat.to_string pat)] @ perhaps_type_attr in
+  box ~loc:pat.ppat_loc ~parsetree_attrs:pat.ppat_attributes ~attrs "vb" @@
+    [render_tv stuff (Some pat) None]
 
 (* Shows value bindings *)
 and local_canvas_vbs_and_returns_htmls stuff exp =
   let html_of_vb (recflag, vb) = html_of_vb stuff recflag vb in
-  let vbs = gather_vbs exp in
+  let vbs                      = gather_vbs exp in
+  let case_pats_to_show_as_tvs = gather_case_pats exp in
   (* let terminal_exps = terminal_exps exp in *)
   (* let ret_tv_path_descs = terminal_match_paths exps |>@ fun (_, pat, _) -> Pat.to_string pat in *)
   (* let ret_tv_htmls  = terminal_exps |>@ render_tv stuff None in *)
-  [ div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] (vbs |>@ html_of_vb)
+  [ div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] @@ (case_pats_to_show_as_tvs |>@ html_tv_of_case_pat stuff) @ (vbs |>@ html_of_vb)
   ; div ~attrs:[("class", "returns")] [ret_tree_html stuff exp]
   ]
 
@@ -562,14 +581,14 @@ and ret_tree_html stuff exp =
       [ div ~attrs:(attrs @ [("class","scrutinee")]) ["⇠ "; html_of_exp ~show_result:false stuff scrutinee; " ⇢"]
       ; div ~attrs:[("class","cases")] (cases |>@ html_of_case)
       ]
-  | _ -> div ~attrs:[("class", "return")] [render_tv stuff None exp]
+  | _ -> div ~attrs:[("class", "return")] [render_tv stuff None (Some exp)]
 
 
 (* Actually renders all values, but only one is displayed at a time (via Javascript). *)
-and render_tv ?(show_output = true) stuff vb_pat_opt exp =
+and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) =
   let _ = show_output in
-  match exp.pexp_desc with
-  | Pexp_fun _ ->
+  match exp_opt with
+  | Some ({ pexp_desc = Pexp_fun _; _ } as exp) ->
     let rec get_param_rows_and_body exp =
       match exp.pexp_desc with
       | Pexp_fun (label, default_opt, pat, body) ->
@@ -592,7 +611,7 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
         local_canvas_vbs_and_returns_htmls stuff body
       end
     (* ] *)
-  | Pexp_assert e ->
+  | Some ({ pexp_desc = Pexp_assert e; _ }) ->
     let matching_asserts =
       begin match Eval.parse_assert e with
       | Some (lhs, _fexp, _argexp, expected) ->
@@ -610,17 +629,25 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
       else ("", "")
     in
     div ~attrs:[("class", "exp_label exp" ^ pass_fail_class)] [pass_fail_icon; " "; html_of_exp ~tv_root_exp:true stuff e]
-  | _ ->
+  | Some exp ->
     div ~attrs:[("class", "tv")] begin
       if should_show_vbs exp then
         local_canvas_vbs_and_returns_htmls stuff exp
       else
         [ div ~attrs:[("class", "label")] @@
-          (vb_pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat ^ " = ") |> Option.to_list) @
+          (pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat ^ " = ") |> Option.to_list) @
           [ div ~attrs:[("class", "exp_label exp")] [html_of_exp ~tv_root_exp:true stuff exp]]
-        ; html_of_values_for_exp stuff vb_pat_opt exp
+        ; html_of_values_for_exp stuff pat_opt exp
         ]
     end
+  | None ->
+    pat_opt |>& begin fun pat ->
+      div ~attrs:[("class", "tv")]
+        [ div ~attrs:[("class", "label")] [html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat]
+        ; html_of_values_for_pat stuff pat
+        ]
+    end ||& "expected either a pat or an exp to be given to render_tv"
+
 
 let html_of_top_matter_structure_item (item : structure_item) =
   match item.pstr_desc with

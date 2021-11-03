@@ -224,6 +224,7 @@ let set_pos loc x y old =
   old
   |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
   |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
+  |> Pat.map_by_loc loc (Pos.set_pat_pos x y)
 
 let move_vb vbs_loc mobile_vb_loc xy_opt final_tenv old =
   let old = match xy_opt with Some (x,y) -> set_pos mobile_vb_loc x y old | None -> old in

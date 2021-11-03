@@ -1356,7 +1356,7 @@ function resizeVbHolders(elem) {
     let maxWidth = 0;
     let maxHeight = 0;
     for (box of vbsHolder.children) {
-      if (!box.classList.contains("vb")) { continue; } /* Skip transient textboxes in the vbs elem */
+      if (!(box.classList.contains("box"))) { continue; } /* Skip transient textboxes in the vbs elem */
       resizeVbHolders(box);
       maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
       maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
@@ -1384,11 +1384,12 @@ function reflow() {
   }
   function size(box) { return box.offsetWidth * box.offsetHeight; }
   vbsHolders.forEach(vbsHolder => {
-    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("vb")); /* Skip transient textboxes in the vbs elem */
-    // Move smallest stuff first.
-    boxes.sort((box1, box2) => size(box1) - size(box2));
+    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("box")); /* Skip transient textboxes in the vbs elem */
+    // Position largest stuff first.
+    boxes.sort((box1, box2) => size(box2) - size(box1));
     for (box of boxes) {
-      const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box); /* If box has an explicit position */
+      const mySize = size(box);
+      const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box && mySize <= size(otherBox)); /* If box has an explicit position and is larger */
       var left0 = parseInt(box.dataset.left);
       var top0  = parseInt(box.dataset.top);
       if (isNaN(left0)) { left0 = 10 };
@@ -1414,7 +1415,7 @@ function reflow() {
 }
 function initializeLayout() {
   document.querySelectorAll(".vbs").forEach(vbsHolder => {
-    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("vb")); /* Skip transient textboxes in the vbs elem */
+    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("box")); /* Skip transient textboxes in the vbs elem */
     for (box of boxes) {
       var left0 = parseInt(box.dataset.left);
       var top0  = parseInt(box.dataset.top);
@@ -1427,14 +1428,16 @@ function initializeLayout() {
   });
 }
 function relayout() {
+  removeTreeEdges();
   initializeLayout();
   for (_ of [1,2,3]) {
     resizeVbHolders(document);
-    redrawTreeEdges();
     reflow();
   }
+  redrawTreeEdges();
 }
-window.addEventListener('DOMContentLoaded', relayout);
+// This happens in initFrameNos
+// window.addEventListener('DOMContentLoaded', relayout);
 
 
 
@@ -1526,21 +1529,22 @@ function savedFrameNo(frameRootElem) {
   return frameNos(frameRootElem)[frameIndex];
 }
 
-function setFrameNo(frameRootElem, frameNo) {
+function setFrameNo(frameRootElem, frameNo, skip_relayout) {
   if (autocompleteOpen) { return; } // Don't change frame numbers when an autocomplete is open
   if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
   frameRootElem.dataset.activeFrameNo = frameNo;
   saveFrameNo(frameRootElem);
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
-  relayout();
+  if (!skip_relayout) { relayout(); };
 }
 
 function initFrameNos() {
   document.querySelectorAll(".fun").forEach(frameNoElem => {
     const priorFrameNo = savedFrameNo(frameNoElem);
     const frameNo = priorFrameNo || frameNoElem.querySelector("[data-frame-no]")?.dataset?.frameNo;
-    if (frameNo) { setFrameNo(frameNoElem, frameNo); }
+    if (frameNo) { setFrameNo(frameNoElem, frameNo, true); }
   });
+  relayout();
 }
 
 // Returns whether any any descendent values are active
@@ -1699,6 +1703,9 @@ document.addEventListener("keydown", function(event) {
 
 /////////////////// Pretty trees ///////////////////
 
+function removeTreeEdges() {
+  document.querySelectorAll(".tree-edge").forEach(svg => svg.remove());
+}
 // Call removeTreeEdges first.
 function redrawTreeEdges() {
   function line(x1, y1, x2, y2) {
@@ -1722,7 +1729,6 @@ function redrawTreeEdges() {
     return svg;
   }
   // console.log("redraw edges");
-  document.querySelectorAll(".tree-edge").forEach(svg => svg.remove());
   document.querySelectorAll(".tree-kids").forEach(kidsTable => {
     const parent = kidsTable.previousElementSibling;
     const root   = parent.parentElement;

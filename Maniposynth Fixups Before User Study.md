@@ -101,11 +101,7 @@
 
 - [ ] placeholder on function canvas to prompt?
 
-- [ ] show case pats as TVs on canvas
-
-- [ ] tooltips describing what the pieces are?
-
-- [ ] tools offscreen
+- [x] show case pats as TVs on canvas
 
 - [ ] fix undo/redo
 
@@ -113,13 +109,17 @@
 
 - [ ] highlight var value origins on hover
 
+- [ ] highlight holes in red
+
+- [ ] tools offscreen
+
+- [ ] tooltips describing what the pieces are?
+
 - [ ] don't allow same names in a scope?
 
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
 
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
-
-- [ ] only edit values when values are constants
 
 - [x] too easy to switch frame
 
@@ -147,19 +147,15 @@
 
 - [ ] ensure tool works if subdirs have spaces
 
-- [ ] 
-
 - [x] placing left and right extraction vbs was not working
 
-- [ ] bigger things not pushing smaller things out of the way
+- [x] bigger things not pushing smaller things out of the way
 
 - [x] represent func values as unapplied val tools? Make sure they always insert calls
 
 - [ ] divergence produces junk frames: combine identical frames?
 
 - [ ] click on canvas vals to insert code into textbox
-
-- [ ] highlight holes in red
 
 - [ ] setting to hide vals in exp labels?
 

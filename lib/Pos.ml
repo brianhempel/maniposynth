@@ -29,6 +29,7 @@ let remove_pos_attr attrs : attributes =
 
 let set_vb_pos  x y vb  = { vb  with pvb_attributes  = set_pos_attr x y vb.pvb_attributes }
 let set_exp_pos x y exp = { exp with pexp_attributes = set_pos_attr x y exp.pexp_attributes }
+let set_pat_pos x y pat = { pat with ppat_attributes = set_pos_attr x y pat.ppat_attributes }
 
 let remove_exp_pos exp = { exp with pexp_attributes = remove_pos_attr exp.pexp_attributes }
 
