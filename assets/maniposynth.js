@@ -1412,17 +1412,29 @@ function reflow() {
     }
   });
 }
-function relayout() {
-  resizeVbHolders(document);
-  redrawTreeEdges();
-  reflow();
+function initializeLayout() {
+  document.querySelectorAll(".vbs").forEach(vbsHolder => {
+    const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("vb")); /* Skip transient textboxes in the vbs elem */
+    for (box of boxes) {
+      var left0 = parseInt(box.dataset.left);
+      var top0  = parseInt(box.dataset.top);
+      if (isNaN(left0)) { left0 = 10 };
+      if (isNaN(top0) && vbsHolder.classList.contains("top-level")) { top0 = 50 };
+      if (isNaN(top0)) { top0 = 10 };
+      box.style.left = `${left0}px`
+      box.style.top  = `${top0}px`
+    }
+  });
 }
-window.addEventListener('DOMContentLoaded', () => {
-  relayout();
-  relayout();
-  relayout();
-  relayout();
-});
+function relayout() {
+  initializeLayout();
+  for (_ of [1,2,3]) {
+    resizeVbHolders(document);
+    redrawTreeEdges();
+    reflow();
+  }
+}
+window.addEventListener('DOMContentLoaded', relayout);
 
 
 
@@ -1520,9 +1532,6 @@ function setFrameNo(frameRootElem, frameNo) {
   frameRootElem.dataset.activeFrameNo = frameNo;
   saveFrameNo(frameRootElem);
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
-  relayout();
-  relayout();
-  relayout();
   relayout();
 }
 
