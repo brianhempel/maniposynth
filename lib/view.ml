@@ -452,7 +452,9 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     in
     span ~attrs:([("class","exp")] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
   in
-  (if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else "") ^
+  let values_for_exp =
+    if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
+  in
   wrap @@
   match exp.pexp_desc with
   | Pexp_apply (fexp, labeled_args) ->
@@ -466,24 +468,24 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ (if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
-    | _                -> (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
+    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
+    | _                -> values_for_exp ^ (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
     end
-  | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> if in_list then "]" else "[]"
+  | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> values_for_exp ^ if in_list then "]" else "[]"
   | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
     if String.starts_with "[" code' && String.ends_with "]" code' then (* Have to make sure this list is suitable to render sugared *)
-      (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
+      values_for_exp ^ (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
     else
       (* Render infix *)
-      recurse ~parens_context:NextToInfixOp head ^ " :: " ^ recurse ~parens_context:NextToInfixOp tail
+      recurse ~parens_context:NextToInfixOp head ^ values_for_exp ^ " :: " ^ recurse ~parens_context:NextToInfixOp tail
   | Pexp_construct ({ txt = lid; _ }, Some arg) ->
-    Longident.to_string lid ^ " " ^ recurse ~parens_context:NormalArg arg
+    values_for_exp ^ Longident.to_string lid ^ " " ^ recurse ~parens_context:NormalArg arg
   | Pexp_tuple exps ->
     "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
   | Pexp_ifthenelse (e1, e2, e3_opt) ->
-    "if " ^ recurse e1 ^ " then " ^ recurse e2 ^ (e3_opt |>& (fun e3 -> " else " ^ recurse e3) ||& "")
+    values_for_exp ^ "if " ^ recurse e1 ^ " then " ^ recurse e2 ^ (e3_opt |>& (fun e3 -> " else " ^ recurse e3) ||& "")
   | _ ->
-    code' ^ " "
+    values_for_exp ^ code' ^ " "
 
 
 (* let rec terminal_exps exp = (* Dual of gather_vbs *)

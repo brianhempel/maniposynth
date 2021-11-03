@@ -97,7 +97,7 @@
 
 - [x] display label as `pat = exp`
 
-- [ ] show infix op result on infix op
+- [x] show infix op result on infix op
 
 - [ ] placeholder on function canvas to prompt?
 
