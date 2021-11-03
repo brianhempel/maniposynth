@@ -103,9 +103,11 @@
 
 - [x] show case pats as TVs on canvas
 
-- [ ] fix undo/redo
+- [x] fix undo/redo
 
 - [ ] only allow direct value edits on constants in the immediate expression
+
+- [x] shorter names, name constants by type
 
 - [ ] highlight var value origins on hover
 

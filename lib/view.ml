@@ -119,7 +119,7 @@ let exp_gunk ?(infix = false) stuff exp =
 
 let rec apply_visualizers (prog : program) assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
   if visualizers = [] then "" else
-  let html_of_value ?code_to_assert_on extraction_exp_opt value = html_of_value ~single_line_only:true ~code_to_assert_on { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty extraction_exp_opt value in
+  let html_of_value ?code_to_assert_on extraction_exp_opt value = html_of_value ~single_line_only:true ~code_to_assert_on { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty [] extraction_exp_opt value in
   let result_htmls =
     visualizers
     |>@@ begin fun { exp } ->
@@ -189,8 +189,8 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   in
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
-and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
-  let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env in
+and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env locs_editable_in_value (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+  let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env locs_editable_in_value in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
@@ -204,8 +204,8 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     value.vtrace
     |> List.rev
     |> List.findmap_opt begin function
-      | ((_, loc), (Use | Ret | Intro)) -> Exp.find_opt loc stuff.prog
-      | _                               -> None
+      | ((_, loc), (Use | Ret | Intro)) when List.mem loc locs_editable_in_value -> Exp.find_opt loc stuff.prog
+      | _                                                                        -> None
     end
     |>& exp_in_place_edit_attrs ||& []
   in
@@ -396,11 +396,12 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
 
 let value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
+  let locs_editable_in_value = root_exp_opt |>& Exp.flatten ||& [] |>@ Exp.loc in
   let html_of_entry (_, frame_no, value, env) =
     span
       (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
       ~attrs:[("class","root-value-holder"); ("data-loc", Serialize.string_of_loc loc); ("data-frame-no", string_of_int frame_no)]
-      [html_of_value ~single_line_only stuff frame_no visualizers env type_env root_exp_opt value]
+      [html_of_value ~single_line_only stuff frame_no visualizers env type_env locs_editable_in_value root_exp_opt value]
   in
   let max_shown = 7 in (* Should be odd. *)
   if List.length entries >= max_shown then
@@ -457,7 +458,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     span ~attrs:([("class","exp")] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
   in
   let values_for_exp =
-    if show_result && not tv_root_exp && Bindings.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
+    if show_result && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
   in
   wrap @@
   match exp.pexp_desc with

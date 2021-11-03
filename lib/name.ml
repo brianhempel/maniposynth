@@ -34,7 +34,7 @@ let junk_to_name_parts =
   %> String.uncapitalize_ascii
   %> String.split_on_whitespace
 
-let junk_to_name = junk_to_name_parts %> String.concat "_"
+let junk_to_name = junk_to_name_parts %> List.prefix 2 %> String.concat "_"
 
 let base_name_from_type typ =
   (Shared.Formatter_to_stringifier.f Printtyp.type_expr) typ
@@ -96,7 +96,7 @@ let gen_from_exp ?(avoid = []) ?type_env exp prog =
   let name_from_exp = junk_to_name code in
   let avoid         = String.split_on_whitespace code @ avoid in
   let base_name_opt =
-    if String.length name_from_exp >= 1 then
+    if String.length name_from_exp >= 1 && List.length (Scope.free_unqualified_names exp) >= 2 then
       Some name_from_exp
     else
       let type_env =
@@ -108,3 +108,16 @@ let gen_from_exp ?(avoid = []) ?type_env exp prog =
       |>& base_name_from_type
   in
   gen ~avoid ?base_name:base_name_opt prog
+
+
+(* Currently, unnamedN is only inserted on the LHS of single pat VBs. *)
+(* Precondition: VB LOCS MUST BE FRESH! *)
+let name_unnameds ?type_env prog =
+  let try_rename vb prog =
+    match vb |> Vb.pat |> Pat.single_name with
+    | Some name when String.starts_with default_base_name name ->
+      Scope.rename_pat_by_loc (Pat.loc (Vb.pat vb)) (gen_from_exp ?type_env (Vb.exp vb) prog) prog
+    | _ ->
+      prog
+  in
+  List.fold_right try_rename (Vb.all prog) prog

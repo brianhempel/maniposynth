@@ -153,7 +153,7 @@ let replace_loc_code loc code final_tenv old =
   (* If new code is a var pattern, try renaming *)
   let try_rename ?(loc = loc) ?(code = code) prog =
     match code |> Pat.from_string_opt |>&& Pat.single_name with
-    | Some name' -> Bindings.rename_pat_by_loc loc name' prog
+    | Some name' -> Scope.rename_pat_by_loc loc name' prog
     | None       -> prog
   in
   (* Preserve old attrs and loc. *)
@@ -201,7 +201,7 @@ let insert_code loc code xy_opt final_tenv old =
       )
   in
   let prog =
-    Bindings.name_unnameds ~type_env:final_tenv @@
+    Name.name_unnameds ~type_env:final_tenv @@
     Bindings.fixup final_tenv @@
     if old = [] then (* Empty program *)
       new_sis
@@ -224,7 +224,6 @@ let set_pos loc x y old =
   old
   |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
   |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
-  |> Pat.map_by_loc loc (Pos.set_pat_pos x y)
 
 let move_vb vbs_loc mobile_vb_loc xy_opt final_tenv old =
   let old = match xy_opt with Some (x,y) -> set_pos mobile_vb_loc x y old | None -> old in

@@ -867,7 +867,7 @@ let make_bindings_with_holes_recursive prog =
   prog
   |> VbGroups.map begin function
       | (Nonrecursive, [vb]) ->
-        let rhs_free = Bindings.free_unqualified_names vb.pvb_expr in
+        let rhs_free = Scope.free_unqualified_names vb.pvb_expr in
         begin match Pat.single_name vb.pvb_pat with
         | Some name when List.mem "??" rhs_free && not (List.mem name rhs_free) ->
           (Recursive, [vb])
@@ -881,7 +881,7 @@ let remove_unnecessary_rec_flags prog =
   prog
   |> VbGroups.map begin function
       | (Recursive, [vb]) ->
-        let rhs_free = Bindings.free_unqualified_names vb.pvb_expr in
+        let rhs_free = Scope.free_unqualified_names vb.pvb_expr in
         begin match Pat.single_name vb.pvb_pat with
         | Some name when not (List.mem name rhs_free) ->
           (Nonrecursive, [vb])
