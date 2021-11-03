@@ -531,8 +531,8 @@ let rec html_of_vb stuff recflag vb =
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes ~attrs "vb" @@
     (if show_pat && show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) @
     (if show_pat && Exp.is_funlike vb.pvb_expr then [label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
-    [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) vb.pvb_expr] @
-    (if show_pat && not show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else [])
+    [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) vb.pvb_expr](*  @
+    (if show_pat && not show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) *)
 
 (* Shows value bindings *)
 and local_canvas_vbs_and_returns_htmls stuff exp =
@@ -613,7 +613,9 @@ and render_tv ?(show_output = true) stuff vb_pat_opt exp =
       if should_show_vbs exp then
         local_canvas_vbs_and_returns_htmls stuff exp
       else
-        [ div ~attrs:[("class", "exp_label exp")] [html_of_exp ~tv_root_exp:true stuff exp]
+        [ div ~attrs:[("class", "label")] @@
+          (vb_pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat ^ " = ") |> Option.to_list) @
+          [ div ~attrs:[("class", "exp_label exp")] [html_of_exp ~tv_root_exp:true stuff exp]]
         ; html_of_values_for_exp stuff vb_pat_opt exp
         ]
     end

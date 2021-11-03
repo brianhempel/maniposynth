@@ -143,8 +143,6 @@ nav img {
 .subvalue-name {
   font-family: 'Times New Roman', Times, serif;
   font-weight: bold;
-}
-.box > .pat:first-child {
   color: var(--pat-color);
 }
 
@@ -170,15 +168,13 @@ nav img {
 }
 
 .exp_label,
-.pat_label,
-.box > .pat:last-child {
+.pat_label {
   padding: var(--padding);
 }
-.pat_label,
-.box > .pat:last-child,
+.box > .pat,
+.pat_label.draggable-hovered,
 .subvalue-name {
   background-color: white;
-  color: var(--pat-color);
 }
 .fun-param > .pat_label {
   color: white;
@@ -210,7 +206,7 @@ nav img {
   color: #555;
 }
 .exp_label .values {
-  background-color: var(--color-light);
+  background-color: var(--color);
 }
 .scrutinee .values {
   background-color: #eee;
@@ -219,13 +215,8 @@ nav img {
 .exp_label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
   display: none;
 }
-/* .fun-param > td > .values > .root-value-holder,
-.fun-param > td > .values > .ellipses {
-  margin-right: 1.2em;
-} */
 .tv > .values {
   background-color: var(--third-color-light);
-  padding-top: 0.5rem;
   min-height: 2.5rem;
   min-width: 2rem;
 }
@@ -240,54 +231,40 @@ table.subvalue-annotations td {
   line-height: 1rem;
   text-align: right;
 }
-.subvalue-name,
-.box > .pat:last-child {
+.subvalue-name {
   border: solid 1px lightgray;
 }
 .subvalue-name {
   display: inline-block;
   margin: 1px 0px -3px 1px;
   padding: 0 1px;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
 }
+.tv > .label {
+  background-color: var(--color-light);
+}
 .exp_label {
-  background-color: var(--color);
   display: inline-block;
-}
-.tv > .exp_label {
-  margin-left: -0.9em;
-  margin-top: -1.5em;
-  margin-right: -1em; /* Make this too negative and the exp_label escapes its vb selection box */
-  margin-bottom: -1em;
-}
-/* .exp_label .exp_label {
-  border: solid 1px white;
-} */
-.box > .pat:last-child {
-  font-size: 0.9rem;
-  position: absolute;
-  padding: 2px;
-  left: 0.1rem;
-  bottom: -0.1rem;
 }
 
 .vbs {
   position: relative;
-  /* min-height for .vbs in the the resizeVbHolders() javascript */
+  /* min-height for .vbs is in the the resizeVbHolders() javascript */
 }
 
-.exp_label,
+.exp_label {
+  font-size: 1rem;
+}
 .derived-vis-values {
   font-size: 0.8rem;
 }
 .tree-kids .derived-vis-values {
-  font-size: 0.65rem;
-  margin-top: -0.2rem;
+  font-size: 0.7rem;
 }
 .scrutinee .root-value-holder,
 .exp_label .root-value-holder {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
 }
 .root-value-holder {
   font-size: 1.5rem;
@@ -327,8 +304,7 @@ table.subvalue-annotations td {
 .root-value-holder.not-in-active-frame, .ellipses {
   display: none;
 }
-.tv.not-in-active-frame,
-.tv.not-in-active-frame + .pat {
+.tv.not-in-active-frame {
   opacity: 0.4;
 }
 .pat .not-in-active-frame,
@@ -369,7 +345,7 @@ table.subvalue-annotations td {
   display: block;
   height: 1rem;
   margin: 0;
-  margin-top: -1rem;
+  margin-top: -0.2rem;
   position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
 }
 
@@ -393,7 +369,7 @@ table.subvalue-annotations td {
 }
 .scrutinee {
   text-align: center;
-  font-size: 0.7em;
+  font-size: 0.8em;
 }
 .case > .match { /* nested match */
   border: solid 1px #eee;
@@ -410,7 +386,7 @@ table.subvalue-annotations td {
   text-align: left;
 }
 .scrutinee + .cases > .case > .pat {
-  font-size: 0.7em;
+  font-size: 0.8em;
   margin-top: -1.2em;
   color: var(--pat-color);
   /* font-style: italic; */
@@ -471,7 +447,7 @@ table.subvalue-annotations td {
 }
 
 #inspector label {
-  font-size: 0.7em;
+  font-size: 0.8em;
 }
 
 #inspector input[type=checkbox] {
@@ -539,8 +515,8 @@ table.subvalue-annotations td {
   background-color: rgb(247,247,247);
   color: #444;
   padding: 0 2px;
-  height: 1rem;
-  line-height: 1rem;
-  font-size: 0.8rem;
+  height: 1.2rem;
+  line-height: 1.2rem;
+  font-size: 1rem;
   overflow: hidden;
 }

@@ -91,11 +91,11 @@
 
 - [x] don't allow drag onto self
 
-- [ ] make exps bigger?
+- [x] make exps bigger?
 
-- [ ] align exp labels on TVs so it looks more like cells
+- [x] align exp labels on TVs so it looks more like cells
 
-- [ ] display label as `pat = exp`
+- [x] display label as `pat = exp`
 
 - [ ] show infix op result on infix op
 
@@ -110,6 +110,8 @@
 - [ ] fix undo/redo
 
 - [ ] only allow direct value edits on constants in the immediate expression
+
+- [ ] highlight var value origins on hover
 
 - [ ] don't allow same names in a scope?
 
@@ -132,8 +134,6 @@
 - [ ] "add arg" tool
 
 - [ ] "add example" tool (for function)
-
-- [ ] highlight var value origins on hover
 
 - [ ] display rets as a row under the incoming function args
 
