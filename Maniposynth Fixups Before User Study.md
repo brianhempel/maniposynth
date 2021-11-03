@@ -66,7 +66,7 @@
 
 - [x] trees were only drawing for the first tree
 
-- [ ] 0 in terminal Leaf 0 is not available for autocomplete
+- [x] 0 in terminal Leaf 0 is not available for autocomplete
 
   ```ocaml
   type 'a tree = Node of 'a tree * 'a tree | Leaf of 'a
@@ -86,10 +86,10 @@
 
   actually, this is a pretty deep problem
 
-  - [ ] disallow autocomplete to values in higher scope
-  - [ ] 
+  - [x] disallow autocomplete to values in higher scope
+  - [x] assign "value ids" unique per thing displayed on the screen rather than via tracing
 
-- [ ] don't allow drag onto self
+- [x] don't allow drag onto self
 
 - [ ] make exps bigger?
 

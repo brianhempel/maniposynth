@@ -266,6 +266,10 @@ function drop(event) {
   let dropTarget      = event.currentTarget;
   // let droppedVTrace   = event.dataTransfer.getData("application/vtrace");
   let droppedExtractionCode = event.dataTransfer.getData("application/extractionCode");
+  if (droppedExtractionCode === dropTarget.dataset.extractionCode) { // Don't allow drop onto self
+    event.stopImmediatePropagation();
+    return;
+  }
   // console.log(dropTarget, droppedVTrace);
   // if (dropTarget.classList.contains("vbs") && droppedVTrace) {
   //   dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
