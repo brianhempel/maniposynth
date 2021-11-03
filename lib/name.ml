@@ -96,7 +96,7 @@ let gen_from_exp ?(avoid = []) ?type_env exp prog =
   let name_from_exp = junk_to_name code in
   let avoid         = String.split_on_whitespace code @ avoid in
   let base_name_opt =
-    if String.length name_from_exp >= 1 && List.length (Scope.free_unqualified_names exp) >= 2 then
+    if String.length name_from_exp >= 1 && List.length (Scope.free_unqualified_names exp) >= 1 then
       Some name_from_exp
     else
       let type_env =
