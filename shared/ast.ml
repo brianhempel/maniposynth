@@ -148,7 +148,6 @@ module Type = struct
     let recurse = equal_ignoring_id_and_scope (* ~show *) in
     let t1 = regular t1 in
     let t2 = regular t2 in
-    t1.level = t2.level &&
     begin
     (* (fun b -> if not b then
       (if show then print_endline (to_string_raw t1 ^ " <> " ^ to_string_raw t2); b)
@@ -160,6 +159,7 @@ module Type = struct
     | Tunivar str_opt1, Tunivar str_opt2 ->
       (* let p = function None -> "None" | Some str -> "Some \'" ^ str ^ "\'" in
       if show then print_endline (p str_opt1 ^ " vs " ^ p str_opt2 ^ " " ^ string_of_bool (str_opt1 = str_opt2)); *)
+      t1.level = t2.level &&
       str_opt1 = str_opt2
 
     | Tarrow (lab1, t_l1, t_r1, comm1)
@@ -201,11 +201,6 @@ module Type = struct
     | Tnil
     , Tnil -> true
 
-    | Tlink t1, _
-    | Tsubst t1, _ -> recurse t1 t2
-    | _, Tlink t2
-    | _, Tsubst t2 -> recurse t1 t2
-
     | Tvariant row1
     , Tvariant row2 ->
       List.for_all2_safe begin fun (lab1, field1) (lab2, field2) ->
@@ -245,6 +240,11 @@ module Type = struct
     | Tpackage (path1, lids1, ts1)
     , Tpackage (path2, lids2, ts2) ->
       Path.same path1 path2 && List.for_all2_safe (=) lids1 lids2 && List.for_all2_safe recurse ts1 ts2
+
+    | Tlink _, _
+    | Tsubst _, _
+    | _, Tlink _
+    | _, Tsubst _ -> failwith "equal_ignoring_id_and_scope: shouldn't happen"
 
     | _ -> false
     end

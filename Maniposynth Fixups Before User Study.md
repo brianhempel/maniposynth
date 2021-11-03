@@ -1,6 +1,6 @@
 # Maniposynth Fixups Before User Study
 
-- [ ] make sure it can be installed on mac/windows/linux
+- [x] make sure it can be installed on mac/windows/linux
 
 - [x] post the recruitment survey
 
@@ -64,7 +64,7 @@
 
 - [x] preserve frame across changes
 
-- [ ] the type for the tree task doesn't work right
+- [x] trees were only drawing for the first tree
 
 - [ ] 0 in terminal Leaf 0 is not available for autocomplete
 
@@ -84,9 +84,40 @@
   let fold_List_cons_tree = fold List.cons [] tree [@@pos 143, 641]
   ```
 
+  actually, this is a pretty deep problem
+
+  - [ ] disallow autocomplete to values in higher scope
+  - [ ] 
+
+- [ ] don't allow drag onto self
+
+- [ ] make exps bigger?
+
+- [ ] align exp labels on TVs so it looks more like cells
+
+- [ ] display label as `pat = exp`
+
+- [ ] show infix op result on infix op
+
+- [ ] placeholder on function canvas to prompt?
+
+- [ ] show case pats as TVs on canvas
+
+- [ ] tooltips describing what the pieces are?
+
 - [ ] tools offscreen
 
-- [ ] ensure tool works if subdirs have spaces
+- [ ] fix undo/redo
+
+- [ ] only allow direct value edits on constants in the immediate expression
+
+- [ ] don't allow same names in a scope?
+
+- [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
+
+- [ ] click out of expression editor with only a space caused an `undefined` to be inserted
+
+- [ ] only edit values when values are constants
 
 - [x] too easy to switch frame
 
@@ -94,15 +125,29 @@
 
 - [x] click to switch frame?
 
-- [ ] display rets as a row under the incoming function args
+- [ ] automatically visualize recurse calls and rets
+
+- [ ] "new function" tool
+
+- [ ] "add arg" tool
+
+- [ ] "add example" tool (for function)
 
 - [ ] highlight var value origins on hover
+
+- [ ] display rets as a row under the incoming function args
+
+- [ ] legend explaining TV parts?
+
+- [ ] allow comments
 
 - [x] double-click to insert code should position the new TV
 
 - [x] autocomplete with trees is UUUUUGGGGLLLYYY
 
-- [ ] placeholder on function canvas to prompt
+- [ ] ensure tool works if subdirs have spaces
+
+- [ ] 
 
 - [x] placing left and right extraction vbs was not working
 
@@ -114,9 +159,7 @@
 
 - [ ] click on canvas vals to insert code into textbox
 
-- [ ] automatically visualize recurse calls and rets?
-
-- [ ] highlight hole returns
+- [ ] highlight holes in red
 
 - [ ] setting to hide vals in exp labels?
 
@@ -135,4 +178,20 @@
 - [ ] autocomplete to vised values?
 
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
+
+
+
+
+
+## study
+
+- [x] build tool
+- [x] email zoom link
+- [x] record consent
+- [x] stop recording
+- [ ] setup payment
+
+- [x] email w9
+- [x] email tool & vim/emacs directions
+- [ ] record
 
