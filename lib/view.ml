@@ -394,9 +394,9 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
 
 
-let value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
+let value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
   let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
-  let locs_editable_in_value = root_exp_opt |>& Exp.flatten ||& [] |>@ Exp.loc in
+  let locs_editable_in_value = (associated_exp_label_opt |>& Exp.flatten ||& []) |>@ Exp.loc in
   let html_of_entry (_, frame_no, value, env) =
     span
       (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
@@ -412,8 +412,8 @@ let value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizer
     entries |>@ html_of_entry
 
 (* This is a separate function because the table view for function params needs the value htmls separately *)
-let html_of_values_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc =
-  let inners = value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers loc in
+let html_of_values_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
+  let inners = value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc in
   div ~attrs:[("class","values")] inners
 
 let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
@@ -421,13 +421,13 @@ let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
-  html_of_values_for_loc ~single_line_only stuff type_env (Some root_exp) visualizers exp.pexp_loc
+  html_of_values_for_loc ~single_line_only stuff type_env (Some exp) (Some root_exp) visualizers exp.pexp_loc
 
 let value_htmls_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs pat.ppat_attributes in
   let root_exp_opt = Pat.single_name pat |>& Exp.var in
-  value_htmls_for_loc ~single_line_only stuff type_env root_exp_opt visualizers pat.ppat_loc
+  value_htmls_for_loc ~single_line_only stuff type_env None root_exp_opt visualizers pat.ppat_loc
 
 let html_of_values_for_pat ?(single_line_only = false) stuff pat =
   div ~attrs:[("class","values")] (value_htmls_for_pat ~single_line_only stuff pat)
