@@ -195,19 +195,27 @@ nav img {
   padding: var(--padding);
   display: inline-block;
 }
+.scrutinee .root-value-holder,
 .exp_label .root-value-holder {
   padding: 0;
 }
+.scrutinee .values,
 .exp_label .values {
   display: inline-block;
   position: relative;
   top: -0.7em;
   margin-left: 2px;
-  background-color: var(--color-light);
   /* border: solid 1px var(--color); */
   padding: 1px;
   color: #555;
 }
+.exp_label .values {
+  background-color: var(--color-light);
+}
+.scrutinee .values {
+  background-color: #eee;
+}
+.scrutinee .subvalue-name,
 .exp_label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
   display: none;
 }
@@ -277,6 +285,7 @@ table.subvalue-annotations td {
   font-size: 0.65rem;
   margin-top: -0.2rem;
 }
+.scrutinee .root-value-holder,
 .exp_label .root-value-holder {
   font-size: 0.65rem;
 }
@@ -310,6 +319,7 @@ table.subvalue-annotations td {
   pointer-events: none;
 }
 .derived-vis-value .value,
+.scrutinee .value,
 .exp_label .value {
   font-weight: normal;
 }

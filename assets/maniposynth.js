@@ -34,6 +34,11 @@ Array.prototype.removeAsSet = function(elem) {
   return this;
 };
 
+Array.prototype.dedup = function () {
+  // https://stackoverflow.com/a/9229821
+  return this.filter((item, pos) => this.indexOf(item) == pos );
+}
+
 function doAction(action, reload) {
   if (reload === undefined) { reload = true };
   let request = new XMLHttpRequest();
@@ -727,22 +732,38 @@ function abortTextEdit(textbox) {
 function isNotVis(elem) {
   return !elem.closest(".derived-vis-value");
 }
-
-function valuesShownInFrame() {
-  return Array.from(document.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis);
+function isNotInExpLabel(elem) {
+  return !elem.closest(".exp_label");
 }
+function allExtractableValues() {
+  // We add valueIds to all of these.
+  return Array.from(document.querySelectorAll(".root-value-holder .value[data-extraction-code]"));
+}
+function localValuesShownInFrame(elem) {
+  const frameNoElem = findFrameNoElem(elem);
+  // Erroneously includes more deeply nested values that are otherwise inaccessible...
+  return Array.from(frameNoElem.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis).filter(isNotInExpLabel);
+}
+window.addEventListener('DOMContentLoaded', () => {
+  let valueId = 1;
+  allExtractableValues().forEach(elem => {
+    elem.dataset.valueId = `${valueId}`;
+    valueId++;
+  });
+});
+
 
 autocompleteOpen = false;
-function colorizeSubvalues() {
+function colorizeSubvalues(elem) {
   let hue = 30;
-  valuesShownInFrame().forEach(elem => {
+  localValuesShownInFrame(elem).forEach(elem => {
     elem.style.color = `hsl(${hue}, 90%, 40%)`;
     hue = (hue + 152) % 360;
   });
   autocompleteOpen = true;
 }
-function decolorizeSubvalues() {
-  valuesShownInFrame().forEach(elem => {
+function decolorizeSubvalues(elem) {
+  allExtractableValues().forEach(elem => {
     elem.style.color = null;
   });
   autocompleteOpen = false;
@@ -850,13 +871,13 @@ function subvalueToOptionPart(subvalueElem) {
 function optionFromSuggestion(suggestion) {
   const parts = suggestion.split(/\b/); /* Split on word boundaries */
   // Convert to nodes, turning value_id_123 into a pretty clone of that subvalue on the screen
-  const visibleValues = valuesShownInFrame();
+  const values = allExtractableValues();
   const nodes = parts.map(part => {
     let subvalueElem = null;
     if (part.startsWith('value_id_')) {
       // Try to find that subvalue
       const valueIdStr = "" + part.match(/value_id_(\d+)/)[1];
-      subvalueElem = valuesShownInFrame().find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr);
+      subvalueElem = values.find(elem => elem.dataset.valueId && elem.dataset.valueId === valueIdStr);
     }
     if (subvalueElem) {
       return subvalueToOptionPart(subvalueElem);
@@ -921,16 +942,15 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
     event.stopPropagation();
   });
   textboxDiv.addEventListener('focus', event => {
-    should_show_autocomplete && colorizeSubvalues();
+    should_show_autocomplete && colorizeSubvalues(targetElem);
     window.getSelection().selectAllChildren(textboxDiv);
     should_show_autocomplete && updateAutocompleteAsync(textboxDiv, selectedValueIdStr);
   });
 }
 
 function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
-  const frameNo         = frameNoForElem(textboxDiv.targetElem);
   const vbsLoc          = vbsHolderForInsert(textboxDiv.targetElem).dataset.loc;
-  const valuesVisible   = valuesShownInFrame();
+  const valuesVisible   = localValuesShownInFrame(textboxDiv.targetElem);
   const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
   const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replaceAll(",","~CoMmA~") /* escape commas */ );
   // console.log(valueStrs);
@@ -938,7 +958,7 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
 
   // https://stackoverflow.com/a/57067829
   const searchURL = new URL(document.location.href + "/search");
-  let queryParams = { frame_no: frameNo || -1, vbs_loc: vbsLoc, value_ids_visible: valueIdsVisible, value_strs: valueStrs, q: query };
+  let queryParams = { vbs_loc: vbsLoc, value_ids_visible: valueIdsVisible, value_strs: valueStrs, q: query };
   if (selectedValueIdStr) { queryParams["selected_value_id"] = selectedValueIdStr; }
   searchURL.search = new URLSearchParams(queryParams).toString();
   let request = new XMLHttpRequest();
@@ -1063,6 +1083,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // document.querySelectorAll('[data-code-to-assert-on]').forEach(elem => {
   //   elem.addEventListener("dblclick", beginEditCallback("new assert"));
   // });
+
 
   document.querySelectorAll('.vbs').forEach(elem => {
     elem.addEventListener("dblclick", beginNewCodeEdit(elem));
@@ -1465,7 +1486,7 @@ function findFrameNoElem(elem) {
 }
 
 function frameNos(frameRootElem) {
-  return Array.from(frameRootElem.querySelectorAll("[data-frame-no]")).map(elem => elem.dataset.frameNo).sort((fn1, fn2) => parseInt(fn1) - parseInt(fn2));
+  return Array.from(frameRootElem.querySelectorAll("[data-frame-no]")).map(elem => elem.dataset.frameNo).sort((fn1, fn2) => parseInt(fn1) - parseInt(fn2)).dedup();
 }
 
 // keyed by function name, e.g. "/top-level/fold"

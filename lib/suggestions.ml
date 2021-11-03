@@ -162,13 +162,7 @@ let rec terminal_exps exp = (* Dual of gather_vbs *)
     [] *)
 
 (* KISS for now: lexical completions of last word typed *)
-let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) frame_no vbs_loc value_ids_visible value_strs ?selected_value_id (query : string) =
-  let visible_values_in_frame =
-    let value_in_frame_by_id = Trace.entries_in_frame frame_no trace |>@ Trace.Entry.value |>@@ flatten_value |>@ (fun v -> (v.Data.id, v)) |> IntMap.of_list in
-    List.combine value_strs value_ids_visible
-    |>@& (fun (v_str, v_id) -> IntMap.find_opt v_id value_in_frame_by_id |>& (fun v -> (v_str, v)))
-    |> List.dedup_by snd
-  in
+let suggestions (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) vbs_loc value_ids_visible value_strs ?selected_value_id (query : string) =
   let locs = prog |> Exp.find_opt vbs_loc |>& terminal_exps ||& [] |>@ Exp.loc in
   let tenvs =
     (locs |>@& type_lookups.lookup_exp |>@ fun texp -> texp.Typedtree.exp_env)
@@ -208,8 +202,8 @@ let suggestions (trace : Trace.t) (type_lookups : Typing.lookups) (final_tenv : 
         @ SSet.elements initial_var_names
     in
     let subvalue_options =
-      visible_values_in_frame
-      |>@ begin fun (v_str, v) -> (v_str, "value_id_" ^ string_of_int v.id) end
+      List.combine value_strs value_ids_visible
+      |>@ begin fun (v_str, v_id) -> (v_str, "value_id_" ^ string_of_int v_id) end
     in
     selected_value_options |>@ fst |> List.iter print_endline;
     (* subvalue_options |>@ fst |> List.iter print_endline; *)

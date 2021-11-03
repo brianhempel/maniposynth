@@ -13,8 +13,7 @@ module UStore = Map.Make(struct
 end)
 
 (* vtraces don't serialize reliably enough across identical runs *)
-(* value id is (essentially) execution step which last returned the value *)
-type value = { v_ : value_; id: int; vtrace : vtrace; type_opt : Types.type_expr option }
+type value = { v_ : value_; vtrace : vtrace; type_opt : Types.type_expr option }
 and value_ =
   | Bomb (* Evalution hit some error, e.g. a hole made it to elimination position *)
   | Hole of (env ref * frame_no * expression) (* Evalution hit a hole - allows pushing requirements into bare holes in e.g. let not_a_func_yet = (??) in assert (not_a_func_yet [] = 0) *)
@@ -185,7 +184,7 @@ type assert_result =
   ; expected_exp : expression
   }
 
-let new_vtrace v_ = { v_ = v_; id = -1; vtrace = []; type_opt = None }
+let new_vtrace v_ = { v_ = v_; vtrace = []; type_opt = None }
 let add_type_opt type_opt v = { v with type_opt = type_opt }
 
 let unit = new_vtrace @@ Constructor ("()", 0, None)

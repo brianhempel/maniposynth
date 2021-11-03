@@ -239,7 +239,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
-        [("class", "value"); ("data-value-id", string_of_int value.id); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        [("class", "value"); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
       [str]
   in

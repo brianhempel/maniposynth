@@ -57,10 +57,6 @@ let alloc_fuel count f out_of_fuel_f = (* Subtracts fuel after return/failure. *
   reset_fuel ();
   out
 
-let value_id_counter          = ref 0
-let reset_value_id_counter () = value_id_counter := 0
-let next_value_id ()          = incr value_id_counter; !value_id_counter
-
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
   let map f = function Some x -> Some (f x) | None -> None
@@ -297,10 +293,10 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
     trace_state.Trace.trace <- Trace.add trace_entry trace_state.Trace.trace;
     value
   in
-  let intro                       v = { v with id = next_value_id (); vtrace = ((frame_no, expr.pexp_loc), Intro)                         :: v.vtrace } in
-  let use                         v = { v with id = next_value_id (); vtrace = ((frame_no, expr.pexp_loc), Use)                           :: v.vtrace } in
-  let ret                         v = { v with id = next_value_id (); vtrace = ((frame_no, expr.pexp_loc), Ret)                           :: v.vtrace } in
-  let pat_match root_val val_path v = { v with id = next_value_id (); vtrace = ((frame_no, expr.pexp_loc), PatMatch (root_val, val_path)) :: v.vtrace } in
+  let intro                       v = { v with vtrace = ((frame_no, expr.pexp_loc), Intro)                         :: v.vtrace } in
+  let use                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Use)                           :: v.vtrace } in
+  let ret                         v = { v with vtrace = ((frame_no, expr.pexp_loc), Ret)                           :: v.vtrace } in
+  let pat_match root_val val_path v = { v with vtrace = ((frame_no, expr.pexp_loc), PatMatch (root_val, val_path)) :: v.vtrace } in
   let intro_bomb () = intro @@ new_vtrace @@ Bomb in
   attach_trace @@
   match expr.pexp_desc with
@@ -655,8 +651,8 @@ and eval_bindings ?fuel_per_binding ?alloc_fuel_per_binding fillings prims env l
 and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val path pat ({ v_; _ } as v : value) =
   (* frame_no is passed in here because pattern matches can execute code, which will change the lookup_exp_typed trace_state frame_no for later calls to pattern_bind *)
   (* (namely the str = "Format" case) *)
-  let intro          v = { v with id = next_value_id (); vtrace = ((frame_no, pat.ppat_loc), Intro)                     :: v.vtrace } in
-  let pat_match path v = { v with id = next_value_id (); vtrace = ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: v.vtrace } in
+  let intro          v = { v with vtrace = ((frame_no, pat.ppat_loc), Intro)                     :: v.vtrace } in
+  let pat_match path v = { v with vtrace = ((frame_no, pat.ppat_loc), PatMatch (root_val, path)) :: v.vtrace } in
   let v = pat_match path v in
   let attach_trace env =
     let trace_entry = (pat.ppat_loc, frame_no, v, env) in

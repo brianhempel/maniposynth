@@ -63,7 +63,6 @@ let render_maniposynth out_chan url =
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
   let (trace, assert_results) =
     let open Camlboot_interpreter in
-    Eval.reset_value_id_counter ();
     Eval.with_gather_asserts begin fun () ->
       Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
     end
@@ -80,8 +79,8 @@ let render_suggestions out_chan uri =
   let url_path = uri |> Uri.path |> Uri.pct_decode in
   let file_path = url_path |> String.drop 1 |> String.drop_suffix "/search" |> nativize_path in
   let query_params = uri |> Uri.query in
-  match ["frame_no"; "vbs_loc"; "value_ids_visible"; "value_strs"; "q"] |>@ (fun key -> List.assoc_opt key query_params) |> Option.project with
-  | Some [[frame_no_str]; [vbs_loc_str]; [value_ids_visible_comma_separated]; [value_strs_comma_separated]; [q_str]] ->
+  match ["vbs_loc"; "value_ids_visible"; "value_strs"; "q"] |>@ (fun key -> List.assoc_opt key query_params) |> Option.project with
+  | Some [[vbs_loc_str]; [value_ids_visible_comma_separated]; [value_strs_comma_separated]; [q_str]] ->
     (* print_endline value_ids_visible_comma_separated; *)
     let value_ids_visible = value_ids_visible_comma_separated |> String.split_on_char ',' |> List.remove "" |>@ int_of_string in
     (* print_endline value_strs_comma_separated; *)
@@ -95,16 +94,8 @@ let render_suggestions out_chan uri =
     let html_str = View.html_str callables trace bindings_skels in *)
     let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file file_path in
     let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-    let (trace, _assert_results) =
-      let open Camlboot_interpreter in
-      Eval.reset_value_id_counter ();
-      Eval.with_gather_asserts begin fun () ->
-        Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [file_path]
-      end
-    in
-    let frame_no = int_of_string frame_no_str in
     let selected_value_id = List.assoc_opt "selected_value_id" query_params |>&& List.hd_opt |>& int_of_string in
-    let suggestions = Suggestions.suggestions trace type_lookups final_tenv parsed frame_no vbs_loc value_ids_visible value_strs ?selected_value_id q_str in
+    let suggestions = Suggestions.suggestions type_lookups final_tenv parsed vbs_loc value_ids_visible value_strs ?selected_value_id q_str in
     (* print_endline @@ string_of_int (List.length assert_results); *)
     (* let html_str = View.html_str parsed trace assert_results type_lookups final_tenv in *)
     (* Utils.save_file (file_path ^ ".html") html_str; *)
