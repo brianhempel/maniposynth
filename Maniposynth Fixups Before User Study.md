@@ -103,9 +103,15 @@
 
 - [x] show case pats as TVs on canvas
 
+- [x] and don't insert superfluous bindings that show the same thing
+
 - [x] fix undo/redo
 
-- [ ] only allow direct value edits on constants in the immediate expression
+- [x] only allow direct value edits on constants in the immediate expression
+
+- [ ] indicate that you're editing an exp
+
+- [ ] bigger click targets for root exps
 
 - [x] shorter names, name constants by type
 
@@ -122,6 +128,8 @@
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
 
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
+
+- [ ] show type errors
 
 - [x] too easy to switch frame
 
@@ -187,9 +195,8 @@
 - [x] email zoom link
 - [x] record consent
 - [x] stop recording
-- [ ] setup payment
-
+- [ ] setup payment https://finserv.uchicago.edu/sites/finserv.uchicago.edu/files/uploads/Form%20W-9%20%28Rev.%20October%202018%29.pdf
 - [x] email w9
-- [x] email tool & vim/emacs directions
+- [ ] email tool & vim/emacs directions
 - [ ] record
 

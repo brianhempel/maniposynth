@@ -384,7 +384,7 @@ and find_arg_count_for_name ?struct_items ?exp name =
         arg_count := max !arg_count (find_arg_count_for_name ~exp name)
     end
   in
-  let handle_pat name_still_visible pat =
+  let handle_root_pat name_still_visible pat =
     name_still_visible && begin
       pat |> Pat.flatten |> List.iter (fun pat -> iter_vis_attrs pat.ppat_attributes);
       not (List.mem name (Pat.names pat))
@@ -400,8 +400,8 @@ and find_arg_count_for_name ?struct_items ?exp name =
     e
   in
   begin match struct_items, exp with
-  | Some struct_items, _ -> ignore @@ map_exps_with_scope_prog true handle_pat iter_exp struct_items;
-  | _, Some exp          -> ignore @@ map_exps_with_scope      true handle_pat iter_exp exp;
+  | Some struct_items, _ -> ignore @@ map_exps_with_scope_prog true handle_root_pat iter_exp struct_items;
+  | _, Some exp          -> ignore @@ map_exps_with_scope      true handle_root_pat iter_exp exp;
   | _                    -> failwith "you were supposed to provide either struct_items or an exp..."
   end;
   !arg_count
@@ -502,9 +502,9 @@ let move_vbs_into_all_relevant_branches =
 let simplify_nested_matches_on_same_thing prog =
   let simplify scrutinee_name branch_pat branch =
     (* Handle shadowing. *)
-    let handle_pat higher_branch_opt pat = higher_branch_opt |>&& (fun ((scrutinee_name, _) as higher_branch) -> if List.mem scrutinee_name (Pat.names pat) then None else Some higher_branch) in
+    let handle_root_pat higher_branch_opt pat = higher_branch_opt |>&& (fun ((scrutinee_name, _) as higher_branch) -> if List.mem scrutinee_name (Pat.names pat) then None else Some higher_branch) in
     branch
-    |> map_exps_with_scope (Some (scrutinee_name, branch_pat)) handle_pat begin fun higher_branch_opt exp ->
+    |> map_exps_with_scope (Some (scrutinee_name, branch_pat)) handle_root_pat begin fun higher_branch_opt exp ->
       match higher_branch_opt, exp.pexp_desc with
       (* scrutinee is a simple variable and first pattern is a ctor *)
       | Some (higher_scrutinee_name, higher_branch_pat)
@@ -593,7 +593,6 @@ let remove_matches_with_no_cases prog =
   |> VbGroups.SequenceLike.map (fun imperative_exp -> Some imperative_exp |>&? should_keep)
 
 
-
 let move_up_duplicated_bindings prog =
   (* nondep = not dependent on the case pat OR anything defined earlier in the case branch *)
   (* If we iteratively pluck out such letexps one by one we will catch nondep chains. *)
@@ -675,6 +674,57 @@ let move_up_duplicated_bindings prog =
     | _ ->
       exp
   end
+
+
+(* Drag-to-extract produces a "let subvalue2 = subvalue in" binding, which is superfluous because
+name patterns in cases are shown as TVs on the canvas (becuase the above is ugly). Remove these bindings.
+
+(And copy their [@pos] attr to the pattern.)
+*)
+let remove_simple_rename_bindings prog =
+  let init_name_to_pat = [] in (* Association list of (name, pat) *)
+  let handle_root_pat name_to_pat pat =
+    let introduced =  Pat.flatten pat |>@? Pat.is_name |>@ (fun pat -> (Pat.name pat ||& "", pat)) in
+    introduced @ name_to_pat
+  in
+  let patterns_to_position = ref [] in (* List of (pat, Pos.t) *)
+  prog
+  |> map_exps_with_scope_prog init_name_to_pat handle_root_pat begin fun name_to_pat exp ->
+    match exp.pexp_desc with
+    (* let lhs_name = rhs_name in *)
+    | Pexp_let (Asttypes.Nonrecursive, [{pvb_pat; pvb_expr; pvb_attributes; _}], body) when Pat.is_single_name pvb_pat && Exp.is_ident pvb_expr ->
+      begin match (Pat.single_name pvb_pat, Exp.simple_name pvb_expr) with
+      | Some lhs_name, Some rhs_name
+        when List.mem_assoc rhs_name name_to_pat (* This is a simple renaming *)
+          && not @@ List.mem lhs_name (free_unqualified_names body) (* Name lhs_name unused *)
+          ->
+        let higher_pat = List.assoc rhs_name name_to_pat in
+        (* Note the pos attrs so we can copy it to the pat. *)
+        begin match Pos.from_attrs pvb_attributes with
+        | Some pos -> patterns_to_position := (higher_pat, pos) :: !patterns_to_position
+        | _        -> ()
+        end;
+        (* Remove the binding *)
+        body
+      | _ ->
+        exp
+      end
+    | _ ->
+      exp
+  end
+  (* |> begin fun prog ->
+    !patterns_to_position |> List.iter begin fun (pat, pos) ->
+      print_endline @@ Pat.to_string pat ^ " " ^ Exp.to_string (Pos.set_exp_pos pos.Pos.x pos.y (Exp.var "x"))
+    end;
+    prog
+  end *)
+  (* Copy positions to the pattern *)
+  |> Pat.map begin fun pat ->
+    match List.assoc_opt pat !patterns_to_position with
+    | Some pos -> Pos.(set_pat_pos pos.x pos.y pat)
+    | None     -> pat
+  end
+
 
 (* Naive extraction produces e.g. `f (match x with y -> y)` *)
 (* Turn that into `match x with y -> f y` *)
@@ -819,6 +869,8 @@ let fixup_matches final_tenv prog =
   |> move_up_duplicated_bindings
   (* |> log *)
   |> add_missing_cases final_tenv
+  (* |> log *)
+  |> remove_simple_rename_bindings
   (* |> log *)
 
 (* Need final tenv to know what constructors exist *)

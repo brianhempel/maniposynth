@@ -149,27 +149,27 @@ and names_in_vis_attrs attrs =
 
 (* Mapping is top-down, rather than bottom-up. *)
 (* Using OCaml binding semantics, rather than Maniposynth's non-linear pseudosemantics. *)
-(* handle_pat is only given the root pattern of a binding introduction (it's up to handle_pat to flatten&recurse, if need be) *)
-let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
+(* handle_root_pat is only given the root pattern of a binding introduction (it's up to handle_root_pat to flatten&recurse, if need be) *)
+let mapper_with_scope (init_scope_info : 'a) (handle_root_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) =
   let rec map_exp scope_info _ e =
     let e'                       = f scope_info e in
     let recurse                  = map_exp scope_info  (mapper scope_info) in
     let recurse'     scope_info' = map_exp scope_info' (mapper scope_info') in
     let map_children scope_info' = dflt_mapper.expr    (mapper scope_info') in
     let handle_case case =
-      let scope_info' = handle_pat scope_info case.pc_lhs in
+      let scope_info' = handle_root_pat scope_info case.pc_lhs in
       let recurse' = recurse' scope_info' in
       case |> Case.map_guard recurse' |> Case.map_rhs recurse'
     in
     let ret desc = { e' with pexp_desc = desc } in
     begin match e'.pexp_desc with
-    | Pexp_let (Asttypes.Nonrecursive, vbs, body)  -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in ret @@ Pexp_let (Asttypes.Nonrecursive, vbs |>@ Vb.map_exp recurse, recurse' scope_info' body)
-    | Pexp_let (Asttypes.Recursive, vbs, _)        -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in map_children scope_info' e'
+    | Pexp_let (Asttypes.Nonrecursive, vbs, body)  -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_root_pat scope_info in ret @@ Pexp_let (Asttypes.Nonrecursive, vbs |>@ Vb.map_exp recurse, recurse' scope_info' body)
+    | Pexp_let (Asttypes.Recursive, vbs, _)        -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_root_pat scope_info in map_children scope_info' e'
     | Pexp_match (scrutinee, cases)                -> ret @@ Pexp_match (recurse scrutinee, cases |>@ handle_case)
     | Pexp_try   (body, cases)                     -> ret @@ Pexp_try (recurse body, cases |>@ handle_case)
     | Pexp_function cases                          -> ret @@ Pexp_function (cases |>@ handle_case)
-    | Pexp_fun (arg_label, default, pat, body)     -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_fun (arg_label, default |>& recurse, pat, recurse' scope_info' body)
-    | Pexp_for (pat, e1, e2, dirflag, body)        -> let scope_info' = handle_pat scope_info pat in ret @@ Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse' scope_info' body)
+    | Pexp_fun (arg_label, default, pat, body)     -> let scope_info' = handle_root_pat scope_info pat in ret @@ Pexp_fun (arg_label, default |>& recurse, pat, recurse' scope_info' body)
+    | Pexp_for (pat, e1, e2, dirflag, body)        -> let scope_info' = handle_root_pat scope_info pat in ret @@ Pexp_for (pat, recurse e1, recurse e2, dirflag, recurse' scope_info' body)
     | Pexp_letmodule (_str_loced, _mod_exp, _body) -> failwith "map_with_scope: letmodule not handled"
     | Pexp_pack _mod_exp                           -> failwith "map_with_scope: pack not handled"
     | Pexp_object _                                -> failwith "map_with_scope: classes not handled"
@@ -182,8 +182,8 @@ let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) 
       sis
       |> List.fold_left begin fun (sis'_rev, scope_info) si ->
         (match si.pstr_desc with
-        | Pstr_value (Asttypes.Nonrecursive, vbs) -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info)  si :: sis'_rev, scope_info')
-        | Pstr_value (Asttypes.Recursive, vbs)    -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_pat scope_info in (map_si (mapper scope_info') si :: sis'_rev, scope_info')
+        | Pstr_value (Asttypes.Nonrecursive, vbs) -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_root_pat scope_info in (map_si (mapper scope_info)  si :: sis'_rev, scope_info')
+        | Pstr_value (Asttypes.Recursive, vbs)    -> let scope_info' = vbs |>@ Vb.pat |> List.fold_left handle_root_pat scope_info in (map_si (mapper scope_info') si :: sis'_rev, scope_info')
         | _                                       -> (map_si (mapper scope_info) si :: sis'_rev, scope_info)
         )
       end ([], scope_info)
@@ -193,15 +193,16 @@ let mapper_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) 
   in
   mapper init_scope_info
 
-let map_exps_with_scope (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
-  let mapper = mapper_with_scope init_scope_info handle_pat f in
+let map_exps_with_scope (init_scope_info : 'a) (handle_root_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) exp =
+  let mapper = mapper_with_scope init_scope_info handle_root_pat f in
   mapper.expr mapper exp
 
-let map_exps_with_scope_prog (init_scope_info : 'a) (handle_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) struct_items =
-  let mapper = mapper_with_scope init_scope_info handle_pat f in
+let map_exps_with_scope_prog (init_scope_info : 'a) (handle_root_pat : 'a -> pattern -> 'a) (f : 'a -> expression -> expression) struct_items =
+  let mapper = mapper_with_scope init_scope_info handle_root_pat f in
   mapper.structure mapper struct_items
 
 (* Preserves old attrs and locs *)
+(* Non-recursive *)
 let apply_subst_on_exp subst exp =
   match exp.pexp_desc with
   | Pexp_ident ({ txt = Longident.Lident name; _ } as lid_loced) ->
@@ -213,20 +214,20 @@ let apply_subst_on_exp subst exp =
 
 (* Preserves old attrs and locs *)
 let rename_unqualified_variables subst exp =
-  let handle_pat subst pat = SMap.remove_all (Pat.names pat) subst in
+  let handle_root_pat subst pat = SMap.remove_all (Pat.names pat) subst in
   exp
-  |> map_exps_with_scope subst handle_pat apply_subst_on_exp
+  |> map_exps_with_scope subst handle_root_pat apply_subst_on_exp
 
 (* Only handles single name pats for now, not as-pats. *)
 (* Preserves old attrs and locs *)
 let rename_pat_by_loc loc name' prog =
   let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = loc in
-  let handle_pat subst pat =
+  let handle_root_pat subst pat =
     let subst = SMap.remove_all (Pat.names pat) subst in
     match pat |> Pat.flatten |> List.find_opt is_target_pat with
     | Some pat -> SMap.add (Pat.single_name pat ||& "") name' subst
     | None     -> subst
   in
   prog
-  |> map_exps_with_scope_prog SMap.empty handle_pat apply_subst_on_exp
+  |> map_exps_with_scope_prog SMap.empty handle_root_pat apply_subst_on_exp
   |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
