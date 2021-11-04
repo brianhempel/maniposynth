@@ -99,7 +99,7 @@
 
 - [x] show infix op result on infix op
 
-- [ ] placeholder on function canvas to prompt?
+- [x] placeholder on function canvas to prompt?
 
 - [x] show case pats as TVs on canvas
 
@@ -109,11 +109,13 @@
 
 - [x] only allow direct value edits on constants in the immediate expression
 
-- [ ] indicate that you're editing an exp
-
 - [ ] bigger click targets for root exps
 
+- [ ] indicate that you're editing an exp
+
 - [x] shorter names, name constants by type
+
+- [ ] insert case splits without extracting
 
 - [ ] highlight var value origins on hover
 

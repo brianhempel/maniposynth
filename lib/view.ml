@@ -560,11 +560,12 @@ and local_canvas_vbs_and_returns_htmls stuff exp =
   let html_of_vb (recflag, vb) = html_of_vb stuff recflag vb in
   let vbs                      = gather_vbs exp in
   let case_pats_to_show_as_tvs = gather_case_pats exp in
+  let hint str = span ~attrs:[("class","hint")] [str] in
   (* let terminal_exps = terminal_exps exp in *)
   (* let ret_tv_path_descs = terminal_match_paths exps |>@ fun (_, pat, _) -> Pat.to_string pat in *)
   (* let ret_tv_htmls  = terminal_exps |>@ render_tv stuff None in *)
-  [ div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] @@ (case_pats_to_show_as_tvs |>@ html_tv_of_case_pat stuff) @ (vbs |>@ html_of_vb)
-  ; div ~attrs:[("class", "returns")] [ret_tree_html stuff exp]
+  [ div ~attrs:[("class", "vbs"); loc_attr exp.pexp_loc] @@ [hint "Bindings inside function - drag what you want below, or double-click to write code"] @ (case_pats_to_show_as_tvs |>@ html_tv_of_case_pat stuff) @ (vbs |>@ html_of_vb)
+  ; div ~attrs:[("class", "returns")] [hint "Return expression(s) and value(s)"; ret_tree_html stuff exp]
   ]
 
 and ret_tree_html stuff exp =

@@ -520,3 +520,9 @@ table.subvalue-annotations td {
   font-size: 1rem;
   overflow: hidden;
 }
+
+.hint {
+  font-style: italic;
+  color: dimgray;
+  padding: var(--padding);
+}
