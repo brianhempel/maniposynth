@@ -78,7 +78,7 @@ let hint str = span ~attrs:[("class","hint")] [str]
 
 
 let html_of_pat ?(attrs = []) stuff pat =
-  let code = Pat.to_string { pat with ppat_attributes = [] } in (* Don't show vis attrs. *)
+  let code = Pat.to_string @@ Pat.apply_mapper (Attrs.mapper (fun _ -> [])) pat in (* Don't show vis attrs. *)
   let pat_type_opt = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> texp.Typedtree.pat_type) in
   let perhaps_type_attr = pat_type_opt |>& (fun pat_type -> [("data-type", Type.to_string pat_type)]) ||& [] in
   let perhaps_extraction_attr =
