@@ -167,8 +167,9 @@ nav img {
   margin: 0;
 }
 
-.exp_label,
-.pat_label {
+.label > .exp,
+.label > .pat,
+td.pat_label > .pat {
   padding: var(--padding);
 }
 .box > .pat,
@@ -188,15 +189,17 @@ nav img {
   /* border-bottom: none; */
 }
 .root-value-holder {
-  padding: var(--padding);
   display: inline-block;
 }
-.scrutinee .root-value-holder,
-.exp_label .root-value-holder {
+.root-value-holder > .value {
+  padding: var(--padding);
+}
+.scrutinee .root-value-holder > .value,
+.label .root-value-holder > .value {
   padding: 0;
 }
 .scrutinee .values,
-.exp_label .values {
+.label .values {
   display: inline-block;
   position: relative;
   top: -0.7em;
@@ -205,14 +208,14 @@ nav img {
   padding: 1px;
   color: #555;
 }
-.exp_label .values {
+.label .values {
   background-color: var(--color);
 }
 .scrutinee .values {
   background-color: #eee;
 }
 .scrutinee .subvalue-name,
-.exp_label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
+.label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
   display: none;
 }
 .tv > .values {
@@ -243,8 +246,12 @@ table.subvalue-annotations td {
 }
 .tv > .label {
   background-color: var(--color-light);
+  /* display: grid;
+  grid-template-columns: max-content max-content auto;
+  align-items: center; */
 }
-.exp_label {
+.label > .pat_label,
+.label > .exp {
   display: inline-block;
 }
 
@@ -253,9 +260,9 @@ table.subvalue-annotations td {
   /* min-height for .vbs is in the the resizeVbHolders() javascript */
 }
 
-.exp_label {
+/* .label {
   font-size: 1rem;
-}
+} */
 .derived-vis-values {
   font-size: 0.8rem;
 }
@@ -263,7 +270,7 @@ table.subvalue-annotations td {
   font-size: 0.7rem;
 }
 .scrutinee .root-value-holder,
-.exp_label .root-value-holder {
+.label .root-value-holder {
   font-size: 0.7rem;
 }
 .root-value-holder {
@@ -297,7 +304,7 @@ table.subvalue-annotations td {
 }
 .derived-vis-value .value,
 .scrutinee .value,
-.exp_label .value {
+.label .value {
   font-weight: normal;
 }
 
@@ -318,7 +325,7 @@ table.subvalue-annotations td {
   /* background-color: rgba(200,200,200,0.5); */
   box-shadow: 1px 1px 7px rgba(0,0,0,0.3);
 }
-/* For making it clearer which tiny subvalue in an exp_label is hovered. */
+/* For making it clearer which tiny subvalue in an label is hovered. */
 .draggable-hovered.value,
 .highlighted {
   color: black;

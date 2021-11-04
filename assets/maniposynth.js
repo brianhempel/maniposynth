@@ -736,8 +736,8 @@ function abortTextEdit(textbox) {
 function isNotVis(elem) {
   return !elem.closest(".derived-vis-value");
 }
-function isNotInExpLabel(elem) {
-  return !elem.closest(".exp_label");
+function isNotInLabel(elem) {
+  return !elem.closest(".label");
 }
 function allExtractableValues() {
   // We add valueIds to all of these.
@@ -746,7 +746,7 @@ function allExtractableValues() {
 function localValuesShownInFrame(elem) {
   const frameNoElem = findFrameNoElem(elem);
   // Erroneously includes more deeply nested values that are otherwise inaccessible...
-  return Array.from(frameNoElem.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis).filter(isNotInExpLabel);
+  return Array.from(frameNoElem.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis).filter(isNotInLabel);
 }
 window.addEventListener('DOMContentLoaded', () => {
   let valueId = 1;

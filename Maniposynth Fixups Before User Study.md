@@ -109,7 +109,7 @@
 
 - [x] only allow direct value edits on constants in the immediate expression
 
-- [ ] bigger click targets for root exps
+- [x] bigger click targets for root exps
 
 - [ ] indicate that you're editing an exp
 
