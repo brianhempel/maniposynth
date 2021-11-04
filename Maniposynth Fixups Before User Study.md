@@ -111,7 +111,7 @@
 
 - [x] bigger click targets for root exps
 
-- [ ] indicate that you're editing an exp
+- [x] indicate that you're editing an exp
 
 - [x] shorter names, name constants by type
 

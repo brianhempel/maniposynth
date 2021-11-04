@@ -170,7 +170,12 @@ nav img {
 .label > .exp,
 .label > .pat,
 td.pat_label > .pat {
+  display: inline-block;
   padding: var(--padding);
+}
+td.pat_label > .pat {
+  min-height: 2rem;
+  line-height: 2rem;
 }
 .box > .pat,
 .pat_label.draggable-hovered,
@@ -188,15 +193,20 @@ td.pat_label > .pat {
   /* border-top: none; */
   /* border-bottom: none; */
 }
-.root-value-holder {
+/* .root-value-holder {
   display: inline-block;
-}
+} */
 .root-value-holder > .value {
   padding: var(--padding);
 }
 .scrutinee .root-value-holder > .value,
 .label .root-value-holder > .value {
   padding: 0;
+}
+/* Root value in TV result should be full width */
+.tv > .values > .root-value-holder > .value {
+  display: block;
+  /* text-align: left; */
 }
 .scrutinee .values,
 .label .values {
@@ -220,7 +230,7 @@ td.pat_label > .pat {
 }
 .tv > .values {
   background-color: var(--third-color-light);
-  min-height: 2.5rem;
+  min-height: 2.2rem;
   min-width: 2rem;
 }
 
@@ -250,11 +260,6 @@ table.subvalue-annotations td {
   grid-template-columns: max-content max-content auto;
   align-items: center; */
 }
-.label > .pat_label,
-.label > .exp {
-  display: inline-block;
-}
-
 .vbs {
   position: relative;
   /* min-height for .vbs is in the the resizeVbHolders() javascript */
@@ -282,9 +287,18 @@ table.subvalue-annotations td {
   cursor: pointer;
   font-weight: bold;
   font-family: system-ui;
-  text-align: center;
+  /* text-align: center; */
   position: relative; /* Without this, tree edges are not drawn correctly in the autocomplete list */
 }
+/* constants in value position */
+.value[data-in-place-edit-code] {
+  background-color: var(--color-light);
+}
+/* non-constant subvalues of something constant */
+.value[data-in-place-edit-code] .value:not([data-in-place-edit-code]) {
+  background-color: var(--third-color-light);
+}
+
 .value > * {
   text-align: normal;
 }
@@ -327,9 +341,11 @@ table.subvalue-annotations td {
 }
 /* For making it clearer which tiny subvalue in an label is hovered. */
 .draggable-hovered.value,
-.highlighted {
+.draggable-hovered.value .value,
+.highlighted,
+.highlighted .value {
   color: black;
-  background-color: rgb(255, 255, 249);
+  background-color: rgb(255, 255, 249) !important; /* Need to override the green-background constants */
 }
 
 .current-drop-target {

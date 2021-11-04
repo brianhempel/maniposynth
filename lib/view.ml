@@ -204,8 +204,8 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     value.vtrace
     |> List.rev
     |> List.findmap_opt begin function
-      | ((_, loc), (Use | Ret | Intro)) when List.mem loc locs_editable_in_value -> Exp.find_opt loc stuff.prog
-      | _                                                                        -> None
+      | ((_, loc), Intro) when List.mem loc locs_editable_in_value -> Exp.find_opt loc stuff.prog
+      | _                                                          -> None
     end
     |>& exp_in_place_edit_attrs ||& []
   in
