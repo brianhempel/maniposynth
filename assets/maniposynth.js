@@ -1053,6 +1053,9 @@ function updateAutocomplete(textboxDiv, suggestions) {
 
     autocompleteDiv.appendChild(option);
   }
+
+  removeTreeEdges();
+  redrawTreeEdges();
 }
 
 

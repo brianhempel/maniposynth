@@ -303,7 +303,11 @@ table.subvalue-annotations td {
   text-align: normal;
 }
 .tree-kids {
-  margin-top: 0.4em;
+  margin: 0.4em auto 0;
+}
+.tree-node {
+  text-align: center;
+  display: block;
 }
 .tree-kids, .tree-node {
   font-size: 1rem;
@@ -342,6 +346,7 @@ table.subvalue-annotations td {
 /* For making it clearer which tiny subvalue in an label is hovered. */
 .draggable-hovered.value,
 .draggable-hovered.value .value,
+.draggable-hovered.exp,
 .highlighted,
 .highlighted .value {
   color: black;
