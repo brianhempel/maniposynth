@@ -74,6 +74,9 @@ let box ?(attrs = []) ~loc ~parsetree_attrs klass inners =
   let attrs = ("class", ("box " ^ klass)) :: loc_attr loc:: perhaps_pos_attr @ attrs in
   div ~attrs inners
 
+let hint str = span ~attrs:[("class","hint")] [str]
+
+
 let html_of_pat ?(attrs = []) stuff pat =
   let code = Pat.to_string { pat with ppat_attributes = [] } in (* Don't show vis attrs. *)
   let pat_type_opt = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> texp.Typedtree.pat_type) in
@@ -560,7 +563,6 @@ and local_canvas_vbs_and_returns_htmls stuff exp =
   let html_of_vb (recflag, vb) = html_of_vb stuff recflag vb in
   let vbs                      = gather_vbs exp in
   let case_pats_to_show_as_tvs = gather_case_pats exp in
-  let hint str = span ~attrs:[("class","hint")] [str] in
   (* let terminal_exps = terminal_exps exp in *)
   (* let ret_tv_path_descs = terminal_match_paths exps |>@ fun (_, pat, _) -> Pat.to_string pat in *)
   (* let ret_tv_htmls  = terminal_exps |>@ render_tv stuff None in *)
@@ -753,6 +755,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ; div ~attrs:[("class", "top-matter")] @@
         List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
+        [hint "Top level - drag items from the menus above, or double-click below to write code"] @
         List.map (html_of_vb_structure_item stuff) structure_items
       ; div ~attrs:[("id", "inspector")]
         [ div ~attrs:[("id", "text-edit-pane")]
