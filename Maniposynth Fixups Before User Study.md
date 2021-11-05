@@ -121,7 +121,7 @@
 
 - [x] perhaps fun arg values should have a yellow background? (or for the current frame at least?)
 
-- [ ] rework layout alg
+- [x] rework layout alg
 
 - [ ] insert case splits without extracting
 

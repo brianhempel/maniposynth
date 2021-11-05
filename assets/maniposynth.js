@@ -1371,7 +1371,7 @@ function resizeVbHolders() {
       if (box.classList.contains("box")) { /* Skip transient textboxes in the vbs elem */
         maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
         maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
-        console.log(maxWidth,maxHeight,box);
+        // console.log(maxWidth,maxHeight,box);
       }
     }
     if (vbsHolder.tagName === "TD") {
@@ -1383,46 +1383,74 @@ function resizeVbHolders() {
     }
   });
 };
+// Algorithm:
+// Place elements from top to bottom.
+// If overlapping with prior elements, move right a bit.
+// Otherwise, move it (and everything after) down.
+// Thus, vertical ordering (of element tops) never changes.
 function reflow() {
   const vbsHolders = document.querySelectorAll(".vbs");
+  const allowedOverlapAmount = 40;
+  const maxRightwardMovement = 300;
   function left(box)  { return box.offsetLeft; }
   function top(box)   { return box.offsetTop; }
   function right(box) { return box.offsetLeft + box.offsetWidth; }
   function bot(box)   { return box.offsetTop + box.offsetHeight; }
   function areOverlapping(box1, box2) {
-    if (right(box1) < left(box2) || right(box2) < left(box1)) { return false; }
-    if (bot(box1)   < top(box2)  || bot(box2)   < top(box1))  { return false; }
+    if (right(box1) < left(box2) + allowedOverlapAmount || right(box2) - allowedOverlapAmount < left(box1)) { return false; }
+    if (bot(box1)   < top(box2)  + allowedOverlapAmount || bot(box2)   - allowedOverlapAmount < top(box1))  { return false; }
     // console.log(box1, box2, left(box1), top(box1), right(box1), bot(box1), left(box2), top(box2), right(box2), bot(box2));
     return true;
   }
   function size(box) { return box.offsetWidth * box.offsetHeight; }
   vbsHolders.forEach(vbsHolder => {
     const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("box")); /* Skip transient textboxes in the vbs elem */
-    // Position largest stuff first.
-    boxes.sort((box1, box2) => size(box2) - size(box1));
+    // boxes.sort((box1, box2) => size(box2) - size(box1)); // Position largest stuff first.
+    boxes.sort((box1, box2) => top(box1) - top(box2)); // Position top-to-bottom
+    console.log(boxes);
+    let pushEverythingDownBy = 0;
     for (box of boxes) {
-      const mySize = size(box);
-      const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box && mySize <= size(otherBox)); /* If box has an explicit position and is larger */
+      // const mySize = size(box);
+      const myTop = top(box);
+      // const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box && mySize <= size(otherBox)); /* If box has an explicit position and is larger */
+      const boxesToDodge = boxes.filter(otherBox => otherBox.style.left && otherBox !== box && myTop >= top(otherBox)); /* If box has an explicit position and is higher */
       var left0 = parseInt(box.dataset.left);
       var top0  = parseInt(box.dataset.top);
-      if (isNaN(left0)) { left0 = 10 };
+      if (isNaN(left0)) { left0 = 5 };
       if (isNaN(top0) && vbsHolder.classList.contains("top-level")) { top0 = 50 };
-      if (isNaN(top0)) { top0 = 10 };
+      if (isNaN(top0)) { top0 = 5 };
 
-      // More or less, move in the cardinal direction that moves the box the least.
-      var r = 0;
-      var theta = 0;
-      box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`
-      box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`
-      while (parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) {
-        r += 10;
-        theta = 0;
-        while ((parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) && theta < 2*Math.PI) {
-          box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`;
-          box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`;
-          theta += Math.PI/2;
+      var dx = 0;
+      box.style.left = `${left0 + dx}px`
+      box.style.top  = `${top0 + pushEverythingDownBy}px`
+      while (boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+        dx += 10;
+        if(dx > maxRightwardMovement) { break; }
+        box.style.left = `${left0 + dx}px`;
+      }
+      // Still can't find a good location, move everything down instead.
+      if (boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+        box.style.left = `${left0}px`
+        while (boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+          pushEverythingDownBy += 10;
+          box.style.top  = `${top0 + pushEverythingDownBy}px`
         }
       }
+
+      // More or less, move in the cardinal direction that moves the box the least.
+      // var r = 0;
+      // var theta = 0;
+      // box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`
+      // box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`
+      // while (parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) {
+      //   r += 10;
+      //   theta = 0;
+      //   while ((parseInt(box.style.left) < 0 || parseInt(box.style.top) < 0 || boxesToDodge.find(box2 => areOverlapping(box, box2))) && theta < 2*Math.PI) {
+      //     box.style.left = `${left0 + r * Math.cos(theta + Math.PI/2)}px`;
+      //     box.style.top  = `${top0  + r * Math.sin(theta + Math.PI/2)}px`;
+      //     theta += Math.PI/2;
+      //   }
+      // }
     }
   });
 }
