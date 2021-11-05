@@ -628,7 +628,7 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         let default_exp_str = default_opt |>& (fun default_exp -> " = " ^ html_of_exp stuff default_exp) ||& "" in
         let row =
           tr ~attrs:[("class", "pat fun-param")] @@
-            [ td ~attrs:[("class", "pat_label")] [string_of_arg_label label ^ html_of_pat stuff pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
+            [ td ~attrs:[("class", "pat-label")] [string_of_arg_label label ^ html_of_pat stuff pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
             ] @ (value_htmls_for_pat stuff pat |>@ List.singleton |>@ td)
         in
         (row::later_rows, final_body)
@@ -694,7 +694,7 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         local_canvas_vbs_and_returns_htmls stuff exp
       else
         [ div ~attrs:[("class", "label")] @@
-          (pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat ^ " = ") |> Option.to_list) @
+          (pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat-label pat")] stuff pat ^ " = ") |> Option.to_list) @
           [html_of_exp ~tv_root_exp:true stuff exp]
         ; html_of_values_for_exp stuff pat_opt exp
         ]
@@ -702,7 +702,7 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
   | None ->
     pat_opt |>& begin fun pat ->
       div ~attrs:[("class", "tv")]
-        [ div ~attrs:[("class", "label")] [html_of_pat ~attrs:[("class", "pat_label pat")] stuff pat]
+        [ div ~attrs:[("class", "label")] [html_of_pat ~attrs:[("class", "pat-label pat")] stuff pat]
         ; html_of_values_for_pat stuff pat
         ]
     end ||& "expected either a pat or an exp to be given to render_tv"

@@ -117,9 +117,9 @@
 
 - [x] display rets as a row under the incoming function args
 
-  - [ ] support visualizers on them
+  - [x] ~~support visualizers on them~~
 
-- [ ] perhaps fun arg values should have a yellow background? (or for the current frame at least?)
+- [x] perhaps fun arg values should have a yellow background? (or for the current frame at least?)
 
 - [ ] rework layout alg
 
@@ -133,20 +133,15 @@
 
 - [x] highlight holes in red
 
+--- go over P1S1
+
 - [ ] tools offscreen
-
 - [ ] tooltips describing what the pieces are?
-
 - [ ] don't allow same names in a scope?
-
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
-
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
-
 - [ ] show type errors
-
 - [ ] hide hints once there's stuff
-
 - [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
 
 - [x] too easy to switch frame

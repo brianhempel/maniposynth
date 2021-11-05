@@ -138,7 +138,7 @@ nav img {
 }
 
 .box > .pat,
-.pat_label,
+.pat-label,
 .case > .pat,
 .subvalue-name {
   font-family: 'Times New Roman', Times, serif;
@@ -188,22 +188,23 @@ nav img {
 
 .label > .exp,
 .label > .pat,
-td.pat_label > .pat {
+td.pat-label > .pat {
   display: inline-block;
   padding: var(--padding);
 }
-td.pat_label > .pat {
+td.pat-label > .pat {
   min-height: 2rem;
   line-height: 2rem;
 }
 .box > .pat,
-.pat_label.draggable-hovered,
+.pat-label.draggable-hovered,
 .subvalue-name {
   background-color: white;
 }
-.fun-param > .pat_label {
+.fun-param > .pat-label {
   color: white;
   background-color: var(--pat-color);
+  border: solid 1px var(--pat-color);
 }
 .fun-param > td {
   border: solid 1px var(--pat-color-light);
@@ -218,7 +219,9 @@ td.pat_label > .pat {
 td.returns-label {
   font-style: italic;
   padding: var(--padding);
-  color: dimgray;
+  color: lightgray;
+  background-color: dimgray;
+  border: solid 1px dimgray;
 }
 /* .root-value-holder {
   display: inline-block;
@@ -255,8 +258,12 @@ td.returns-label {
 .label .subvalue-name { /* Don't show subvalue names in green subexp value displays */
   display: none;
 }
+.fun-param > td:not(.pat-label),
+.fun-returns > td:not(.returns-label),
 .tv > .values {
   background-color: var(--third-color-light);
+}
+.tv > .values {
   min-height: 2.2rem;
   min-width: 2rem;
 }
