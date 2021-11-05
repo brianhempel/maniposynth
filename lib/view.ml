@@ -296,13 +296,13 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     ; tr [td [extracted_subvalue_names]]
     ] ^
   match value_ with
-  | Bomb                                     -> "💣"
-  | Hole _                                   -> "??"
-  | Int int                                  -> string_of_int int
-  | Int32 int32                              -> Int32.to_string int32
-  | Int64 int64                              -> Int64.to_string int64
-  | Nativeint nativeint                      -> Nativeint.to_string nativeint
-  | Fun _ | Function _ ->
+  | Bomb                -> "💣"
+  | Hole _              -> "??"
+  | Int int             -> string_of_int int
+  | Int32 int32         -> Int32.to_string int32
+  | Int64 int64         -> Int64.to_string int64
+  | Nativeint nativeint -> Nativeint.to_string nativeint
+  | Fun _ | Function _  ->
     value.vtrace
     |> List.rev
     |> List.findmap_opt begin function
@@ -312,13 +312,13 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     end
     ||&~ begin fun _ ->
       match value_ with
-      | Fun (arg_label, e_opt, pat, body, _)     -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
-      | Function (_, _)                          -> "func"
-      | _                                        -> failwith "impossible"
+      | Fun (arg_label, e_opt, pat, body, _) -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
+      | Function (_, _)                      -> "func"
+      | _                                    -> failwith "impossible"
     end
-  | String bytes                             -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
-  | Float float                              -> string_of_float float
-  | Tuple vs                                 ->
+  | String bytes -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
+  | Float float  -> string_of_float float
+  | Tuple vs     ->
     begin match (tuple_or_array_children ~in_list vs, in_list) with
     | ([head; tail], true) -> head ^ tail
     | (children, _)        -> "(" ^ String.concat ", " children ^ ")"
@@ -375,12 +375,12 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       end
     end
     ||&~ (fun () -> ctor_name_to_show ^ recurse ~in_list:(ctor_name = "::") None arg)
-  | Prim _                                   -> "prim"
-  | Fexpr _                                  -> "fexpr"
-  | ModVal _                                 -> "modval"
-  | InChannel _                              -> "inchannel"
-  | OutChannel _                             -> "outchannel"
-  | Record entry_map                         ->
+  | Prim _           -> "prim"
+  | Fexpr _          -> "fexpr"
+  | ModVal _         -> "modval"
+  | InChannel _      -> "inchannel"
+  | OutChannel _     -> "outchannel"
+  | Record entry_map ->
     entry_map
     |> SMap.bindings
     |> List.map begin fun (field_name, value_ref) ->
@@ -395,30 +395,50 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     end
     |> String.concat "; "
     |> (fun entries_str -> "{ " ^ entries_str ^ " }")
-  | Lz _                                     -> "lazy"
-  | Array values_arr                         -> "[! " ^ String.concat "; " (tuple_or_array_children @@ Array.to_list values_arr) ^ " !]"
-  | Fun_with_extra_args (_, _, _)            -> "funwithextraargs"
-  | Object _                                 -> "object"
-  | ExCall _                                 -> "ExCall ShouldntSeeThis"
-  | ExDontCare                               -> "ExDontCare ShouldntSeeThis"
+  | Lz _                          -> "lazy"
+  | Array values_arr              -> "[! " ^ String.concat "; " (tuple_or_array_children @@ Array.to_list values_arr) ^ " !]"
+  | Fun_with_extra_args (_, _, _) -> "funwithextraargs"
+  | Object _                      -> "object"
+  | ExCall _                      -> "ExCall ShouldntSeeThis"
+  | ExDontCare                    -> "ExDontCare ShouldntSeeThis"
 
+
+(* [a,b,c,d,e,g,h] => ([Some a, Some b, None, Some g, Some h], count_elided) *)
+(* Its own function because we use the logic a few different contexts. *)
+(* max_shown should be odd. *)
+let max_frames_per_function = 7 (* Should be odd. *)
+let elide_middle_if_too_many max_shown list =
+  if List.length list >= max_shown then
+    let list' =
+      (List.prefix (max_shown/2) list |>@ Option.some) @
+      [None] @
+      (List.suffix (max_shown/2) list |>@ Option.some)
+    in
+    (list', List.length list - 2*(max_shown/2))
+  else
+    (List.map Option.some list, 0)
+
+(* Sorted by frame_no *)
+let entries_for_locs stuff locs = stuff.trace |> Trace.entries_for_locs locs |> List.sort_by Trace.Entry.frame_no
+let entries_for_loc  stuff loc  = entries_for_locs stuff [loc]
+
+let html_of_trace_entry ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt (loc, frame_no, value, env) =
+  span
+    (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
+    ~attrs:[("class","root-value-holder"); ("data-loc", Serialize.string_of_loc loc); ("data-frame-no", string_of_int frame_no)]
+    [html_of_value ~single_line_only stuff frame_no visualizers env type_env locs_editable_in_value root_exp_opt value]
 
 let value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
-  let entries = stuff.trace |> Trace.entries_for_loc loc |> List.sort_by (fun (_, frame_no, _, _) -> frame_no) in
+  let entries = entries_for_loc stuff loc in
   let locs_editable_in_value = (associated_exp_label_opt |>& Exp.flatten ||& []) |>@ Exp.loc in
-  let html_of_entry (_, frame_no, value, env) =
-    span
-      (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
-      ~attrs:[("class","root-value-holder"); ("data-loc", Serialize.string_of_loc loc); ("data-frame-no", string_of_int frame_no)]
-      [html_of_value ~single_line_only stuff frame_no visualizers env type_env locs_editable_in_value root_exp_opt value]
-  in
-  let max_shown = 7 in (* Should be odd. *)
-  if List.length entries >= max_shown then
-    (List.prefix (max_shown/2) entries |>@ html_of_entry) @
-    [span ~attrs:[("class","ellipses")] ["..." ^ string_of_int (List.length entries - 2*(max_shown/2)) ^ " more..."]] @
-    (List.suffix (max_shown/2) entries |>@ html_of_entry)
-  else
-    entries |>@ html_of_entry
+  let (elided_entries, count_elided) = elide_middle_if_too_many max_frames_per_function entries in
+  elided_entries |>@ begin function
+    | Some entry -> html_of_trace_entry ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt entry
+    | None       -> span ~attrs:[("class","ellipses")] ["..." ^ string_of_int count_elided ^ " more..."]
+  end
+
+(* let value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc = *)
+
 
 (* This is a separate function because the table view for function params needs the value htmls separately *)
 let html_of_values_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
@@ -501,28 +521,6 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   | _ ->
     values_for_exp ^ code' ^ " "
 
-
-(* let rec terminal_exps exp = (* Dual of gather_vbs *)
-  match exp.pexp_desc with
-  | Pexp_let (_, _, e)       -> terminal_exps e
-  | Pexp_sequence (_, e2)    -> terminal_exps e2
-  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
-  | Pexp_letmodule (_, _, e) -> terminal_exps e
-  | _                        -> [exp] *)
-
-(* Gather list of (scrutinee, case pat, guard opt) for each terminal exp
-let rec terminal_match_paths exp =
-  match exp.pexp_desc with
-  | Pexp_let (_, _, e)       -> terminal_match_paths e
-  | Pexp_sequence (_, e2)    -> terminal_match_paths e2
-  | Pexp_letmodule (_, _, e) -> terminal_match_paths e
-  | Pexp_match (scrutinee, cases) ->
-    cases
-    |>@@ begin fun {pc_lhs; pc_guard; pc_rhs } ->
-      terminal_match_paths pc_rhs |>@ (fun path -> (scrutinee, pc_lhs, pc_guard)::path)
-    end
-  | _                        -> [[]] *)
-
 let rec gather_vbs exp = (* Dual of ret_tree_html *)
   let tag_rec recflag vb = (recflag, vb) in
   match exp.pexp_desc with
@@ -593,12 +591,21 @@ and ret_tree_html stuff exp =
       ]
   | _ -> div ~attrs:[("class", "return")] [render_tv stuff None (Some exp)]
 
+(* Mirrors ret_tree_html *)
+and ret_exps stuff exp =
+  let recurse = ret_exps stuff in
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)       -> recurse e
+  | Pexp_sequence (_, e2)    -> recurse e2
+  | Pexp_letmodule (_, _, e) -> recurse e
+  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ recurse
+  | _                        -> [exp]
 
 (* Actually renders all values, but only one is displayed at a time (via Javascript). *)
 and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) =
   let _ = show_output in
   match exp_opt with
-  | Some ({ pexp_desc = Pexp_fun _; _ } as exp) ->
+  | Some ({ pexp_desc = Pexp_fun (_, _, first_arg_pat, _); _ } as exp) ->
     let rec get_param_rows_and_body exp =
       match exp.pexp_desc with
       | Pexp_fun (label, default_opt, pat, body) ->
@@ -612,12 +619,39 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         (row::later_rows, final_body)
       | _ -> ([], exp)
     in
+    (* let get_ret_row some_param_row body =
+      let frame_nos =
+    in *)
     let param_rows, body = get_param_rows_and_body exp in
+    let ret_row =
+      let (entries, count_elided) =
+        entries_for_loc stuff first_arg_pat.ppat_loc
+        |> elide_middle_if_too_many max_frames_per_function
+      in
+      let frame_no_opts = entries |>@ Option.map Trace.Entry.frame_no in
+      let locs = ret_exps stuff body |>@ Exp.loc in
+      let ret_entries = entries_for_locs stuff locs in
+      let type_env = stuff.type_lookups.Typing.lookup_pat first_arg_pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
+      let tds =
+        frame_no_opts |>@ begin function
+          | Some frame_no ->
+            ret_entries
+            |> List.find_opt (Trace.Entry.frame_no %> (=) frame_no)
+            |>& html_of_trace_entry ~single_line_only:false stuff [] type_env [] None
+            ||& ""
+          | None -> span ~attrs:[("class","ellipses")] ["..." ^ string_of_int count_elided ^ " more..."]
+        end
+        |>@ List.singleton |>@ td
+      in
+      tr ~attrs:[("class", "fun-returns")] @@
+        [ td ~attrs:[("class", "returns-label")] ["Returns"]
+        ] @ tds
+    in
     (* Technically, a function is value and one can argue the above code should be in html_of_values_for_exp *)
     (* Don't remember why I double wrapped this. But when I do, hovering over a top level value causes other top level functions to gray out because there's no child element that has the same frameNo as the top level. So let's try not double wrapping and see what happens... *)
     (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
-        [ table param_rows ] @
+        [ table @@ param_rows @ [ret_row] ] @
         local_canvas_vbs_and_returns_htmls stuff body
       end
     (* ] *)

@@ -193,6 +193,14 @@ td.pat_label > .pat {
   /* border-top: none; */
   /* border-bottom: none; */
 }
+.fun-returns > td {
+  border: solid 1px lightgray;
+}
+td.returns-label {
+  font-style: italic;
+  padding: var(--padding);
+  color: dimgray;
+}
 /* .root-value-holder {
   display: inline-block;
 } */
@@ -336,8 +344,10 @@ table.subvalue-annotations td {
 .tv.not-in-active-frame {
   opacity: 0.4;
 }
-.pat .not-in-active-frame,
-.pat .ellipses {
+.fun-returns .not-in-active-frame,
+.fun-returns .ellipses,
+.fun-param .not-in-active-frame,
+.fun-param .ellipses {
   display: inline-block;
   opacity: 0.14;
 }

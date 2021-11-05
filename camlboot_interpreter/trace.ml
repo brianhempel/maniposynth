@@ -30,14 +30,17 @@ let add entry trace =
   let counter = if IMap.is_empty trace then 0 else IMap.max_binding trace |> fst in
   IMap.add (counter + 1) entry trace
 
-let entries_for_loc loc trace =
+let entries_for_locs locs trace =
   let finder _ entry results =
-    if Entry.loc entry = loc then
+    if List.mem (Entry.loc entry) locs then
       entry :: results
     else
       results
   in
   IMap.fold finder trace []
+
+let entries_for_loc loc trace =
+  entries_for_locs [loc] trace
 
 let entries_in_frame frame_no trace =
   let finder _ entry results =

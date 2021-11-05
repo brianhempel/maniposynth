@@ -43,6 +43,7 @@ let (%||&~) f default_f = fun x -> match f x with Some x -> x | _ -> default_f (
 
 module Option = struct
   (* Selections from https://ocaml.org/api/Option.html *)
+  let some x = Some x
   let map f = function Some x -> Some (f x) | None -> None
   let iter f = function Some x -> f x | None -> ()
   let join = function Some (Some x) -> Some x | _ -> None
