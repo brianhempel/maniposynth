@@ -212,6 +212,23 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     end
     |>& exp_in_place_edit_attrs ||& []
   in
+  let extracted_subvalue_names =
+    let rec is_descendent candidate_vtrace ancestor_vtrace =
+      candidate_vtrace == ancestor_vtrace ||
+      match candidate_vtrace with
+      | _::rest -> is_descendent rest ancestor_vtrace
+      | []      -> false
+    in
+    Trace.entries_in_frame frame_no stuff.trace
+    |>@ Trace.Entry.value
+    |>@? (fun { v_; _ }     -> v_ == value_)
+    |>@? (fun { vtrace; _ } -> is_descendent vtrace value.vtrace)
+    |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
+    |>@& (fun loc -> Pat.find_opt loc stuff.prog)
+    |>@? (Pat.name %>& ((<>) extraction_code) %||& false) (* A name pat but not trival. If = extraction_code that means we're at the root of pat that's likely labeled elsewhere. *)
+    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")] stuff
+    |> String.concat ""
+  in
   let wrap_value str =
     let perhaps_extraction_code =
       extraction_exp_opt
@@ -235,6 +252,12 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       end
       |> Option.to_list
     in
+    let perhaps_destructable_class =
+      match value_ with
+      | Constructor _
+        when (extraction_exp_opt |>& Exp.is_ident ||& false) || extracted_subvalue_names <> "" -> " destructable"
+      | _                                                                                      -> ""
+    in
     span
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
@@ -243,7 +266,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
-        [("class", "value"); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        [("class", "value" ^ perhaps_destructable_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
       [str]
   in
@@ -266,23 +289,6 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       children
     end
     ||&~ (fun () -> vs |> List.mapi (fun i v -> recurse ~in_list:(i = 1 && in_list (* tail position *)) None v))
-  in
-  let extracted_subvalue_names =
-    let rec is_descendent candidate_vtrace ancestor_vtrace =
-      candidate_vtrace == ancestor_vtrace ||
-      match candidate_vtrace with
-      | _::rest -> is_descendent rest ancestor_vtrace
-      | []      -> false
-    in
-    Trace.entries_in_frame frame_no stuff.trace
-    |>@ Trace.Entry.value
-    |>@? (fun { v_; _ }     -> v_ == value_)
-    |>@? (fun { vtrace; _ } -> is_descendent vtrace value.vtrace)
-    |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
-    |>@& (fun loc -> Pat.find_opt loc stuff.prog)
-    |>@? (Pat.name %>& ((<>) extraction_code) %||& false) (* A name pat but not trival. If = extraction_code that means we're at the root of pat that's likely labeled elsewhere. *)
-    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")] stuff
-    |> String.concat ""
   in
   wrap_value @@
   table ~attrs:[("class","subvalue-annotations")]

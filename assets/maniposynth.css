@@ -299,6 +299,9 @@ table.subvalue-annotations td {
 .value[data-in-place-edit-code] .value:not([data-in-place-edit-code]) {
   background-color: var(--third-color-light);
 }
+/* .value.destructable {
+  border: 1px solid var(--pat-color);
+} */
 
 .value > * {
   text-align: normal;
