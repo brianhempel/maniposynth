@@ -20,6 +20,7 @@ type t =
   | Redo
   | DoSynth
   | InsertCode       of string * string * (int * int) option (* vbs loc str, code, pos opt *)
+  | Destruct         of string * string  (* vbs loc str, scrutinee code *)
   | SetPos           of string * int * int (* loc str, x, y *)
   | MoveVb           of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
   | SetRecFlag       of string * bool (* vb loc str, is rec *)
@@ -46,6 +47,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
           ; `List [`String "None"]]                                                  -> InsertCode (vbs_loc_str, code, None)
   | `List [`String "InsertCode"; `String vbs_loc_str; `String code
           ; `List [`String "Some"; x; y]]                                            -> InsertCode (vbs_loc_str, code, Some (float_or_int_to_int x, float_or_int_to_int y))
+  | `List [`String "Destruct"; `String vbs_loc_str; `String destruct_code]           -> Destruct (vbs_loc_str, destruct_code)
   | `List [`String "SetPos"; `String loc_str; x; y]                                  -> SetPos (loc_str, float_or_int_to_int x, float_or_int_to_int y)
   | `List [`String "MoveVb"; `String vbs_loc_str; `String mobile_vb_loc_str
           ; `List [`String "None"]]                                                  -> MoveVb (vbs_loc_str, mobile_vb_loc_str, None)
@@ -181,20 +183,20 @@ let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
 
 (* Loc could be at top level (need new struct item binding) or an exp (need new let) *)
 (* OR code could be an entire struct item (e.g. "type nat = Z | S of nat") *)
-let insert_code loc code xy_opt final_tenv old =
+let insert_code ?name loc code xy_opt final_tenv old =
   let set_pos vb = match xy_opt with Some (x, y) -> Pos.set_vb_pos x y vb | None -> vb in
   let exp_inserter, new_sis, new_exp_loc =
     try
-      let exp = Exp.from_string code in
-      let name = Name.gen old in
-      let vb' =  Vb.mk (Pat.var name) exp |> Vb.freshen_locs |> set_pos in
+      let exp = Exp.from_string code in (* This will fail if given a struct item *)
+      let name = name ||&~ (fun _ -> Name.gen old) in
+      let vb' =  Vb.mk (Pat.var name) exp |> Vb.freshen_locs |> set_pos (* Freshening required by name_unnameds *) in
       ( Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'] (* body unapplied here *)
       , [Ast_helper.Str.value Asttypes.Nonrecursive [vb']]
       , vb'.pvb_expr.pexp_loc
       )
     with Syntaxerr.Error _ ->
       (* If we could not parse as an exp, try parsing as a structure item *)
-      let struct_items = StructItems.from_string code |>@ StructItem.freshen_locs in
+      let struct_items = StructItems.from_string code |>@ StructItem.freshen_locs (* Freshening required by name_unnameds *) in
       ( (fun exp -> exp)
       , struct_items |> Vb.map set_pos
       , Location.none
@@ -219,6 +221,20 @@ let insert_code loc code xy_opt final_tenv old =
     end
   | _ ->
     prog
+
+(*
+We have all sorts of beautiful transforms to put matches in the right place, provided the
+match starts in the form:
+
+let var = match ... with ... in
+
+So, just insert such a binding, let the transforms do their work, then remove the binding.
+*)
+let destruct loc destruct_code final_tenv old =
+  insert_code ~name:"remove_me" loc destruct_code None final_tenv old
+  |> VbGroups.map begin fun (recflag, vbs) ->
+    (recflag, if (vbs |>@@ Vb.names) = ["remove_me"] then [] else vbs)
+  end
 
 let set_pos loc x y old =
   old
@@ -300,6 +316,9 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   | InsertCode (loc_str, code, xy_opt) ->
     let loc = Serialize.loc_of_string loc_str in
     insert_code loc code xy_opt final_tenv
+  | Destruct (loc_str, destruct_code) ->
+    let loc = Serialize.loc_of_string loc_str in
+    destruct loc destruct_code final_tenv
   | SetPos (loc_str, x, y) ->
     let loc = Serialize.loc_of_string loc_str in
     set_pos loc x y

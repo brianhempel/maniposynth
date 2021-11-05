@@ -125,13 +125,13 @@ function redo() {
   ]);
 }
 
-function insertCode(loc, code, pos) {
+function insertCode(vbsLoc, code, pos) {
   if ("" + code === "undefined") { console.error("insertCode(): undefined code"); return; };
   let posOpt = ["None"];
   if (pos) { posOpt = ["Some", pos.x, pos.y] }
   doAction([
     "InsertCode",
-    loc,
+    vbsLoc,
     code,
     posOpt
   ]);
@@ -146,14 +146,22 @@ function setPos(loc, x, y) {
   ]);
 }
 
-function moveVb(vbsLoc, mobileLoc, newPos) {
+function moveVb(loc, mobileLoc, newPos) {
   let newPosOpt = ["None"];
   if (newPos) { newPosOpt = ["Some", newPos.x, newPos.y] }
   doAction([
     "MoveVb",
-    vbsLoc,
+    loc,
     mobileLoc,
     newPosOpt
+  ]);
+}
+
+function destruct(loc, scrutineeCode) {
+  doAction([
+    "Destruct",
+    loc,
+    scrutineeCode
   ]);
 }
 
@@ -279,7 +287,7 @@ function drop(event) {
   const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
-    insertCode(dropTarget.dataset.loc, droppedExtractionCode, mouseReletiveToElem(dropTarget, event));
+    insertCode(dropTarget.dataset.loc, droppedExtractionCode, mouseRelativeToElem(dropTarget, event));
   } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
@@ -1076,7 +1084,7 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.classList.add("textbox");
     textboxDiv.style.position = "absolute";
     // textboxDiv.style.backgroundColor = "white";
-    const { x, y } = mouseReletiveToElem(vbsHolder, event);
+    const { x, y } = mouseRelativeToElem(vbsHolder, event);
     const pos = { x: x - 5, y: y - 10 };
     textboxDiv.style.left = `${pos.x}px`;
     textboxDiv.style.top  = `${pos.y}px`;
@@ -1238,7 +1246,7 @@ function topLeftOffsetFromMouse(elem, event) {
   const rect = elem.getBoundingClientRect();
   return { dx: rect.left - event.clientX, dy: rect.top - event.clientY }
 }
-function mouseReletiveToElem(elem, event) {
+function mouseRelativeToElem(elem, event) {
   const { dx, dy } = topLeftOffsetFromMouse(elem, event);
   return { x: -dx, y: -dy };
 }
@@ -1407,7 +1415,7 @@ function reflow() {
     const boxes = Array.from(vbsHolder.children).filter(box => box.classList.contains("box")); /* Skip transient textboxes in the vbs elem */
     // boxes.sort((box1, box2) => size(box2) - size(box1)); // Position largest stuff first.
     boxes.sort((box1, box2) => top(box1) - top(box2)); // Position top-to-bottom
-    console.log(boxes);
+    // console.log(boxes);
     let pushEverythingDownBy = 0;
     for (box of boxes) {
       // const mySize = size(box);
@@ -1791,15 +1799,16 @@ function redrawTreeEdges() {
 
 /////////////////// Tooltips ///////////////////
 
-
 tooltipDiv = undefined;
 tooltipStack = [];
 
 function updateTooltip(event) {
-  if (tooltipStack[0] && !tooltipStack[0].closest(".not-in-active-frame")) { /* Don't show tooltip if the hovered element is no in an active execution frame. */
+  const elem = tooltipStack[0];
+  if (elem && !elem.closest(".not-in-active-frame")) { /* Don't show tooltip if the hovered element is no in an active execution frame. */
+    const { x, y } = mouseRelativeToElem(elem, event);
     tooltipDiv.style.left = `${event.pageX - 10}px`;
-    tooltipDiv.style.top  = `${event.pageY - 30}px`;
-    tooltipDiv.innerText = tooltipStack[0].dataset.extractionCode.replaceAll(/\s+/g," ");
+    tooltipDiv.style.top  = `${event.pageY - 27 - y}px`;
+    tooltipDiv.innerText = elem.dataset.extractionCode.replaceAll(/\s+/g," ");
     show(tooltipDiv);
   } else {
     hide(tooltipDiv);
@@ -1812,10 +1821,6 @@ window.addEventListener('DOMContentLoaded', () => {
   hide(tooltipDiv);
 
   document.querySelectorAll('[data-extraction-code]:not(.tool):not(.exp)').forEach(elem => {
-    // console.log(elem);
-    // elem.draggable = true;
-    // elem.addEventListener("dragstart", dragstart);
-    // elem.addEventListener("dragend", dragend);
     elem.addEventListener("mouseenter", event => {
       tooltipStack.unshift(elem);
       updateTooltip(event);
@@ -1824,5 +1829,47 @@ window.addEventListener('DOMContentLoaded', () => {
       tooltipStack.removeAsSet(elem);
       updateTooltip(event);
     });
+  });
+});
+
+
+
+/////////////////// Destruct button ///////////////////
+
+destructButton = undefined;
+destructButtonStack = [];
+
+function updateDestructButton(event) {
+  const elem = destructButtonStack[0];
+  if (elem && !elem.closest(".not-in-active-frame")) { /* Don't show tooltip if the hovered element is no in an active execution frame. */
+    destructButton.remove();
+    elem.appendChild(destructButton);
+    destructButton.style.top = 0;
+    destructButton.style.right = "100%";
+  } else {
+    destructButton.remove();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  destructButton = document.getElementById("destruct-button");
+  destructButton.remove();
+
+  document.querySelectorAll('[data-destruction-code]').forEach(elem => {
+    elem.addEventListener("mouseenter", event => {
+      destructButtonStack.unshift(elem);
+      updateDestructButton();
+    });
+    elem.addEventListener("mouseleave", event => {
+      destructButtonStack.removeAsSet(elem);
+      updateDestructButton();
+    });
+  });
+
+  destructButton.addEventListener("click", event => {
+    const valueElem = destructButton.parentElement;
+    destructButton.remove(); // Prevent double-submit :P
+    destruct(vbsHolderForInsert(valueElem).dataset.loc, valueElem.dataset.destructionCode);
+    event.stopImmediatePropagation();
   });
 });

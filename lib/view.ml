@@ -5,6 +5,18 @@ open Shared
 open Shared.Ast
 open Shared.Util
 
+(* https://www.w3.org/International/questions/qa-escapes *)
+let needs_escape = Str.regexp "[\"'&<>]"
+let html_escape str =
+  str |> Str.global_substitute needs_escape begin Str.matched_string %> function
+  | "\"" -> "&quot;"
+  | "'"  -> "&apos;"
+  | "&"  -> "&amp;"
+  | "<"  -> "&lt;"
+  | ">"  -> "&gt;"
+  | str  -> failwith @@ "html_escape: your regex is bad: " ^ str
+  end
+
 type stuff =
   { trace          : Trace.t
   ; prog           : program
@@ -25,7 +37,7 @@ let sprintf = Printf.sprintf
 
 let rec print_attrs attrs  =
   match attrs with
-  | (name, value)::rest -> sprintf " %s=\"%s\"%s" name value (print_attrs rest)
+  | (name, value)::rest -> sprintf " %s=\"%s\"%s" name (html_escape value) (print_attrs rest)
   | []                  -> ""
 
 let tag name ?(attrs = []) inners =
@@ -212,7 +224,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     end
     |>& exp_in_place_edit_attrs ||& []
   in
-  let extracted_subvalue_names =
+  let extracted_subvalue_pats =
     let rec is_descendent candidate_vtrace ancestor_vtrace =
       candidate_vtrace == ancestor_vtrace ||
       match candidate_vtrace with
@@ -226,8 +238,25 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     |>@@ (fun { vtrace; _ } -> match vtrace with ((_, loc), PatMatch _)::_ -> [loc] | _ -> [] )
     |>@& (fun loc -> Pat.find_opt loc stuff.prog)
     |>@? (Pat.name %>& ((<>) extraction_code) %||& false) (* A name pat but not trival. If = extraction_code that means we're at the root of pat that's likely labeled elsewhere. *)
-    |>@  html_of_pat ~attrs:[("class","subvalue-name pat")] stuff
+  in
+  let extracted_subvalue_names_html =
+    extracted_subvalue_pats
+    |>@ html_of_pat ~attrs:[("class","subvalue-name pat")] stuff
     |> String.concat ""
+  in
+  let ctor_destruction_pat_and_ctor_arg_pat_opt =
+    match (value_, extraction_exp_opt) with
+    | Constructor (ctor_name, _, _), Some extraction_exp ->
+      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
+      Case_gen.gen_ctor_cases_from_ctor_name ~avoid_names:(prior_extraction_names @ stuff.names_in_prog) ctor_name type_env
+      |> List.findmap_opt begin fun case ->
+        match case.pc_lhs.ppat_desc with
+        | Ppat_construct ({ txt = Longident.Lident pat_ctor_name; _}, arg_pat_opt) when pat_ctor_name = ctor_name ->
+          Some (case.pc_lhs, arg_pat_opt)
+        | _ -> None
+      end
+    | _ ->
+      None
   in
   let wrap_value str =
     let perhaps_extraction_code =
@@ -252,11 +281,20 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       end
       |> Option.to_list
     in
-    let perhaps_destructable_class =
-      match value_ with
-      | Constructor _
-        when (extraction_exp_opt |>& Exp.is_ident ||& false) || extracted_subvalue_names <> "" -> " destructable"
-      | _                                                                                      -> ""
+    let perhaps_destruction_code =
+      let extracted_subvalue_names = extracted_subvalue_pats |>@& Pat.name in
+      let scrutinee_name_opt =
+        List.hd_opt @@
+          (extraction_exp_opt |>&& Exp.simple_name |> Option.to_list)
+          @ extracted_subvalue_names
+      in
+      match scrutinee_name_opt, ctor_destruction_pat_and_ctor_arg_pat_opt with
+      | Some scrutinee_name, Some (case_pat, _) ->
+        (* By only providing a single case, we signal Bindings.fixup which branch should get the existing code. *)
+        (* Bindings.fixups will add missings cases with holes for branches. *)
+        [("data-destruction-code", Exp.to_string @@ Exp.match_ (Exp.var scrutinee_name) [Exp.case case_pat Exp.hole])]
+      | _ ->
+        []
     in
     let value_class =
       match value_ with
@@ -280,7 +318,8 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
-        [("class", "value " ^ value_class ^ perhaps_destructable_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        perhaps_destruction_code @
+        [("class", "value " ^ value_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
       [str]
   in
@@ -307,7 +346,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   wrap_value @@
   table ~attrs:[("class","subvalue-annotations")]
     [ tr [td [apply_visualizers stuff.prog stuff.assert_results visualizers env type_env extraction_exp_opt value]]
-    ; tr [td [extracted_subvalue_names]]
+    ; tr [td [extracted_subvalue_names_html]]
     ] ^
   match value_ with
   | Bomb                -> "💣"
@@ -342,13 +381,10 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
   | Constructor (ctor_name, _, Some arg) ->
     let ctor_name_to_show = if ctor_name = "::" then (if in_list then "; " else "[") else ctor_name ^ " " in
     extraction_exp_opt |>&& begin fun extraction_exp ->
-      let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
-      Case_gen.gen_ctor_cases_from_ctor_name ~avoid_names:(prior_extraction_names @ stuff.names_in_prog) ctor_name type_env
-      |> List.findmap_opt begin fun case ->
-        match case.pc_lhs.ppat_desc with
-        | Ppat_construct ({ txt = Longident.Lident pat_ctor_name; _}, Some arg_pat) when pat_ctor_name = ctor_name ->
-          Some (case.pc_lhs, arg_pat)
-        | _ -> None
+      ctor_destruction_pat_and_ctor_arg_pat_opt
+      |>&& begin function
+      | (pat,  Some ctor_arg_pat) -> Some (pat, ctor_arg_pat)
+      | (_pat, None)              -> None
       end
       |>& begin fun (pat, arg_pat) ->
         match (arg_pat.ppat_desc, arg.v_) with
@@ -842,5 +878,6 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ]
       ; button ~attrs:[("id", "synth-button")] ["Synth"]
       ; div ~attrs:[("id", "tooltip")] []
+      ; button ~attrs:[("id", "destruct-button")] ["Destruct"]
       ]
     ]

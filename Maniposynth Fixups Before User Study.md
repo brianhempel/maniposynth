@@ -123,9 +123,11 @@
 
 - [x] rework layout alg
 
-- [ ] insert case splits without extracting
+- [x] insert case splits without extracting
 
 - [x] gray out hole val to emphasize that it's different than hole exp
+
+- [ ] hard-code `hd::tail` names for list
 
 - [ ] still offering too many values for autocomplete
 
@@ -136,6 +138,8 @@
 --- go over P1S1
 
 - [ ] tools offscreen
+- [ ] val superscripts are wrong color in return exps
+- [ ] vis pane shouldn't show for selected val superscripts
 - [ ] tooltips describing what the pieces are?
 - [ ] don't allow same names in a scope?
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`

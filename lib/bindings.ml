@@ -858,15 +858,15 @@ let fixup_matches final_tenv prog =
   (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
   prog
   (* |> log *)
-  |> move_vbs_into_all_relevant_branches
+  |> move_vbs_into_all_relevant_branches (* VBs pushed down (duplicated) across branches *)
   (* |> log *)
   |> simplify_nested_matches_on_same_thing (* A match statement may have been inserted inside a match branch that already matches on the same scrutinee. Simplify. *)
   (* |> log *)
-  |> remove_matches_with_no_cases
+  |> remove_matches_with_no_cases (* Nested extraction not valid on this branch *)
   (* |> log *)
-  |> move_matches_outside
+  |> move_matches_outside (* Transform the "let x = match (match x with ...) with ... in" structure by floating the matches outward. *)
   (* |> log *)
-  |> move_up_duplicated_bindings
+  |> move_up_duplicated_bindings (* Since we duplicated VBs, pull them back out. *)
   (* |> log *)
   |> add_missing_cases final_tenv
   (* |> log *)

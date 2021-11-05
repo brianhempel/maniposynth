@@ -339,7 +339,7 @@ table.subvalue-annotations td {
 .value[data-in-place-edit-code] .value:not([data-in-place-edit-code]) {
   background-color: var(--third-color-light);
 }
-/* .value.destructable {
+/* .value[data-destruction-code] {
   border: 1px solid var(--pat-color);
 } */
 
@@ -596,7 +596,9 @@ table.subvalue-annotations td {
   overflow: hidden;
 }
 
-
+#destruct-button {
+  position: absolute;
+}
 
 .hint {
   font-size: 0.7em;
