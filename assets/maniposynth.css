@@ -265,9 +265,10 @@ table.subvalue-annotations td {
   /* min-height for .vbs is in the the resizeVbHolders() javascript */
 }
 
-/* .label {
-  font-size: 1rem;
-} */
+.label {
+  text-align: center;
+  /* font-size: 1rem; */
+}
 .derived-vis-values {
   font-size: 0.8rem;
 }
@@ -287,7 +288,7 @@ table.subvalue-annotations td {
   cursor: pointer;
   font-weight: bold;
   font-family: system-ui;
-  /* text-align: center; */
+  text-align: center;
   position: relative; /* Without this, tree edges are not drawn correctly in the autocomplete list */
 }
 /* constants in value position */
@@ -552,6 +553,7 @@ table.subvalue-annotations td {
 
 
 .hint {
+  font-size: 0.7em;
   font-style: italic;
   color: dimgray;
   padding: var(--padding);

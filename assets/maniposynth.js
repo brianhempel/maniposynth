@@ -334,8 +334,14 @@ function deselectAll() {
   selectedElems().forEach(deselect);
 }
 
+window.atEndOfDragSoPreventClickSelect = false;
 // Selectable element clicked...
 function clickSelect(event) {
+  if (atEndOfDragSoPreventClickSelect) {
+    atEndOfDragSoPreventClickSelect = false;
+    event.stopImmediatePropagation();
+    return;
+  }
   submitAllChangedTextboxes();
   const elem = event.currentTarget;
   if (elem.closest(".not-in-active-frame")) {
@@ -1332,11 +1338,13 @@ window.addEventListener('DOMContentLoaded', () => {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
           setPos(elem.dataset.loc, x, y);
+          atEndOfDragSoPreventClickSelect = true;
         } else if (dropTarget) {
           const dropTargetOffsetFromMouse = topLeftOffsetFromMouse(dropTarget, event);
           const x = stuffMoving.offsetFromMouse.dx - dropTargetOffsetFromMouse.dx;
           const y = stuffMoving.offsetFromMouse.dy - dropTargetOffsetFromMouse.dy;
           moveVb(dropTarget.dataset.loc, elem.dataset.loc, { x : x, y : y });
+          atEndOfDragSoPreventClickSelect = true;
         } else {
           elem.style.zIndex = "auto";
         }
@@ -1350,19 +1358,21 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
-function resizeVbHolders(elem) {
-  const vbsHolders = elem.querySelectorAll(".vbs");
+function resizeVbHolders() {
+  const vbsHolders = document.querySelectorAll(".vbs:not(.top-level)");
   const minVbHolderHeight = 70;
-  vbsHolders.forEach(vbsHolder => {
-    if (vbsHolder.classList.contains("top-level")) { return; }
+  // Traverse deepest first
+  Array.from(vbsHolders).reverse().forEach(vbsHolder => {
     // console.log(vbsHolder.children);
     let maxWidth = 0;
     let maxHeight = 0;
     for (box of vbsHolder.children) {
-      if (!(box.classList.contains("box"))) { continue; } /* Skip transient textboxes in the vbs elem */
-      resizeVbHolders(box);
-      maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
-      maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
+      // console.log(box);
+      if (box.classList.contains("box")) { /* Skip transient textboxes in the vbs elem */
+        maxWidth  = Math.max(maxWidth, box.offsetLeft + box.offsetWidth);
+        maxHeight = Math.max(maxHeight, box.offsetTop + box.offsetHeight);
+        console.log(maxWidth,maxHeight,box);
+      }
     }
     if (vbsHolder.tagName === "TD") {
       vbsHolder.style.width  = `${maxWidth + 10}px`
@@ -1437,6 +1447,7 @@ function relayout() {
     resizeVbHolders(document);
     reflow();
   }
+  resizeVbHolders(document);
   redrawTreeEdges();
 }
 // This happens in initFrameNos

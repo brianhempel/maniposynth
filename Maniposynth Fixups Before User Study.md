@@ -115,7 +115,17 @@
 
 - [x] shorter names, name constants by type
 
+- [ ] display rets as a row under the incoming function args
+
+- [ ] perhaps fun arg values should have a yellow background? (or for the current frame at least?)
+
+- [ ] rework layout alg
+
 - [ ] insert case splits without extracting
+
+- [ ] gray out hole val to emphasize that it's different than hole exp
+
+- [ ] still offering too many values for autocomplete
 
 - [ ] highlight var value origins on hover
 
@@ -146,8 +156,6 @@
 - [ ] "add arg" tool
 
 - [ ] "add example" tool (for function)
-
-- [ ] display rets as a row under the incoming function args
 
 - [ ] legend explaining TV parts?
 
