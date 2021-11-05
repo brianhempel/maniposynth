@@ -258,6 +258,20 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         when (extraction_exp_opt |>& Exp.is_ident ||& false) || extracted_subvalue_names <> "" -> " destructable"
       | _                                                                                      -> ""
     in
+    let value_class =
+      match value_ with
+      | Bomb          -> "bomb"
+      | Hole _        -> "hole"
+      | String _      -> "string"
+      | Tuple _       -> "tuple"
+      | Record _      -> "record"
+      | Constructor _ -> "ctor"
+      | Array _       -> "array"
+      | Float _       -> "float number"
+      | Int _         -> "int number" | Int32 _ -> "int32 number" | Int64 _ -> "int64 number" | Nativeint _ -> "nativeint number"
+      | Fun _ | Function _ | Fun_with_extra_args (_, _, _) -> "fun"
+      | Prim _ -> "prim" | Fexpr _ -> "fexpr" | ModVal _ -> "mod-val" | InChannel _ -> "in-channel" | OutChannel _ -> "out-channel" | Lz _ -> "lazy" | Object _ -> "object" | ExCall _ -> "ex-call" | ExDontCare -> "ex-dont-care"
+    in
     span
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
@@ -266,7 +280,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         perhaps_extraction_code @
         perhaps_type_attr @
         perhaps_code_to_assert_on @
-        [("class", "value" ^ perhaps_destructable_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        [("class", "value " ^ value_class ^ perhaps_destructable_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
       [str]
   in
@@ -484,10 +498,11 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
         | NextToInfixOp -> has_infix_app ()
         end
     in
-    span ~attrs:([("class","exp")] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
+    let perhaps_exp_class = if Exp.is_hole exp then " hole" else "" in
+    span ~attrs:([("class","exp" ^ perhaps_exp_class)] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
   in
   let values_for_exp =
-    if show_result && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
+    if show_result && not (Exp.is_hole exp) && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
   in
   wrap @@
   match exp.pexp_desc with

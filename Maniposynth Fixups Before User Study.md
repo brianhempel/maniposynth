@@ -115,7 +115,9 @@
 
 - [x] shorter names, name constants by type
 
-- [ ] display rets as a row under the incoming function args
+- [x] display rets as a row under the incoming function args
+
+  - [ ] support visualizers on them
 
 - [ ] perhaps fun arg values should have a yellow background? (or for the current frame at least?)
 
@@ -123,13 +125,13 @@
 
 - [ ] insert case splits without extracting
 
-- [ ] gray out hole val to emphasize that it's different than hole exp
+- [x] gray out hole val to emphasize that it's different than hole exp
 
 - [ ] still offering too many values for autocomplete
 
 - [ ] highlight var value origins on hover
 
-- [ ] highlight holes in red
+- [x] highlight holes in red
 
 - [ ] tools offscreen
 
@@ -143,56 +145,35 @@
 
 - [ ] show type errors
 
+- [ ] hide hints once there's stuff
+
+- [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
+
 - [x] too easy to switch frame
-
 - [x] align values coming into function, one frame per column
-
 - [x] click to switch frame?
-
 - [ ] automatically visualize recurse calls and rets
-
 - [ ] "new function" tool
-
 - [ ] "add arg" tool
-
 - [ ] "add example" tool (for function)
-
 - [ ] legend explaining TV parts?
-
 - [ ] allow comments
-
 - [x] double-click to insert code should position the new TV
-
 - [x] autocomplete with trees is UUUUUGGGGLLLYYY
-
 - [ ] ensure tool works if subdirs have spaces
-
 - [x] placing left and right extraction vbs was not working
-
 - [x] bigger things not pushing smaller things out of the way
-
 - [x] represent func values as unapplied val tools? Make sure they always insert calls
-
 - [ ] divergence produces junk frames: combine identical frames?
-
 - [ ] click on canvas vals to insert code into textbox
-
 - [ ] setting to hide vals in exp labels?
-
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
-
 - [ ] synth!
-
 - [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
-
 - [ ] parans for vals?
-
 - [ ] show type errors?
-
 - [ ] add submit button for all textboxes (with hotkey noted)?
-
 - [ ] autocomplete to vised values?
-
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 
 

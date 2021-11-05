@@ -167,6 +167,25 @@ nav img {
   margin: 0;
 }
 
+.exp.hole {
+  /* background-color: red; */
+  animation-name: pulse;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-timing-function: ease-in-out;
+}
+@keyframes pulse {
+  0% {
+    /* text-shadow: 0 0 5px red; */
+    background-color: inherit;
+  }
+  100% {
+    /* text-shadow: 0 0 5px rgba(255,0,0,0.0); */
+    background-color: rgb(255, 90, 90);
+  }
+}
+
 .label > .exp,
 .label > .pat,
 td.pat_label > .pat {
@@ -299,6 +318,12 @@ table.subvalue-annotations td {
   text-align: center;
   position: relative; /* Without this, tree edges are not drawn correctly in the autocomplete list */
 }
+.value.hole {
+  color: rgba(30,30,30,0.3);
+}
+.fun-returns .value.hole { /* looks better like so...? */
+  color: black;
+}
 /* constants in value position */
 .value[data-in-place-edit-code] {
   background-color: var(--color-light);
@@ -373,6 +398,7 @@ table.subvalue-annotations td {
 }
 .current-drop-target.exp {
   background-color: var(--color-dark);
+  animation: none; /* Stop the pulsing holes */
 }
 .current-drop-target.value {
   background-color: var(--third-color-dark);

@@ -1565,7 +1565,7 @@ function initFrameNos() {
 function updateActiveValues(elem, frameNo) {
   let active = false;
 
-  if (elem.classList.contains("fun")) {
+  if (elem.classList.contains("fun") && elem.classList.contains("exp")) {
     // Stop recursing, new set of nested lambdas
   } else if ("frameNo" in elem.dataset) {
     if (parseInt(elem.dataset.frameNo) === parseInt(frameNo)) {
