@@ -9,11 +9,15 @@ let gen_ctor_cases ~avoid_names type_path tenv : case list =
   |>@ (fun ctor_desc ->
     (* Tag_name (typ1, typ2) -> Ctor ("Tag_name", "type", [value_of_typ typ1, value_of_typ typ2]) *)
     let arg_names =
-      ctor_desc.Types.cstr_args
-      |>@ begin fun arg_type ->
-          let arg_name = Name.gen_ ~avoid:(!new_names @ avoid_names) ~base_name:(Name.base_name_from_type arg_type) in
-          new_names := arg_name :: !new_names;
-          arg_name
+      begin if ctor_desc.cstr_name = "::" then
+        ["hd"; "tail"]
+      else
+        List.map Name.base_name_from_type ctor_desc.Types.cstr_args
+      end
+      |>@ begin fun base_name ->
+        let arg_name = Name.gen_ ~avoid:(!new_names @ avoid_names) ~base_name in
+        new_names := arg_name :: !new_names;
+        arg_name
       end
     in
     let case_pat =

@@ -127,7 +127,7 @@
 
 - [x] gray out hole val to emphasize that it's different than hole exp
 
-- [ ] hard-code `hd::tail` names for list
+- [x] hard-code `hd::tail` names for list
 
 - [ ] still offering too many values for autocomplete
 
