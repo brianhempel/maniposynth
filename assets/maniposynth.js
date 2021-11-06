@@ -757,14 +757,39 @@ function isNotVis(elem) {
 function isNotInLabel(elem) {
   return !elem.closest(".label");
 }
+function isNotDoubleMatch(elem) {
+  return !elem.dataset.extractionCode.startsWith("match match");
+}
 function allExtractableValues() {
   // We add valueIds to all of these.
   return Array.from(document.querySelectorAll(".root-value-holder .value[data-extraction-code]"));
 }
-function localValuesShownInFrame(elem) {
+function valuesForAutocomplete(elem) {
+  // console.log(elem);
+  // Local values, roughly.
+  // Approximating scoping below.
   const frameNoElem = findFrameNoElem(elem);
-  // Erroneously includes more deeply nested values that are otherwise inaccessible...
-  return Array.from(frameNoElem.querySelectorAll(".root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")).filter(isShown).filter(isNotVis).filter(isNotInLabel);
+  let values = []
+  for (const ancestor of selfAndParents(elem)) {
+    if (ancestor.classList.contains("vbs")) {
+      values = values.concat(Array.from(ancestor.querySelectorAll(":scope > .box > .tv > .values > .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
+    }
+    if (ancestor.classList.contains("fun") && ancestor.classList.contains("exp")) {
+      // Args
+      values = values.concat(Array.from(ancestor.querySelectorAll(":scope > table > tbody > .fun-param .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
+      // Rets
+      values = values.concat(Array.from(ancestor.querySelectorAll(":scope > .returns .return .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
+    }
+    if (ancestor == frameNoElem) {
+      break;
+    }
+  }
+  // Discard subexps of the exp label being editted.
+  const discardExps =
+    [elem.dataset.extractionCode].concat(
+      Array.from(elem.closest(".label > .exp")?.querySelectorAll(".exp[data-extraction-code]") || []).map(elem => elem.dataset.extractionCode)
+    ).dedup();
+  return values.filter(isShown).filter(isNotVis).filter(isNotInLabel).filter(isNotDoubleMatch).filter(v => !discardExps.includes(v.dataset.extractionCode));
 }
 window.addEventListener('DOMContentLoaded', () => {
   let valueId = 1;
@@ -778,7 +803,7 @@ window.addEventListener('DOMContentLoaded', () => {
 autocompleteOpen = false;
 function colorizeSubvalues(elem) {
   let hue = 30;
-  localValuesShownInFrame(elem).forEach(elem => {
+  valuesForAutocomplete(elem).forEach(elem => {
     elem.style.color = `hsl(${hue}, 90%, 40%)`;
     hue = (hue + 152) % 360;
   });
@@ -972,7 +997,7 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
 
 function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   const vbsLoc          = vbsHolderForInsert(textboxDiv.targetElem).dataset.loc;
-  const valuesVisible   = localValuesShownInFrame(textboxDiv.targetElem);
+  const valuesVisible   = valuesForAutocomplete(textboxDiv.targetElem);
   const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
   const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replaceAll(",","~CoMmA~") /* escape commas */ );
   // console.log(valueStrs);

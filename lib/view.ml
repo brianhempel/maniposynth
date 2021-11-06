@@ -697,7 +697,7 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         |>@ List.singleton |>@ td
       in
       tr ~attrs:[("class", "fun-returns")] @@
-        [ td ~attrs:[("class", "returns-label")] ["Returns"]
+        [ td ~attrs:[("class", "returns-label")] ["Return"]
         ] @ tds
     in
     (* Technically, a function is value and one can argue the above code should be in html_of_values_for_exp *)

@@ -130,8 +130,7 @@
 - [x] hard-code `hd::tail` names for list
 
 - [x] destruct should work at the top level...
-- [ ] still offering too many values for autocomplete
-- [ ] highlight var value origins on hover
+- [x] still offering too many values for autocomplete
 - [x] highlight holes in red
 - [x] try making holes bigger
 - [x] need to resize top-level canvas vertically so you can double-click to add code when scrolled down
@@ -148,6 +147,7 @@
 - [ ] don't allow same names in a scope?
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
+- [ ] highlight var value origins on hover
 - [ ] show type errors
 - [ ] hide hints once there's stuff
 - [ ] pink subvalue names should not show out-of-scope
