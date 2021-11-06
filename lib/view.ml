@@ -64,6 +64,8 @@ let loc_attr loc = ("data-loc", Serialize.string_of_loc loc)
 let body    ?(attrs = [])       inners = tag "body" ~attrs inners
 let nav     ?(attrs = [])       inners = tag "nav" ~attrs inners
 let div     ?(attrs = [])       inners = tag "div" ~attrs inners
+let p       ?(attrs = [])       inners = tag "p" ~attrs inners
+let strong  ?(attrs = [])       inners = tag "strong" ~attrs inners
 let h1      ?(attrs = [])       inners = tag "h1" ~attrs inners
 let h2      ?(attrs = [])       inners = tag "h2" ~attrs inners
 let span    ?(attrs = [])       inners = tag "span" ~attrs inners
@@ -843,6 +845,14 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv structure_items]
+      ; div ~attrs:[("id", "mission-statement")] @@
+        [ img ~attrs:[("src", "/assets/maniposynth.svg")]
+        ; p ["Exploring the frontiers of visual interactive programming—can cutting-edge features meld into a delightful and productive coding environment?"]
+        ; p [strong ["Live -"]; "Instant feedback of runtime values."]
+        ; p [strong ["Non-linear -"]; "Gather the parts you need, assemble later."]
+        ; p [strong ["Synthesis -"]; "Assert and let the computer write code."]
+        ; p [strong ["Bimodal -"]; "Work in your normal editor whenever you want."]
+        ]
       ; div ~attrs:[("class", "top-matter")] @@
         List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@

@@ -129,15 +129,20 @@
 
 - [x] hard-code `hd::tail` names for list
 
+- [ ] show destruct button on relevant patterns as well
+- [ ] destruct should work at the top level...
 - [ ] still offering too many values for autocomplete
-
 - [ ] highlight var value origins on hover
-
 - [x] highlight holes in red
-
---- go over P1S1
-
+- [x] try making holes bigger
+- [x] need to resize top-level canvas vertically so you can double-click to add code when scrolled down
+- [ ] typing boolean expression at top level produces an assert
+- [ ] allow multi-arg asserts
+- [ ] create new bindings near old bindings
+- [ ] new top-level bindings should be *last* by default, not immediately before last
 - [ ] tools offscreen
+- [ ] shouldn't be able to drag values from out of frame
+- [ ] inline option?
 - [ ] val superscripts are wrong color in return exps
 - [ ] vis pane shouldn't show for selected val superscripts
 - [ ] tooltips describing what the pieces are?
@@ -146,8 +151,8 @@
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
 - [ ] show type errors
 - [ ] hide hints once there's stuff
+- [ ] pink subvalue names should not show out-of-scope
 - [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
-
 - [x] too easy to switch frame
 - [x] align values coming into function, one frame per column
 - [x] click to switch frame?
@@ -157,6 +162,7 @@
 - [ ] "add example" tool (for function)
 - [ ] legend explaining TV parts?
 - [ ] allow comments
+- [ ] get rid of inspector
 - [x] double-click to insert code should position the new TV
 - [x] autocomplete with trees is UUUUUGGGGLLLYYY
 - [ ] ensure tool works if subdirs have spaces
@@ -168,7 +174,9 @@
 - [ ] setting to hide vals in exp labels?
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
 - [ ] synth!
+- [x] Maniposynth mission statement as the top-level background?
 - [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
+- [ ] animate layout changes? (clunky because involves page reload)
 - [ ] parans for vals?
 - [ ] show type errors?
 - [ ] add submit button for all textboxes (with hotkey noted)?
