@@ -168,6 +168,7 @@ nav img {
 }
 
 .exp.hole {
+  font-size: 1.5rem;
   /* background-color: red; */
   animation-name: pulse;
   animation-duration: 2s;
