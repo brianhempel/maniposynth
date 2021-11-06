@@ -1327,7 +1327,7 @@ window.addEventListener('DOMContentLoaded', () => {
         window.stuffMoving.elem.style.left = `${stuffMoving.startOffsetX + dx}px`
         window.stuffMoving.elem.style.top  = `${stuffMoving.startOffsetY + dy}px`
         window.stuffMoving.elem.style.zIndex = 1;
-        // resizeVbHolders(document);
+        // resizeVbHolders();
 
         removeDropTargetStyles();
         const dropTarget = vbDropTarget(event)
@@ -1367,7 +1367,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // Make sure each vbs holder has place for all the vbs
 // Resize deepest first.
 function resizeVbHolders() {
-  const vbsHolders = document.querySelectorAll(".vbs:not(.top-level)");
+  const vbsHolders = document.querySelectorAll(".vbs");
   const minVbHolderHeight = 70;
   // Traverse deepest first
   Array.from(vbsHolders).reverse().forEach(vbsHolder => {
@@ -1383,11 +1383,13 @@ function resizeVbHolders() {
       }
     }
     if (vbsHolder.tagName === "TD") {
-      vbsHolder.style.width  = `${maxWidth + 10}px`
-      vbsHolder.style.height = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`
+      vbsHolder.style.width  = `${maxWidth + 10}px`;
+      vbsHolder.style.height = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`;
+    } else if (vbsHolder.classList.contains("top-level")) {
+      vbsHolder.style.height = `${Math.max(maxHeight + 10, window.innerHeight)}px`;
     } else {
-      vbsHolder.style.minWidth  = `${maxWidth + 10}px`
-      vbsHolder.style.minHeight = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`
+      vbsHolder.style.minWidth  = `${maxWidth + 10}px`;
+      vbsHolder.style.minHeight = `${Math.max(maxHeight + 10, minVbHolderHeight)}px`;
     }
   });
 };
@@ -1480,10 +1482,10 @@ function relayout() {
   removeTreeEdges();
   initializeLayout();
   for (_ of [1,2,3]) {
-    resizeVbHolders(document);
+    resizeVbHolders();
     reflow();
   }
-  resizeVbHolders(document);
+  resizeVbHolders();
   redrawTreeEdges();
 }
 // This happens in initFrameNos

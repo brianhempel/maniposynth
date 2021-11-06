@@ -63,7 +63,7 @@ div.top-matter div {
 }
 .top-level {
   /* margin-top: 2.75rem; */
-  min-height: calc(100vh - 2.75rem);
+  /* min-height: calc(100vh - 2.75rem); */
   min-height: 100vh;
 }
 nav img {
