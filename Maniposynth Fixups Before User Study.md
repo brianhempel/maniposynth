@@ -129,8 +129,7 @@
 
 - [x] hard-code `hd::tail` names for list
 
-- [ ] show destruct button on relevant patterns as well
-- [ ] destruct should work at the top level...
+- [x] destruct should work at the top level...
 - [ ] still offering too many values for autocomplete
 - [ ] highlight var value origins on hover
 - [x] highlight holes in red
@@ -138,8 +137,8 @@
 - [x] need to resize top-level canvas vertically so you can double-click to add code when scrolled down
 - [ ] typing boolean expression at top level produces an assert
 - [ ] allow multi-arg asserts
-- [ ] create new bindings near old bindings
-- [ ] new top-level bindings should be *last* by default, not immediately before last
+- [x] create new bindings near old bindings
+- [x] new top-level bindings should be *last* by default, not immediately before last
 - [ ] tools offscreen
 - [ ] shouldn't be able to drag values from out of frame
 - [ ] inline option?
@@ -178,6 +177,7 @@
 - [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
 - [ ] animate layout changes? (clunky because involves page reload)
 - [ ] parans for vals?
+- [ ] show destruct button on relevant patterns as well?
 - [ ] show type errors?
 - [ ] add submit button for all textboxes (with hotkey noted)?
 - [ ] autocomplete to vised values?

@@ -31,6 +31,10 @@ let set_vb_pos  x y vb  = { vb  with pvb_attributes  = set_pos_attr x y vb.pvb_a
 let set_exp_pos x y exp = { exp with pexp_attributes = set_pos_attr x y exp.pexp_attributes }
 let set_pat_pos x y pat = { pat with ppat_attributes = set_pos_attr x y pat.ppat_attributes }
 
+let vb_pos vb   = vb.pvb_attributes   |> from_attrs
+let exp_pos exp = exp.pexp_attributes |> from_attrs
+let pat_pos pat = pat.ppat_attributes |> from_attrs
+
 let remove_exp_pos exp = { exp with pexp_attributes = remove_pos_attr exp.pexp_attributes }
 
 let exp_pos_attrs exp = pos_attrs exp.pexp_attributes

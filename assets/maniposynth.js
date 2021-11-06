@@ -39,6 +39,10 @@ Array.prototype.dedup = function () {
   return this.filter((item, pos) => this.indexOf(item) == pos );
 }
 
+function vectorAdd({x, y}, vec2) {
+  return { x: x + vec2.x, y: y + vec2.y };
+}
+
 function doAction(action, reload) {
   if (reload === undefined) { reload = true };
   let request = new XMLHttpRequest();
@@ -128,7 +132,7 @@ function redo() {
 function insertCode(vbsLoc, code, pos) {
   if ("" + code === "undefined") { console.error("insertCode(): undefined code"); return; };
   let posOpt = ["None"];
-  if (pos) { posOpt = ["Some", pos.x, pos.y] }
+  if (pos) { posOpt = ["Some", pos.x - 30, pos.y - 30] }
   doAction([
     "InsertCode",
     vbsLoc,
@@ -1871,7 +1875,13 @@ window.addEventListener('DOMContentLoaded', () => {
   destructButton.addEventListener("click", event => {
     const valueElem = destructButton.parentElement;
     destructButton.remove(); // Prevent double-submit :P
-    destruct(vbsHolderForInsert(valueElem).dataset.loc, valueElem.dataset.destructionCode);
+    const vbsHolder = vbsHolderForInsert(valueElem);
+    if (vbsHolder.classList.contains("top-level")) {
+      // Actually insert a binding at the top level.
+      insertCode(vbsHolder.dataset.loc, valueElem.dataset.destructionCode, vectorAdd(mouseRelativeToElem(vbsHolder, event), {x: 0, y: 70}));
+    } else {
+      destruct(vbsHolder.dataset.loc, valueElem.dataset.destructionCode);
+    }
     event.stopImmediatePropagation();
   });
 });

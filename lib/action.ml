@@ -210,7 +210,7 @@ let insert_code ?name loc code xy_opt final_tenv old =
     else
       old
       |> Exp.map_by_loc loc exp_inserter
-      |> StructItem.concat_map_by_loc loc (fun si -> new_sis @ [si])
+      |> StructItem.concat_map_by_loc loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
   in
   (* Turn inserted bare functions into calls. *)
   match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" new_exp_loc with
@@ -231,6 +231,7 @@ let var = match ... with ... in
 So, just insert such a binding, let the transforms do their work, then remove the binding.
 *)
 let destruct loc destruct_code final_tenv old =
+  (* If a top level destruct, the JS will call insertCode instead to avoid removing the binding. *)
   insert_code ~name:"remove_me" loc destruct_code None final_tenv old
   |> VbGroups.map begin fun (recflag, vbs) ->
     (recflag, if (vbs |>@@ Vb.names) = ["remove_me"] then [] else vbs)

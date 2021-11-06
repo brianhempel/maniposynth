@@ -627,6 +627,7 @@ table.subvalue-annotations td {
 
 #destruct-button {
   position: absolute;
+  z-index: 100;
 }
 
 .hint {

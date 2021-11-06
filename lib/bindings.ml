@@ -274,18 +274,31 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
   match struct_items with
   | [] -> []
   | si::rest ->
-    let add_bindings_and_continue ~names_for_si ~names_after_si ~names_free_si_rhs ~names_free_si_rhs_that_should_be_top_level ~make_si_desc' =
+    let new_binding_y = ref None in
+    let add_bindings_and_continue ~pos_opt ~names_for_si ~names_after_si ~names_free_si_rhs ~names_free_si_rhs_that_should_be_top_level ~make_si_desc' =
+      (* Position new top level VB near where the binding is needed. *)
+      let set_pos vb =
+        match pos_opt with
+        | Some {Pos.x; y} ->
+          begin match !new_binding_y with
+          | None   -> new_binding_y := Some (max 0 (y - 10))
+          | Some y -> new_binding_y := Some (y + 150)
+          end;
+          vb |> Pos.set_vb_pos (max 0 (x - 450)) (!new_binding_y ||& y)
+        | None -> vb
+      in
       let names_needed_si                = List.diff names_free_si_rhs names_for_si in
       let names_needed_remaining_prog    = List.diff (free_unqualified_names_struct_items rest) names_after_si in
       let names_to_define_here           = List.inter names_needed_si names_needed_remaining_prog @ List.inter names_needed_si names_free_si_rhs_that_should_be_top_level |> List.dedup in
       let names_to_define_with_arg_count = names_to_define_here |>@ fun name -> (name, find_arg_count_for_name ~struct_items name) in
-      let new_sis                        = names_to_define_with_arg_count |>@ fun (name, arg_count) -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) (make_new_rhs arg_count)] in
+      let new_sis                        = names_to_define_with_arg_count |>@ fun (name, arg_count) -> StructItem.value Nonrecursive [Vb.mk (Pat.var name) (make_new_rhs arg_count) |> set_pos] in
       let si'                            = { si with pstr_desc = make_si_desc' (names_to_define_here @ names_for_si) } in
       new_sis @ [si'] @ recurse (names_to_define_here @ names_after_si) rest
     in
     begin match si.pstr_desc with
     | Pstr_eval (exp, attrs) ->
       add_bindings_and_continue
+        ~pos_opt:None
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(free_unqualified_names exp)
@@ -295,6 +308,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         end
     | Pstr_value (Nonrecursive, vbs) ->
       add_bindings_and_continue
+        ~pos_opt:(vbs |>@& Pos.vb_pos |> List.sort_by (fun {Pos.x; y} -> (y, x)) |> List.hd_opt)
         ~names_for_si:defined_names
         ~names_after_si:((vbs |>@@ Vb.names) @ defined_names)
         ~names_free_si_rhs:(vbs |>@ Vb.exp |>@@ free_unqualified_names)
@@ -305,6 +319,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
     | Pstr_value (Recursive, vbs) ->
       let defined_names' = (vbs |>@@ Vb.names) @ defined_names in
       add_bindings_and_continue
+        ~pos_opt:(vbs |>@& Pos.vb_pos |> List.sort_by (fun {Pos.x; y} -> (y, x)) |> List.hd_opt)
         ~names_for_si:defined_names'
         ~names_after_si:defined_names'
         ~names_free_si_rhs:(vbs |>@ Vb.exp |>@@ free_unqualified_names)
@@ -314,6 +329,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         end
     | Pstr_module mod_binding ->
       add_bindings_and_continue
+        ~pos_opt:None
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(free_unqualified_names_mod mod_binding.pmb_expr)
@@ -323,6 +339,7 @@ let rec add_missing_bindings_struct_items defined_names struct_items =
         end
     | Pstr_recmodule mod_bindings ->
       add_bindings_and_continue
+        ~pos_opt:None
         ~names_for_si:defined_names
         ~names_after_si:defined_names
         ~names_free_si_rhs:(mod_bindings |>@@ (fun { pmb_expr; _ } -> free_unqualified_names_mod pmb_expr))
