@@ -732,7 +732,7 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         local_canvas_vbs_and_returns_htmls stuff exp
       else
         [ div ~attrs:[("class", "label")] @@
-          (pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat-label pat")] stuff pat ^ " = ") |> Option.to_list) @
+          (pat_opt |>& (fun pat -> html_of_pat ~attrs:[("class", "pat-label pat")] stuff pat ^ "=") |> Option.to_list) @
           [html_of_exp ~tv_root_exp:true stuff exp]
         ; html_of_values_for_exp stuff pat_opt exp
         ]

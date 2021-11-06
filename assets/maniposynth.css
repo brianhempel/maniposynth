@@ -219,7 +219,7 @@ nav img {
 .label > .pat,
 td.pat-label > .pat {
   display: inline-block;
-  padding: var(--padding);
+  padding: var(--padding) calc(2 * var(--padding));
 }
 td.pat-label > .pat {
   min-height: 2rem;
