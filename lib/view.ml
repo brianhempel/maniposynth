@@ -845,7 +845,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; span ~attrs:[("class","undo tool")] ["Undo"]
         ; span ~attrs:[("class","redo tool")] ["Redo"]
         ] @ [drawing_tools final_tenv structure_items]
-      ; div ~attrs:[("id", "mission-statement")] @@
+      ; div ~attrs:([("id", "mission-statement")] @ if structure_items <> [] then [("class","there-is-code-now")] else []) @@
         [ img ~attrs:[("src", "/assets/maniposynth.svg")]
         ; p ["Exploring the frontiers of visual interactive programming—can cutting-edge features meld into a delightful and productive coding environment?"]
         ; p [strong ["Live -"]; "Instant feedback of runtime values."]
