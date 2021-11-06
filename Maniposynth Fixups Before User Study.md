@@ -134,13 +134,18 @@
 - [x] highlight holes in red
 - [x] try making holes bigger
 - [x] need to resize top-level canvas vertically so you can double-click to add code when scrolled down
-- [ ] typing boolean expression at top level produces an assert
-- [ ] allow multi-arg asserts
+- [x] typing boolean expression at top level produces an assert
+- [x] allow multi-arg asserts
 - [x] create new bindings near old bindings
 - [x] new top-level bindings should be *last* by default, not immediately before last
+- [ ] synth!
+- [ ] "new function" tool
+- [ ] "add arg" tool
+- [ ] "add example" tool (for function)
+- [ ] divergence produces junk frames: combine identical frames?
 - [ ] tools offscreen
 - [ ] shouldn't be able to drag values from out of frame
-- [ ] inline option?
+- [ ] inline?
 - [ ] val superscripts are wrong color in return exps
 - [ ] vis pane shouldn't show for selected val superscripts
 - [ ] tooltips describing what the pieces are?
@@ -156,9 +161,6 @@
 - [x] align values coming into function, one frame per column
 - [x] click to switch frame?
 - [ ] automatically visualize recurse calls and rets
-- [ ] "new function" tool
-- [ ] "add arg" tool
-- [ ] "add example" tool (for function)
 - [ ] legend explaining TV parts?
 - [ ] allow comments
 - [ ] get rid of inspector
@@ -168,18 +170,15 @@
 - [x] placing left and right extraction vbs was not working
 - [x] bigger things not pushing smaller things out of the way
 - [x] represent func values as unapplied val tools? Make sure they always insert calls
-- [ ] divergence produces junk frames: combine identical frames?
 - [ ] click on canvas vals to insert code into textbox
 - [ ] setting to hide vals in exp labels?
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
-- [ ] synth!
 - [x] Maniposynth mission statement as the top-level background?
 - [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
 - [ ] animate layout changes? (clunky because involves page reload)
 - [ ] parans for vals?
 - [ ] show destruct button on relevant patterns as well?
-- [ ] show type errors?
-- [ ] add submit button for all textboxes (with hotkey noted)?
+- [ ] add submit button for all textboxes (with hotkey noted)? participants don't have a problem with this
 - [ ] autocomplete to vised values?
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 

@@ -174,12 +174,18 @@ let replace_loc_code loc code final_tenv old =
     |> StructItem.map_by_loc loc begin fun si -> { si with pstr_desc = (StructItem.from_string code).pstr_desc } end
     |> Bindings.fixup final_tenv
 
-let add_assert_before_loc loc lhs_code rhs_code final_tenv old =
+let add_assert_before_loc loc lhs_code rhs_code xy_opt final_tenv old =
+  let set_vb_pos vb = match xy_opt with Some (x, y) -> Pos.set_vb_pos x y vb | None -> vb in
   let assert_exp = Exp.assert_ @@ Exp.from_string @@ "(" ^ lhs_code ^ ") = (" ^ rhs_code ^ ")" in
-  old
-  (* |> Exp.map_by_loc loc (Exp.let_ Nonrecursive [Vb.mk (Pat.any ()) assert_exp]) *)
-  |> Exp.map_by_loc loc (Exp.sequence assert_exp)
-  |> Bindings.fixup final_tenv
+  let new_sis = [StructItem.value Nonrecursive [Vb.mk (Pat.unit) assert_exp |> set_vb_pos]] in
+  Name.name_unnameds ~type_env:final_tenv @@
+  Bindings.fixup final_tenv @@
+  if old = [] then (* Empty program *)
+    new_sis
+  else
+    old
+    |> Exp.map_by_loc loc (Exp.sequence assert_exp)
+    |> StructItem.concat_map_by_loc loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
 
 (* Loc could be at top level (need new struct item binding) or an exp (need new let) *)
 (* OR code could be an entire struct item (e.g. "type nat = Z | S of nat") *)
@@ -264,7 +270,7 @@ let clear_asserts_with_hole_rhs old =
     match exp.pexp_desc with
     | Pexp_assert e ->
       begin match Camlboot_interpreter.Eval.parse_assert e with
-      | Some (_rhs_exp, _fexp, _argexp, expected_exp) when Exp.is_hole expected_exp -> locs_to_remove := exp.pexp_loc :: !locs_to_remove
+      | Some (_rhs_exp, expected_exp) when Exp.is_hole expected_exp -> locs_to_remove := exp.pexp_loc :: !locs_to_remove
       | _ -> ()
       end
     | _ -> ()
@@ -305,7 +311,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     %> Bindings.fixup final_tenv
   | NewAssert (loc_str, lhs_code, rhs_code) ->
     let loc = Serialize.loc_of_string loc_str in
-    add_assert_before_loc loc lhs_code rhs_code final_tenv
+    add_assert_before_loc loc lhs_code rhs_code None final_tenv
   | DoSynth ->
     (* Synth is async. Don't change program here. *)
     Synth.try_async path;
@@ -316,7 +322,16 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     Undo_redo.redo path
   | InsertCode (loc_str, code, xy_opt) ->
     let loc = Serialize.loc_of_string loc_str in
-    insert_code loc code xy_opt final_tenv
+    let equality_lhs_rhs =
+      match Camlboot_interpreter.Eval.parse_assert (Exp.from_string code) with
+      | Some (lhs, rhs)             -> Some (Exp.to_string lhs, Exp.to_string rhs)
+      | _                           -> None
+      | exception Syntaxerr.Error _ -> None
+    in
+    begin match equality_lhs_rhs with
+    | Some (lhs, rhs) -> add_assert_before_loc loc lhs rhs xy_opt final_tenv
+    | None            -> insert_code loc code xy_opt final_tenv
+    end
   | Destruct (loc_str, destruct_code) ->
     let loc = Serialize.loc_of_string loc_str in
     destruct loc destruct_code final_tenv

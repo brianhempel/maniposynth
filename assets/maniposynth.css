@@ -323,6 +323,18 @@ table.subvalue-annotations td {
   grid-template-columns: max-content max-content auto;
   align-items: center; */
 }
+.assert > .label {
+  padding-left: calc(2 * var(--padding));
+}
+.derived-vis-value > .failing .value,
+.failing > .label {
+  background-color: pink !important;
+}
+.derived-vis-value > .passing .value,
+.passing > .label {
+  background-color: rgb(130, 255, 81) !important;
+}
+
 .vbs {
   position: relative;
   /* min-height for .vbs is in the the resizeVbHolders() javascript */
@@ -457,14 +469,6 @@ table.subvalue-annotations td {
   background-color: white;
   border: solid 1px gray;
   padding: 1px;
-}
-
-.failing {
-  background-color: pink;
-}
-
-.passing {
-  background-color: rgb(130, 255, 81);
 }
 
 

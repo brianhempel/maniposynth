@@ -517,6 +517,14 @@ module Exp = struct
     | _                    -> None
   let ident_lid = ident_lid_loced %>& Loc_.txt
   let simple_name = ident_lid %>&& Longident.simple_name
+  let simple_apply_parts (exp : expression) = (* No arg labels, fexp is name *)
+    match exp.pexp_desc with
+    | Pexp_apply (fexp, labeled_args) ->
+      begin match simple_name fexp, labeled_args |>@ (function (Asttypes.Nolabel, arg) -> Some arg | _ -> None) |> Option.project with
+      | Some name, Some unlabeled_args -> Some (name, unlabeled_args)
+      | _                              -> None
+      end
+    | _ -> None
   let fexp_of_apply (exp : expression) =
     match exp.pexp_desc with
     | Pexp_apply (fexp, _) -> Some fexp

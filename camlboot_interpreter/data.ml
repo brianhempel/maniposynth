@@ -171,17 +171,13 @@ and expr_in_object = {
 
 exception InternalException of value
 
-(* We only remember asserts of form "assert (f x = y)" *)
-(* So no need to store the environment yet (f's closure environment is sufficient) *)
 type assert_result =
   { env          : env
   ; lhs_exp      : expression
-  ; f            : value
-  ; arg          : value
-  ; expected     : value
-  ; actual       : value
-  ; passed       : bool
   ; expected_exp : expression
+  ; actual       : value
+  ; expected     : value
+  ; passed       : bool
   }
 
 let new_vtrace v_ = { v_ = v_; vtrace = []; type_opt = None }

@@ -154,18 +154,11 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
               let exp_to_run = Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") with _ -> (??)" in
               Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
             end in
+          let vis_assert_lhs = Exp.apply exp [(Nolabel, exp_of_value value)] in
           let matching_asserts =
             assert_results
-            |>@? begin fun Data.{ f; arg; _ } ->
-              (* print_endline @@ string_of_bool @@ values_equal_for_assert value arg; *)
-              (* Data.value_to_string fval; *)
-              (* Data.value_to_string f; *)
-              (* Format.pp_print_bool Format.std_formatter (values_equal_for_assert fval f); *)
-              (* Format.pp_print_bool Format.std_formatter (values_equal_for_assert value arg); *)
-              (* Format.pp_force_newline Format.std_formatter (); *)
-              (* print_endline @@ string_of_bool @@ values_equal_for_assert fval f; *)
-              Assert_comparison.values_equal_for_assert value arg && Assert_comparison.values_equal_for_assert fval f
-            end in
+            |>@? Assert_comparison.does_lhs_match env vis_assert_lhs
+          in
           (* print_endline @@ string_of_int (List.length assert_results); *)
           let all_passed = List.for_all (fun Data.{ passed; _ } -> passed) matching_asserts in
           let any_failures = List.exists (fun Data.{ passed; _ } -> not passed) matching_asserts in
@@ -192,7 +185,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
               span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
                 [html_of_value None expected]
             end in
-          let code_to_assert_on = Exp.apply exp [(Nolabel, exp_of_value value)] |> Exp.to_string in
+          let code_to_assert_on = vis_assert_lhs |> Exp.to_string in
           let extraction_exp_opt = value_extraction_exp_opt |>& (fun e -> Exp.apply exp [(Asttypes.Nolabel, e)]) in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
@@ -555,7 +548,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string fexp) ^ " " else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
+    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ " " ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string fexp) else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ " " ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
     | _                -> values_for_exp ^ (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
     end
   | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> values_for_exp ^ if in_list then "]" else "[]"
@@ -711,21 +704,26 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
   | Some ({ pexp_desc = Pexp_assert e; _ }) ->
     let matching_asserts =
       begin match Eval.parse_assert e with
-      | Some (lhs, _fexp, _argexp, expected) ->
+      | Some (lhs, expected) ->
         stuff.assert_results
         |>@? (fun Data.{ lhs_exp; expected_exp; _ } -> (lhs_exp, expected_exp) = (lhs, expected))
       | None -> []
       end
     in
+    let lhs_opt = Eval.parse_assert e |>& (fun (lhs, _) -> lhs) in
     (* print_endline @@ string_of_int (List.length assert_results); *)
     let all_passed = List.for_all (fun Data.{ passed; _ } -> passed) matching_asserts in
     let any_failures = List.exists (fun Data.{ passed; _ } -> not passed) matching_asserts in
+    let is_passing = all_passed && matching_asserts <> [] in
     let pass_fail_class, pass_fail_icon =
       if any_failures then (" failing", "✘")
-      else if all_passed && matching_asserts <> [] then (" passing", "✔︎")
+      else if is_passing then (" passing", "✔︎")
       else ("", "")
     in
-    div ~attrs:[("class", "exp" ^ pass_fail_class)] [pass_fail_icon; " "; html_of_exp ~tv_root_exp:true stuff e]
+    div ~attrs:[("class", "tv assert" ^ pass_fail_class)] begin
+      [ div ~attrs:[("class", "label")] [pass_fail_icon; html_of_exp ~tv_root_exp:true stuff e]
+      ] @ if is_passing then [] else (lhs_opt |>& html_of_values_for_exp stuff None |> Option.to_list)
+    end
   | Some exp ->
     div ~attrs:[("class", "tv")] begin
       if should_show_vbs exp then

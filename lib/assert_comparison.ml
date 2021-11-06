@@ -1,4 +1,5 @@
 open Camlboot_interpreter
+open Shared.Ast
 open Shared.Util
 
 
@@ -203,5 +204,38 @@ and mods_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods = []) m
     mod_exp1 = mod_exp2 &&
     envs_equal_for_assert ~seen_v_s ~seen_envs ~seen_mods env1 env2
 
+  | _ ->
+    false
+
+(* For interventions (when we support them) and asserts in visualizers. *)
+(* Supported forms:
+  1. fname e1 ... en
+  2. heh that's it for now
+*)
+(* No fillings support ATM *)
+let does_lhs_match candidate_env candidate_lhs Data.{ env; lhs_exp; _} =
+  (* Mini-evaluator, I guess. *)
+  match Exp.simple_apply_parts candidate_lhs,
+        Exp.simple_apply_parts lhs_exp
+  with
+  | Some (fname1, arg_exps1)
+  , Some (fname2, arg_exps2)
+  when List.length arg_exps1 = List.length arg_exps2 ->
+    begin match
+    Envir.env_get_value_or_lvar candidate_env (Longident.lident fname1),
+    Envir.env_get_value_or_lvar env           (Longident.lident fname2)
+    with
+    | Value fexp1
+    , Value fexp2
+    when values_equal_for_assert fexp1 fexp2 ->
+      let args_equal arg1 arg2 =
+        let val1 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims candidate_env (fun _ -> None) Trace.new_trace_state 0 arg1 in
+        let val2 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims env           (fun _ -> None) Trace.new_trace_state 0 arg2 in
+        values_equal_for_assert val1 val2
+      in
+      List.for_all2 args_equal arg_exps1 arg_exps2
+    | _ -> false
+    | exception _ -> false
+    end
   | _ ->
     false

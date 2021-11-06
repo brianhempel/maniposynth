@@ -891,16 +891,19 @@ let fixup_matches final_tenv prog =
   (* |> log *)
 
 (* Need final tenv to know what constructors exist *)
-let fixup final_tenv prog =
-  let defined_names = SSet.elements Name.pervasives_names in
+let fixup_ defined_names final_tenv prog =
   prog
   |> fixup_matches final_tenv
   |> move_type_decls_to_top
   |> rearrange_struct_items defined_names
   |> add_missing_bindings_struct_items defined_names
 
-
-
+let fixup final_tenv prog =
+  let defined_names = SSet.elements Name.pervasives_names in
+  prog
+  |> fixup_ defined_names final_tenv
+  |> fixup_ defined_names final_tenv
+  |> fixup_ defined_names final_tenv
 
 
 (* Pats_in_scope_* assumes a fixup happens. *)
