@@ -496,6 +496,22 @@ function onVisualize(code) {
   addVis(loc, vis);
 }
 
+function makeAssert(elem, codeToAssertOn, expectationCode) {
+  // const loc = containingLoc(elem);
+  // Put all asserts at the top level for now.
+  const loc = document.querySelector(".top-level").dataset.loc;
+  let pos = { x: 100, y: 100 };
+  // Position below top-level ancestor
+  for (const ancestor of selfAndParents(elem).reverse()) {
+    if (ancestor.dataset.left && ancestor.dataset.top) {
+      pos = { x: parseInt(ancestor.dataset.left) + 50, y: parseInt(ancestor.dataset.top) + ancestor.offsetHeight };
+      break;
+    }
+  }
+  newAssert(loc, codeToAssertOn, expectationCode, pos);
+
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   window.inspector = document.getElementById("inspector");
 
@@ -517,18 +533,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const code = assertTextbox.value;
     const elem = assertTextbox.targetElem;
     if (elem && code !== assertTextbox.originalValue) {
-      // const loc = containingLoc(elem);
-      // Put all asserts at the top level for now.
-      const loc = document.querySelector(".top-level").dataset.loc;
-      let pos = { x: 100, y: 100 };
-      // Position below top-level ancestor
-      for (const ancestor of selfAndParents(elem).reverse()) {
-        if (ancestor.dataset.left && ancestor.dataset.top) {
-          pos = { x: parseInt(ancestor.dataset.left) + 50, y: parseInt(ancestor.dataset.top) + ancestor.offsetHeight };
-          break;
-        }
-      }
-      newAssert(loc, elem.dataset.codeToAssertOn, code, pos);
+      makeAssert(elem, elem.dataset.codeToAssertOn, code)
     }
   };
   assertTextbox.addEventListener("keydown", textboxKeydownHandler);
@@ -1721,78 +1726,58 @@ document.addEventListener("keydown", function(event) {
 /////////////////// Example Management ///////////////////
 
 
+
+
 // function current_frame_n() {
-//   // Frame 0 is the toplevel, frame 1 is the first function call.
-//   return parseInt(sessionStorage.getItem("current_frame_n")) || 1;
-// }
 
-// function set_frame_n(frame_n) {
-//   sessionStorage.setItem("current_frame_n", parseInt(frame_n));
-//   show_current_frame_values();
-//   return current_frame_n();
-// }
-
-// function show_current_frame_values() {
-//   var frames_seen = [];
-//   var anything_visible = false;
-//   document.querySelectorAll('[data-frame-n]').forEach(elem => {
-//     elem.classList.remove("in-current-frame");
-//     let frame_n = parseInt(elem.dataset.frameN);
-//     frames_seen.push(frame_n);
-//     if (current_frame_n() === frame_n) {
-//       elem.classList.add("in-current-frame");
-//       // console.log(elem);
-//       anything_visible = true;
-//     }
-//   });
-//   document.querySelectorAll('[data-failure-in-frame-n]').forEach(elem => {
-//     elem.classList.remove("in-current-frame");
-//     let frame_n = parseInt(elem.dataset.failureInFrameN);
-//     if (current_frame_n() === frame_n) {
-//       // console.log(elem);
-//       elem.classList.add("in-current-frame");
-//     }
-//   });
-//   if (!anything_visible && frames_seen.length >= 1) {
-//     set_frame_n(frames_seen[0]);
-//   } else {
-//     // Hide skeletons on the branch not taken.
-//     var paths_taken = [];
-//     document.querySelectorAll('[data-branch-path]').forEach(elem => {
-//       if (elem.querySelectorAll('.tracesnap.in-current-frame').length >= 1) {
-//         paths_taken.push(elem.dataset.branchPath);
-//       }
-//     });
-//     // console.log(paths_taken);
-//     if (paths_taken.length >= 0) {
-//       document.querySelectorAll('[data-branch-path]').forEach(elem => {
-//         if (paths_taken.includes(elem.dataset.branchPath)) {
-//           elem.classList.remove("not-taken");
-//         } else {
-//           elem.classList.add("not-taken");
-//         }
-//       });
-//     } else {
-//       document.querySelectorAll('[data-branch-path]').forEach(elem => {
-//         elem.classList.remove("not-taken");
-//       });
-//     }
-//   }
-// }
 
 // // Attach event handlers on load.
-// window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', () => {
 
-//   document.querySelectorAll('[data-frame-n]').forEach(elem => {
-//     elem.addEventListener("mouseover", e => set_frame_n(e.currentTarget.dataset.frameN));
-//   });
+  document.querySelectorAll(".new-expectation-arg, .new-expectation-return").forEach(hide);
 
-//   document.querySelectorAll('[data-failure-in-frame-n]').forEach(elem => {
-//     elem.addEventListener("click", e => set_frame_n(e.currentTarget.dataset.failureInFrameN));
-//   });
+  document.querySelectorAll(".add-expectation").forEach(elem => {
+    elem.addEventListener('click', event => {
+      const cells = elem.closest(".tv.fun").querySelector(":scope > table").querySelectorAll(".new-expectation-arg, .new-expectation-return")
+      hide(elem);
+      cells.forEach(show);
+      cells[0].querySelector("input").focus();
+      event.stopPropagation();
+    });
+  });
 
-//   show_current_frame_values();
-// });
+  document.querySelectorAll(".new-expectation-arg input, .new-expectation-return input").forEach(textbox => {
+    textbox.addEventListener('focus', deselectAll);
+    textbox.addEventListener('click', event => { event.stopPropagation() });
+    textbox.addEventListener('keydown', event => {
+      if (event.key === "Enter") {
+        if (textbox.value.length > 0) {
+          const argCodes =
+            Array.from(textbox.closest("table").querySelectorAll(".new-expectation-arg input")).map( input => {
+              return "(" + input.value + ")";
+            });
+          const expectedRetCode =
+            "(" + textbox.closest("table").querySelector(".new-expectation-return input").value + ")";
+          const fname =
+            textbox.closest(".vb").querySelector(":scope > .pat").innerText;
+
+          makeAssert(textbox, `${fname} ${argCodes.join(" ")}`, expectedRetCode);
+
+          event.stopImmediatePropagation(); /* does this even do anything? */
+          event.preventDefault(); /* Don't insert a newline character */
+        }
+      } else if (event.key === "Esc" || event.key === "Escape") {
+        textbox.value = "";
+
+        event.stopImmediatePropagation();
+      } else if (event.key === "Backspace" || event.key === "Delete") {
+
+        event.stopImmediatePropagation(); /* Don't hit the global delete handler */
+      }
+    }, { capture: true }); /* Run this handler befooooorrre the typing happens */
+  });
+
+});
 
 
 

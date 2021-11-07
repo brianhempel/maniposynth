@@ -142,7 +142,7 @@
 - [ ] synth!
 - [ ] "new function" tool
 - [ ] "add arg" tool
-- [ ] "add example" tool (for function)
+- [x] "add example" tool (for function)
 - [ ] divergence produces junk frames: combine identical frames?
 - [ ] tools offscreen
 - [ ] shouldn't be able to drag values from out of frame

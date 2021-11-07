@@ -686,7 +686,7 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
         let row =
           tr ~attrs:[("class", "pat fun-param")] @@
             [ td ~attrs:[("class", "pat-label")] [string_of_arg_label label ^ html_of_pat stuff pat ^ default_exp_str] (* START HERE: need to trace function value bindings in the evaluator *)
-            ] @ (value_htmls_for_pat stuff pat |>@ List.singleton |>@ td)
+            ] @ (value_htmls_for_pat stuff pat |>@ List.singleton |>@ td) @ [td ~attrs:[("class", "new-expectation-arg")] [textbox []]]
         in
         (row::later_rows, final_body)
       | _ -> ([], exp)
@@ -746,13 +746,14 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
       in
       tr ~attrs:[("class", "fun-returns")] @@
         [ td ~attrs:[("class", "returns-label")] ["Return"]
-        ] @ tds
+        ] @ tds @ [td ~attrs:[("class", "new-expectation-return")] [textbox []]]
     in
     (* Technically, a function is value and one can argue the above code should be in html_of_values_for_exp *)
     (* Don't remember why I double wrapped this. But when I do, hovering over a top level value causes other top level functions to gray out because there's no child element that has the same frameNo as the top level. So let's try not double wrapping and see what happens... *)
     (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
         [ table @@ param_rows @ [ret_row] ] @
+        [ div ~attrs:[("class", "add-expectation")] ["+"]] @
         local_canvas_vbs_and_returns_htmls stuff body
       end
     (* ] *)

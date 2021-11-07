@@ -230,6 +230,22 @@ td.pat-label > .pat {
 .subvalue-name {
   background-color: white;
 }
+.tv.fun > table {
+  display: inline-block;
+  vertical-align: middle;
+}
+.tv.fun > .add-expectation {
+  display: inline-block;
+  vertical-align: middle;
+  padding: var(--padding);
+  background-color: #eee;
+  cursor: pointer;
+}
+.new-expectation-arg input,
+.new-expectation-return input {
+  width: 5rem;
+}
+
 .fun-param > .pat-label {
   color: white;
   background-color: var(--pat-color);
@@ -340,12 +356,13 @@ table.subvalue-annotations td {
 .passing > .label {
   background-color: rgb(130, 255, 81) !important;
 }
-.value.passing,
-.value.expectation {
-  color:  rgb(0, 199, 0);
+.value.passing {
+  color: rgb(0, 199, 0);
 }
 .value.expectation {
   margin-right: 0.5em;
+  color:rgb(0, 150, 255);
+  font-style: italic;
 }
 .vbs {
   position: relative;
@@ -380,6 +397,7 @@ table.subvalue-annotations td {
 }
 .value.hole {
   color: rgba(30,30,30,0.3);
+  letter-spacing: -0.25em;
 }
 .fun-returns .value.hole { /* looks better like so...? */
   color: black;
