@@ -60,14 +60,21 @@ let render_maniposynth out_chan url =
   let html_str = View.html_str callables trace bindings_skels in *)
   let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file path in
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-  let (trace, assert_results) =
+  let ((trace, final_env), assert_results) =
     let open Camlboot_interpreter in
     Eval.with_gather_asserts begin fun () ->
       Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
     end
   in
+  let file_final_env =
+    let open Camlboot_interpreter in
+    (* open the module, basically *)
+    Envir.env_extend false final_env @@
+      Envir.env_get_module_data final_env  (Shared.Ast.Longident.lident (Data.module_name_of_unit_path path))
+  in
+  (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)
-  let html_str = View.html_str parsed trace assert_results type_lookups final_tenv in
+  let html_str = View.html_str parsed trace assert_results type_lookups file_final_env final_tenv in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

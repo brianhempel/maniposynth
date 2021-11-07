@@ -358,15 +358,16 @@ let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
   Arg.parse [] anon_fun "";
   let files = List.rev !rev_files in *)
   let trace_state = Trace.new_trace_state in
-  begin try
-    files
-    |> List.map (fun file -> stdlib_flag, file)
-    |> load_rec_units ?fuel_per_top_level_binding stdlib_env lookup_exp_typed trace_state
-    |> ignore
-  with InternalException value ->
-    Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value
-  end;
-  trace_state.trace
+  let final_env =
+    try
+      files
+      |> List.map (fun file -> stdlib_flag, file)
+      |> load_rec_units ?fuel_per_top_level_binding stdlib_env lookup_exp_typed trace_state
+    with InternalException value ->
+      Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value;
+      Envir.empty_env
+  in
+  (trace_state.trace, final_env)
 
 let run_parsed ?fuel_per_top_level_binding lookup_exp_typed parsed file_name =
   let trace_state = Trace.new_trace_state in

@@ -23,6 +23,7 @@ type stuff =
   ; assert_results : Data.assert_result list
   ; type_lookups   : Typing.lookups
   ; names_in_prog  : string list
+  ; final_env      : Data.env
   }
 
 let empty_stuff =
@@ -31,6 +32,7 @@ let empty_stuff =
   ; assert_results = []
   ; type_lookups   = Typing.empty_lookups
   ; names_in_prog  = []
+  ; final_env      = Envir.empty_env
   }
 
 let sprintf = Printf.sprintf
@@ -136,7 +138,7 @@ let exp_gunk ?(infix = false) stuff exp =
 
 let rec apply_visualizers (prog : program) assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
   if visualizers = [] then "" else
-  let html_of_value ?code_to_assert_on extraction_exp_opt value = html_of_value ~single_line_only:true ~code_to_assert_on { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty [] extraction_exp_opt value in
+  let html_of_value ?exp_to_assert_on ?is_expectation extraction_exp_opt value = html_of_value ?exp_to_assert_on ?is_expectation  ~single_line_only:true { empty_stuff with prog = prog } (-1) [] Envir.empty_env Env.empty [] extraction_exp_opt value in
   let result_htmls =
     visualizers
     |>@@ begin fun { exp } ->
@@ -182,14 +184,13 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
             if all_passed then [] else
             matching_asserts
             |>@ begin fun Data.{ expected; expected_exp; _} ->
-              span ~attrs:[("data-in-place-edit-loc", Serialize.string_of_loc expected_exp.pexp_loc)]
-                [html_of_value None expected]
+              span ~attrs:(exp_in_place_edit_attrs expected_exp)
+                [html_of_value ~is_expectation:true None expected]
             end in
-          let code_to_assert_on = vis_assert_lhs |> Exp.to_string in
           let extraction_exp_opt = value_extraction_exp_opt |>& (fun e -> Exp.apply exp [(Asttypes.Nolabel, e)]) in
           [ span ~attrs:[("class", "derived-vis-value")] @@
               assert_results @
-              [wrap @@ html_of_value ~code_to_assert_on extraction_exp_opt result_value]
+              [wrap @@ html_of_value ~exp_to_assert_on:vis_assert_lhs extraction_exp_opt result_value]
           ]
         end else
           []
@@ -199,7 +200,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   in
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
-and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env locs_editable_in_value (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env locs_editable_in_value (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
   let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env locs_editable_in_value in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
@@ -207,8 +208,8 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     match value.type_opt with
     | Some val_typ -> Suggestions.possible_function_names_on_type val_typ type_env
     | None -> [] in
-  let perhaps_type_attr         = match value.type_opt    with Some typ               -> [("data-type", Type.to_string typ)]  | _ -> [] in
-  let perhaps_code_to_assert_on = match code_to_assert_on with Some code_to_assert_on -> [("data-code-to-assert-on", code_to_assert_on)] | _ -> [] in
+  let perhaps_type_attr         = match value.type_opt   with Some typ              -> [("data-type", Type.to_string typ)]  | _ -> [] in
+  let perhaps_code_to_assert_on = match exp_to_assert_on with Some exp_to_assert_on -> [("data-code-to-assert-on", Exp.to_string (exp_to_assert_on |> Attrs.remove_all_deep_exp))] | _ -> [] in
   let extraction_code = extraction_exp_opt |>& Exp.to_string ||& "" in
   let perhaps_edit_code_attrs =
     value.vtrace
@@ -253,6 +254,17 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     | _ ->
       None
   in
+  let matching_asserts =
+    (* Envir.env_get_value_or_lvar *)
+    exp_to_assert_on |>& begin fun exp_to_assert_on ->
+      stuff.assert_results
+      |>@? Assert_comparison.does_lhs_match stuff.final_env exp_to_assert_on
+    end ||& []
+  in
+  (* print_endline @@ string_of_int (List.length assert_results); *)
+  let all_passed = List.for_all (fun Data.{ passed; _ } -> passed) matching_asserts in
+  let any_failures = List.exists (fun Data.{ passed; _ } -> not passed) matching_asserts in
+  let is_passing = all_passed && matching_asserts <> [] in
   let wrap_value str =
     let perhaps_extraction_code =
       extraction_exp_opt
@@ -305,6 +317,12 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
       | Fun _ | Function _ | Fun_with_extra_args (_, _, _) -> "fun"
       | Prim _ -> "prim" | Fexpr _ -> "fexpr" | ModVal _ -> "mod-val" | InChannel _ -> "in-channel" | OutChannel _ -> "out-channel" | Lz _ -> "lazy" | Object _ -> "object" | ExCall _ -> "ex-call" | ExDontCare -> "ex-dont-care"
     in
+    let perhaps_assert_class =
+      if any_failures then " failing"
+      else if is_passing then " passing"
+      else ""
+    in
+    let perhaps_expectation_class = if is_expectation then " expectation" else "" in
     span
       ~attrs:(
         [("data-active-vises", String.concat "  " active_vises)] @
@@ -314,7 +332,7 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
         perhaps_type_attr @
         perhaps_code_to_assert_on @
         perhaps_destruction_code @
-        [("class", "value " ^ value_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        [("class", "value " ^ value_class ^ perhaps_assert_class ^ perhaps_expectation_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
       )
       [str]
   in
@@ -338,11 +356,20 @@ and html_of_value ?(code_to_assert_on = None) ?(in_list = false) ~single_line_on
     end
     ||&~ (fun () -> vs |> List.mapi (fun i v -> recurse ~in_list:(i = 1 && in_list (* tail position *)) None v))
   in
+  let assert_result_strs =
+    if all_passed then [] else
+    matching_asserts
+    |>@ begin fun Data.{ expected; expected_exp; _ } ->
+      span ~attrs:(exp_in_place_edit_attrs expected_exp)
+        [html_of_value ~single_line_only ~is_expectation:true { empty_stuff with prog = stuff.prog } (-1) [] Envir.empty_env Env.empty [] None expected]
+    end
+  in
   wrap_value @@
   table ~attrs:[("class","subvalue-annotations")]
     [ tr [td [apply_visualizers stuff.prog stuff.assert_results visualizers env type_env extraction_exp_opt value]]
     ; tr [td [extracted_subvalue_names_html]]
     ] ^
+  String.concat "" assert_result_strs ^
   match value_ with
   | Bomb                -> "💣"
   | Hole _              -> "??"
@@ -467,18 +494,18 @@ let elide_middle_if_too_many max_shown list =
 let entries_for_locs stuff locs = stuff.trace |> Trace.entries_for_locs locs |> List.sort_by Trace.Entry.frame_no
 let entries_for_loc  stuff loc  = entries_for_locs stuff [loc]
 
-let html_of_trace_entry ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt (loc, frame_no, value, env) =
+let html_of_trace_entry ?exp_to_assert_on ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt (loc, frame_no, value, env) =
   span
     (* data-loc is view root for visualizers, also for determining where to place new asserts before. *)
     ~attrs:[("class","root-value-holder"); ("data-loc", Serialize.string_of_loc loc); ("data-frame-no", string_of_int frame_no)]
-    [html_of_value ~single_line_only stuff frame_no visualizers env type_env locs_editable_in_value root_exp_opt value]
+    [html_of_value ?exp_to_assert_on ~single_line_only stuff frame_no visualizers env type_env locs_editable_in_value root_exp_opt value]
 
-let value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
+let value_htmls_for_loc ?exp_to_assert_on ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
   let entries = entries_for_loc stuff loc in
   let locs_editable_in_value = (associated_exp_label_opt |>& Exp.flatten ||& []) |>@ Exp.loc in
   let (elided_entries, count_elided) = elide_middle_if_too_many max_frames_per_function entries in
   elided_entries |>@ begin function
-    | Some entry -> html_of_trace_entry ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt entry
+    | Some entry -> html_of_trace_entry ?exp_to_assert_on ~single_line_only stuff visualizers type_env locs_editable_in_value root_exp_opt entry
     | None       -> span ~attrs:[("class","ellipses")] ["..." ^ string_of_int count_elided ^ " more..."]
   end
 
@@ -486,16 +513,17 @@ let value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_op
 
 
 (* This is a separate function because the table view for function params needs the value htmls separately *)
-let html_of_values_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
-  let inners = value_htmls_for_loc ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc in
+let html_of_values_for_loc ?exp_to_assert_on ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc =
+  let inners = value_htmls_for_loc ?exp_to_assert_on ~single_line_only stuff type_env associated_exp_label_opt root_exp_opt visualizers loc in
   div ~attrs:[("class","values")] inners
 
-let html_of_values_for_exp ?(single_line_only = false) stuff vb_pat_opt exp =
+let html_of_values_for_exp ?exp_to_assert_on ?(single_line_only = false) stuff vb_pat_opt exp =
+  let exp_to_assert_on = exp_to_assert_on ||& exp in
   let type_env = stuff.type_lookups.Typing.lookup_exp exp.pexp_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in
   let visualizers = Vis.all_from_attrs exp.pexp_attributes in
   (* If this is a return that's bound to a vb pat, use that pat var as the extraction root rather than the exp. *)
   let root_exp = vb_pat_opt |>&& Pat.single_name |>& Exp.var ||& exp in
-  html_of_values_for_loc ~single_line_only stuff type_env (Some exp) (Some root_exp) visualizers exp.pexp_loc
+  html_of_values_for_loc ~exp_to_assert_on ~single_line_only stuff type_env (Some exp) (Some root_exp) visualizers exp.pexp_loc
 
 let value_htmls_for_pat ?(single_line_only = false) stuff pat =
   let type_env = stuff.type_lookups.Typing.lookup_pat pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
@@ -593,13 +621,12 @@ let rec html_of_vb stuff recflag vb =
   let is_rec_perhaps_checked = if recflag = Asttypes.Recursive then [("checked","true")] else [] in
   let show_pat               = not (Pat.is_unit vb.pvb_pat) in
   let show_pat_on_top        = Exp.is_funlike vb.pvb_expr || should_show_vbs vb.pvb_expr in
-  let show_output            = show_pat && not (Exp.is_funlike vb.pvb_expr) in
   let perhaps_type_attr      = stuff.type_lookups.lookup_exp vb.pvb_expr.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
   let attrs                  = [("data-in-place-edit-loc", Serialize.string_of_loc vb.pvb_loc); ("data-in-place-edit-code", Vb.to_string vb)] @ perhaps_type_attr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes ~attrs "vb" @@
     (if show_pat && show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) @
     (if show_pat && Exp.is_funlike vb.pvb_expr then [label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
-    [render_tv ~show_output stuff (if show_pat then Some vb.pvb_pat else None) (Some vb.pvb_expr)](*  @
+    [render_tv stuff (if show_pat then Some vb.pvb_pat else None) (Some vb.pvb_expr)](*  @
     (if show_pat && not show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) *)
 
 and html_tv_of_case_pat stuff pat =
@@ -648,8 +675,7 @@ and ret_exps stuff exp =
   | _                        -> [exp]
 
 (* Actually renders all values, but only one is displayed at a time (via Javascript). *)
-and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) =
-  let _ = show_output in
+and render_tv stuff pat_opt (exp_opt : expression option) =
   match exp_opt with
   | Some ({ pexp_desc = Pexp_fun (_, _, first_arg_pat, _); _ } as exp) ->
     let rec get_param_rows_and_body exp =
@@ -674,17 +700,46 @@ and render_tv ?(show_output = true) stuff pat_opt (exp_opt : expression option) 
         entries_for_loc stuff first_arg_pat.ppat_loc
         |> elide_middle_if_too_many max_frames_per_function
       in
+      let rec arg_pat_locs = function
+      | { pexp_desc = Pexp_fun (_, _, pat, body); _ } -> pat.ppat_loc :: arg_pat_locs body
+      | _                                             -> []
+      in
+      let arg_pat_locs = arg_pat_locs exp in
       let frame_no_opts = entries |>@ Option.map Trace.Entry.frame_no in
-      let locs = ret_exps stuff body |>@ Exp.loc in
-      let ret_entries = entries_for_locs stuff locs in
+      let ret_locs = ret_exps stuff body |>@ Exp.loc in
+      let ret_entries = entries_for_locs stuff ret_locs in
       let type_env = stuff.type_lookups.Typing.lookup_pat first_arg_pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
+      let arg_entry_opts = (* List of kist of entries... [arg1_entries, arg2_entries, arg3_entries] *)
+        (* Need to construct thing to assert on. *)
+        arg_pat_locs |>@ begin fun pat_loc ->
+          let arg_entries = entries_for_loc stuff pat_loc in
+          frame_no_opts |>@& begin function
+          | Some frame_no -> arg_entries |> List.find_opt (Trace.Entry.frame_no %> (=) frame_no)
+          | None          -> None
+          end
+        end
+      in
       let tds =
         frame_no_opts |>@ begin function
           | Some frame_no ->
-            ret_entries
-            |> List.find_opt (Trace.Entry.frame_no %> (=) frame_no)
-            |>& html_of_trace_entry ~single_line_only:false stuff [] type_env [] None
-            ||& ""
+            let arg_values_opt =
+              arg_entry_opts |>@ begin fun arg_entries ->
+                arg_entries
+                |> List.find_opt (Trace.Entry.frame_no %> (=) frame_no)
+                |>& Trace.Entry.value
+              end
+              |> Option.project
+            in
+            let ret_entry_opt =
+              ret_entries
+              |> List.find_opt (Trace.Entry.frame_no %> (=) frame_no)
+            in
+            let exp_to_assert_on =
+              match pat_opt |>&& Pat.single_name, arg_values_opt with
+              | Some fname, Some arg_vals -> Some (Exp.simple_apply fname (arg_vals |>@ exp_of_value))
+              | _                         -> None
+            in
+            ret_entry_opt |>& html_of_trace_entry ?exp_to_assert_on ~single_line_only:false stuff [] type_env [] None ||& ""
           | None -> span ~attrs:[("class","ellipses")] ["..." ^ string_of_int count_elided ^ " more..."]
         end
         |>@ List.singleton |>@ td
@@ -818,7 +873,7 @@ let drawing_tools tenv prog =
     (common_phrases_menu @ prog_funcs_menu @ ctor_menus)
 
 
-let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_tenv =
+let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_env final_tenv =
   let names_in_prog = StructItems.deep_names structure_items in
   let stuff =
     { trace          = trace
@@ -826,6 +881,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
     ; assert_results = assert_results
     ; type_lookups   = type_lookups
     ; names_in_prog  = names_in_prog
+    ; final_env      = final_env
     }
   in
   let top_level_vbs_loc = structure_items |> List.last_opt |>& StructItem.loc ||& Location.none in

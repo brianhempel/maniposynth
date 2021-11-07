@@ -913,6 +913,11 @@ module Attrs = struct
 
   let map f prog =
     (mapper f).structure (mapper f) prog
+
+  let remove_all_deep_mapper = mapper (fun _ -> [])
+  let remove_all_deep_vb     = remove_all_deep_mapper.value_binding remove_all_deep_mapper
+  let remove_all_deep_exp    = remove_all_deep_mapper.expr          remove_all_deep_mapper
+  let remove_all_deep_pat    = remove_all_deep_mapper.pat           remove_all_deep_mapper
 end
 
 

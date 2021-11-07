@@ -102,12 +102,15 @@ function deleteLoc(loc) {
   ]);
 }
 
-function newAssert(locToAssertBefore, codeToAssertOn, expectedCode) {
+function newAssert(locToAssertBefore, codeToAssertOn, expectedCode, pos) {
+  let posOpt = ["None"];
+  if (pos) { posOpt = ["Some", pos.x - 30, pos.y - 30] }
   doAction([
     "NewAssert",
     locToAssertBefore,
     codeToAssertOn,
-    expectedCode
+    expectedCode,
+    posOpt
   ]);
 }
 
@@ -438,7 +441,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalSubmitEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-in-place-edit-loc],[code-to-assert-on]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-in-place-edit-loc],[data-code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", clickSelect);
   });
@@ -512,9 +515,20 @@ window.addEventListener('DOMContentLoaded', () => {
   const assertTextbox = document.getElementById("assert-textbox");
   assertTextbox.submit = () => {
     const code = assertTextbox.value;
-    if (code !== assertTextbox.originalValue) {
-      let elem = assertTextbox.targetElem;
-      elem && newAssert(containingLoc(elem), elem.dataset.codeToAssertOn, code);
+    const elem = assertTextbox.targetElem;
+    if (elem && code !== assertTextbox.originalValue) {
+      // const loc = containingLoc(elem);
+      // Put all asserts at the top level for now.
+      const loc = document.querySelector(".top-level").dataset.loc;
+      let pos = { x: 100, y: 100 };
+      // Position below top-level ancestor
+      for (const ancestor of selfAndParents(elem).reverse()) {
+        if (ancestor.dataset.left && ancestor.dataset.top) {
+          pos = { x: parseInt(ancestor.dataset.left) + 50, y: parseInt(ancestor.dataset.top) + ancestor.offsetHeight };
+          break;
+        }
+      }
+      newAssert(loc, elem.dataset.codeToAssertOn, code, pos);
     }
   };
   assertTextbox.addEventListener("keydown", textboxKeydownHandler);

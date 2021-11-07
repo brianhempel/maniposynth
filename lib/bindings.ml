@@ -634,9 +634,7 @@ let move_up_duplicated_bindings prog =
     in
     find_nondep_letexps (Pat.names case.pc_lhs) case.pc_rhs
   in
-  let remove_attrs_mapper = Attrs.mapper (fun _ -> []) in
-  let remove_attrs_vb     = remove_attrs_mapper.value_binding remove_attrs_mapper in
-  let vbs_equal vb1 vb2 = Vb.to_string (remove_attrs_vb vb1) = Vb.to_string (remove_attrs_vb vb2) in
+  let vbs_equal vb1 vb2 = Vb.to_string (Attrs.remove_all_deep_vb vb1) = Vb.to_string (Attrs.remove_all_deep_vb vb2) in
   let letexps_equal e1 e2 =
     match e1.pexp_desc, e2.pexp_desc with
     | Pexp_let (recflag1, vbs1, _body1)

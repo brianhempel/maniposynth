@@ -15,7 +15,7 @@ type t =
   | RemoveVis        of string * string (* loc str, vis str *)
   | ReplaceLoc       of string * string (* loc str, code str *)
   | DeleteLoc        of string (* loc str *)
-  | NewAssert        of string * string * string (* loc str, lhs code str, rhs code str *)
+  | NewAssert        of string * string * string * (int * int) option (* loc str, lhs code str, rhs code str, pos opt *)
   | Undo
   | Redo
   | DoSynth
@@ -39,7 +39,10 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]                    -> RemoveVis (loc_str, vis_str)
   | `List [`String "ReplaceLoc"; `String loc_str; `String code]                      -> ReplaceLoc (loc_str, code)
   | `List [`String "DeleteLoc"; `String loc_str]                                     -> DeleteLoc loc_str
-  | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code] -> NewAssert (loc_str, lhs_code, rhs_code)
+  | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code
+  ; `List [`String "None"]]                                                          -> NewAssert (loc_str, lhs_code, rhs_code, None)
+  | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code
+          ; `List [`String "Some"; x; y]]                                            -> NewAssert (loc_str, lhs_code, rhs_code, Some (float_or_int_to_int x, float_or_int_to_int y))
   | `List [`String "DoSynth"]                                                        -> DoSynth
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
@@ -174,6 +177,7 @@ let replace_loc_code loc code final_tenv old =
     |> StructItem.map_by_loc loc begin fun si -> { si with pstr_desc = (StructItem.from_string code).pstr_desc } end
     |> Bindings.fixup final_tenv
 
+(* In the JS, all asserts are added at the top level (for now) *)
 let add_assert_before_loc loc lhs_code rhs_code xy_opt final_tenv old =
   let set_vb_pos vb = match xy_opt with Some (x, y) -> Pos.set_vb_pos x y vb | None -> vb in
   let assert_exp = Exp.assert_ @@ Exp.from_string @@ "(" ^ lhs_code ^ ") = (" ^ rhs_code ^ ")" in
@@ -309,9 +313,9 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     %> Exp.map_by_loc loc delete
     %> clear_asserts_with_hole_rhs (* The above step may produce e.g. `assert (x = (??))` which is a sign to delete the whole assert. *)
     %> Bindings.fixup final_tenv
-  | NewAssert (loc_str, lhs_code, rhs_code) ->
+  | NewAssert (loc_str, lhs_code, rhs_code, xy_opt) ->
     let loc = Serialize.loc_of_string loc_str in
-    add_assert_before_loc loc lhs_code rhs_code None final_tenv
+    add_assert_before_loc loc lhs_code rhs_code xy_opt final_tenv
   | DoSynth ->
     (* Synth is async. Don't change program here. *)
     Synth.try_async path;
