@@ -897,8 +897,8 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
     ; body @@
       [ nav @@
         [ img ~attrs:[("src", "/assets/maniposynth.svg")]
-        ; span ~attrs:[("class","undo tool")] ["Undo"]
-        ; span ~attrs:[("class","redo tool")] ["Redo"]
+        ; span ~attrs:[("class","undo tool")] ["Undo (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
+        ; span ~attrs:[("class","redo tool")] ["Redo  (⇧" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
         ] @ [drawing_tools final_tenv structure_items]
       ; div ~attrs:([("id", "mission-statement")] @ if structure_items <> [] then [("class","there-is-code-now")] else []) @@
         [ img ~attrs:[("src", "/assets/maniposynth.svg")]
@@ -941,7 +941,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
           ; button ~attrs:[("id","visualize-button");("type","submit")] ["Visualize"]
           ]
         ]
-      ; button ~attrs:[("id", "synth-button")] ["Synth"]
+      ; button ~attrs:[("id", "synth-button")] ["Synth (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Y)"]
       ; div ~attrs:[("id", "tooltip")] []
       ; button ~attrs:[("id", "destruct-button")] ["Destruct"]
       ]

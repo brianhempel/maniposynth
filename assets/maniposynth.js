@@ -1164,10 +1164,19 @@ window.addEventListener('DOMContentLoaded', () => {
 /////////////////// Synth Button ///////////////////
 
 window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById("synth-button").addEventListener("click", event => { gratuitousLamdas(event); doSynth() });
+  document.getElementById("synth-button").addEventListener("click", event => { gratuitousLamdas(); doSynth() });
+
+  document.addEventListener('keydown', event => {
+    let commandKeyDown = event.ctrlKey || event.metaKey;
+    if (commandKeyDown && event.key === 'y') {
+      gratuitousLamdas();
+      doSynth();
+      event.preventDefault();
+    }
+  });
 });
 
-function gratuitousLamdas(event) {
+function gratuitousLamdas() {
   const particleLife  = 5  * 1000;
   const generatorLife = 15 * 1000;
   const generatorStart = new Date();
@@ -1185,8 +1194,8 @@ function gratuitousLamdas(event) {
     let   vy = 20 * -Math.random() * 60;
     const vr = 20 * (Math.random() - 0.5) * 60;
     const g = 0.1 * 60 * 60;
-    let x = event.clientX - 10;
-    let y = event.clientY - 20;
+    let x = window.innerWidth - 130;
+    let y = window.innerHeight - 80;
     let r = 360 * Math.random();
     let lastTime = new Date();
     const moveParticle = _ => {
@@ -1212,19 +1221,26 @@ function gratuitousLamdas(event) {
 
 /////////////////// Undo/Redo ///////////////////
 
+isMac = window.navigator.platform.includes("Mac");
+
+commandKeyStr = isMac ? "⌘" : "Ctrl+";
+
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll(".undo").forEach(elem => elem.addEventListener("click", _ => undo()));
   document.querySelectorAll(".redo").forEach(elem => elem.addEventListener("click", _ => redo()));
 
   document.addEventListener('keydown', event => {
-    if (event.metaKey && event.shiftKey && event.key === 'z') {
+    let commandKeyDown = event.ctrlKey || event.metaKey;
+    if (commandKeyDown && event.shiftKey && event.key === 'z') {
       redo();
       event.preventDefault();
-    } else if (event.metaKey && event.key === 'z') {
+    } else if (commandKeyDown && event.key === 'z') {
       undo();
       event.preventDefault();
     }
   });
+
+  document.querySelectorAll(".command-key-glyph").forEach(elem => elem.innerText = commandKeyStr);
 });
 
 
