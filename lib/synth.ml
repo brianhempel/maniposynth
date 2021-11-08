@@ -926,7 +926,11 @@ let try_async path =
       end in
     begin match results parsed trace assert_results path |>@ remove_unnecessary_rec_flags with
     | result::_ ->
-      Pretty_code.output_code result path
+      Undo_redo.perhaps_initialize_undo_history path;
+      if parsed <> result then begin
+        Pretty_code.output_code result path; (* This was overwriting synth results! :o *)
+        Undo_redo.perhaps_log_revision path
+      end;
     | _ -> ()
     end;
     (* |> List.iteri begin fun i result ->

@@ -139,6 +139,7 @@
 - [x] create new bindings near old bindings
 - [x] new top-level bindings should be *last* by default, not immediately before last
 - [x] assert on TV result (but top-level only for now)
+- [x] undo doesn't work with synth
 - [ ] synth!
 - [ ] "new function" tool
 - [ ] "add arg" tool
