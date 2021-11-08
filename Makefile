@@ -8,6 +8,10 @@
 run: ./_build/default/server.exe
 	./_build/default/server.exe
 
+profile:
+	# Must already be running, samples for 10 seconds
+	sample server.exe
+
 # Artifact for distributing to study participants.
 artifact.zip: ./_build/default/server.exe ./assets/*
 	rm -rf artifact; mkdir artifact; cp ./_build/default/server.exe artifact/maniposynth

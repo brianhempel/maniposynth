@@ -469,8 +469,8 @@ let is_imperative typ =
     Type.flatten typ |> List.exists (function { Types.desc = Types.Tvar (Some name2); _ } -> name = name2 | _ -> false)
   | _ -> false
 
-let unimplemented_prim_names = SSet.of_seq (List.to_seq ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"])
-let dont_bother_names = SSet.of_seq (List.to_seq ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="]) (* Don't bother with > and >= because will already guess < and <= *)
+let unimplemented_prim_names = SSet.of_list ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"]
+let dont_bother_names = SSet.of_list ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="] (* Don't bother with > and >= because will already guess < and <= *)
 
 let constants_at_type_seq synth_env typ =
   match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.constants_at_t with
@@ -749,10 +749,12 @@ let e_guess fillings size_limit prog file_name : fillings Seq.t =
       |> Seq.flat_map begin function fillings ->
         (* print_endline "retyping prog"; *)
         let prog = apply_fillings fillings prog in
+        (* print_endline @@ "Typing " ^ StructItems.to_string prog; *)
         let (typed_prog, _, _) =
           try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
           with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
         in
+        (* print_endline "done"; *)
         begin match Typing.find_exp_by_loc hole_loc typed_prog with
         | None ->
           (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
@@ -919,7 +921,7 @@ let try_async path =
     let callables = Read_execution_env.callables_of_file path in
     let trace = Tracing.run_with_tracing path in
     let html_str = View.html_str callables trace bindings_skels in *)
-    let lookup_exp_typed = Typing.exp_typed_lookup_of_parsed parsed path in
+    let lookup_exp_typed = Typing.exp_typed_lookup_of_parsed_with_error_recovery parsed path in
     let (trace, assert_results) =
       Eval.with_gather_asserts begin fun () ->
         Interp.run_parsed ~fuel_per_top_level_binding:10_000 lookup_exp_typed parsed path

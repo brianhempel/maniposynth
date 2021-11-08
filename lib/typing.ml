@@ -31,7 +31,7 @@ let initial_env =
   in
   env_with_hole
 
-let rec typedtree_sig_env_of_parsed parsed file_name =
+let typedtree_sig_env_of_parsed parsed file_name =
   Env.set_unit_name @@ Compenv.module_of_filename formatter file_name file_name;
   (* print_endline @@ Compenv.module_of_filename formatter path path; *)
   let old_warning_printer = !Location.warning_printer in
@@ -40,18 +40,26 @@ let rec typedtree_sig_env_of_parsed parsed file_name =
     let out = Typemod.type_structure initial_env parsed (Location.in_file file_name) in
     Location.warning_printer := old_warning_printer;
     out
-  with Typecore.Error (loc, _env, _err) ->
+  with e ->
     Location.warning_printer := old_warning_printer;
-    (* Typecore.report_error env formatter err; *)
-    typedtree_sig_env_of_parsed (Exp.replace loc Exp.hole parsed) file_name
-    (* print_endline "";
-    failwith "typedtree conversion failed" *)
+    raise e
+
+let rec typedtree_sig_env_of_parsed_with_error_recovery parsed file_name =
+  try
+    typedtree_sig_env_of_parsed parsed file_name
+  with Typecore.Error (loc, _env, _err) as e ->
+    (* Try to recover by replacing the troublesome location with a hole. *)
+    let error_loc_replaced_with_hole = Exp.replace loc Exp.hole parsed in
+    if error_loc_replaced_with_hole <> parsed then
+      typedtree_sig_env_of_parsed_with_error_recovery error_loc_replaced_with_hole file_name
+    else
+      raise e
 
 (* Returns (typedtree_structure, signature, env) *)
-let typedtree_sig_env_of_file path =
+let typedtree_sig_env_of_file_with_error_recovery path =
   let parsed = Camlboot_interpreter.Interp.parse path in
   let (typed_struct, signature, env) =
-    typedtree_sig_env_of_parsed parsed path
+    typedtree_sig_env_of_parsed_with_error_recovery parsed path
   in
   (* Printtyped.implementation formatter typedtree;
   Printtyp.signature formatter signature;
@@ -104,8 +112,8 @@ let type_lookups_of_typed_structure typed_struct : lookups =
   let (typed_struct, _, _) = typedtree_sig_env_of_file path in
   exp_typed_lookup_of_typed_structure typed_struct *)
 
-let exp_typed_lookup_of_parsed parsed file_name =
-  let (typed_struct, _, _) = typedtree_sig_env_of_parsed parsed file_name in
+let exp_typed_lookup_of_parsed_with_error_recovery parsed file_name =
+  let (typed_struct, _, _) = typedtree_sig_env_of_parsed_with_error_recovery parsed file_name in
   (type_lookups_of_typed_structure typed_struct).lookup_exp
 
 (* let type_expression_opt ?(type_env = initial_env) exp =

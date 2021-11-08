@@ -223,7 +223,7 @@ let insert_code ?name loc code xy_opt final_tenv old =
       |> StructItem.concat_map_by_loc loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
   in
   (* Turn inserted bare functions into calls. *)
-  match Typing.exp_typed_lookup_of_parsed prog "unknown.ml" new_exp_loc with
+  match Typing.exp_typed_lookup_of_parsed_with_error_recovery prog "unknown.ml" new_exp_loc with
   | Some { exp_type; _ } when Type.arrow_arg_count exp_type >= 1 ->
     prog
     |> Exp.map_by_loc new_exp_loc begin fun fexp ->
