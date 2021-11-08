@@ -5,7 +5,6 @@ module MapPlus (Key : sig type t val compare : t -> t -> int val to_string : t -
 
   let keys   map = bindings map |> List.map fst
   let values map = bindings map |> List.map snd
-
   let remove_all keys = List.fold_right remove keys
 
   let to_string val_to_string smap =
@@ -21,9 +20,18 @@ module SMap   = MapPlus (struct include String let to_string s = s end)
 module IntMap = MapPlus (struct type t = int let compare = compare let to_string = string_of_int end)
 
 
-module SSet    = Set.Make (String)
-module IntSet  = Set.Make (struct type t = int let compare = compare end)
-module CharSet = Set.Make (Char)
+module SetPlus (Key : sig type t val compare : t -> t -> int end) = struct
+  include Set.Make (Key)
+
+  let add_all    elems = List.fold_right add elems
+  let remove_all elems = List.fold_right remove elems
+
+  let union_all sets = List.fold_right union sets empty
+end
+
+module SSet    = SetPlus (String)
+module IntSet  = SetPlus (struct type t = int let compare = compare end)
+module CharSet = SetPlus (Char)
 
 let clamp lo hi x =
   if x < lo then lo
@@ -106,6 +114,16 @@ module List = struct
     | _::rest -> drop (len-1) rest
 
   let suffix len list = drop (length list - len) list
+
+  let rec take_while pred list =
+    match list with
+    | [] -> ([], [])
+    | x::rest ->
+      if pred x then
+        let (matches, rest') = take_while pred rest in
+        (x::matches, rest')
+      else
+        ([], list)
 
   let rec replace_nth i new_elem = function
     | [] -> raise (Invalid_argument "List.replace_nth called on a list that is too short")

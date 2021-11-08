@@ -446,8 +446,9 @@ let is_req_satisified_by fillings (env, exp, expected) =
 (* Still need to search env for constructors *)
 
 
-(* -10 to 10 *)
-let ints = List.init 21 (fun x -> (Exp.int_lit (x - 10), Predef.type_int))
+(* Based on the corpus in synth_stats_model *)
+let corpus_ints_90th_percentile = [0; 1; 2; 8; -1; 3; 4; 5; 10; 7; 16; 17; 255]
+let ints = corpus_ints_90th_percentile |>@ (fun int -> (Exp.int_lit int, Predef.type_int))
 (* let ints = [(Exp.int_lit 0, Predef.type_int); (Exp.int_lit 1, Predef.type_int)] *)
 let strings = [(Exp.string_lit "", Predef.type_string)]
 
@@ -471,6 +472,15 @@ let is_imperative typ =
 
 let unimplemented_prim_names = SSet.of_list ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"]
 let dont_bother_names = SSet.of_list ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="] (* Don't bother with > and >= because will already guess < and <= *)
+(* Based on the corpus in synth_stats_model *)
+let corpus_pervasives_names_99_percentile = SSet.of_list ["!"; "="; ":="; "raise"; "ref"; "&&"; "+"; "not"; "-"; "<>"; "||"; "^"; "exp"; "@"; "<"; ">"; ">="; "*"; "incr"; "<="; "=="; "fst"; "compare"; "ignore"; "snd"; "string_of_int"; "output_string"; "~-"; "close_in"; "/"; "lsl"; "max"; "exit"; "|>"; "prerr_endline"; "max_int"; "min"; "output_char"; "min_int"; "!="; "print_string"; "land"; "mod"; "input_value"; "asr"; "decr"; "float_of_string"; "stdout"; "open_in_bin"; "really_input_string"; "@@"; "failwith"; "float_of_int"; "log"; "lor"; "output_value"; "succ"; "close_out"; "pred"; "prerr_string"; "+."; "stderr"; "lxor"; "*."; "-."; "/."; "int_of_string"]
+let uncommon_names = SSet.diff Name.pervasives_value_names corpus_pervasives_names_99_percentile
+let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names; uncommon_names]
+
+
+
+
+
 
 let constants_at_type_seq synth_env typ =
   match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.constants_at_t with
@@ -507,8 +517,7 @@ let constants_at_type_seq synth_env typ =
       let f name _path desc out =
         let target_is_var = Type.is_var_type typ in
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
-        if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
-        if SSet.mem name dont_bother_names then out else
+        if SSet.mem name names_to_skip then out else
         if SSet.mem name synth_env.nonconstant_names then out else
         if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
         match Type.unify_opt desc.Types.val_type typ with
@@ -542,8 +551,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
       let f name _path desc out =
         if not (SSet.mem name synth_env.nonconstant_names) then out else
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
-        if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
-        if SSet.mem name dont_bother_names then out else
+        if SSet.mem name names_to_skip then out else
         if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
         match Type.unify_opt desc.Types.val_type typ with
         | Some type' -> (Exp.simple_var name, type') :: out
@@ -587,8 +595,7 @@ let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
         in
         let values_folder name _path desc out =
           if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
-          if SSet.mem name unimplemented_prim_names then out else (* Interpreter doesn't implement some primitives *)
-          if SSet.mem name dont_bother_names then out else
+          if SSet.mem name names_to_skip then out else
           let name_type = Type.regular desc.Types.val_type in
           match name_type.desc with
           | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->

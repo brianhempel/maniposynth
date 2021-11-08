@@ -12,10 +12,15 @@ The the gen functions do support choosing a name immediately if you need to, whi
 
 *)
 
-let pervasives_names =
-  Env.fold_values         (fun name _ _              list -> name      :: list) None Typing.initial_env []
-  @ Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
+let pervasives_value_names =
+  Env.fold_values         (fun name _ _ list -> name :: list) None Typing.initial_env []
   |> SSet.of_list
+
+let pervasives_ctor_names =
+  Env.fold_constructors (fun {Types.cstr_name;  _} list -> cstr_name :: list) None Typing.initial_env []
+  |> SSet.of_list
+
+let pervasives_names = SSet.union pervasives_value_names pervasives_ctor_names
 
 (* https://ocaml.org/releases/4.07/htmlman/names.html *)
 (* https://ocaml.org/releases/4.07/htmlman/lex.html#infix-symbol *)

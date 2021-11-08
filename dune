@@ -6,10 +6,9 @@
  )
 
 (executable
- (name interpret_simple_ml)
- (modules interpret_simple_ml)
- (libraries camlboot_interpreter maniposynth_lib)
- ; (preprocess (pps ppx_yojson_conv))
+ (name synth_stats_model)
+ (modules synth_stats_model)
+ (libraries compiler-libs.common camlboot_interpreter maniposynth_lib yojson uri synth_stats_model)
  )
 
 ; (executable
