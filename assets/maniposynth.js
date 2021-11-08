@@ -294,7 +294,7 @@ function drop(event) {
   const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
-    insertCode(dropTarget.dataset.loc, droppedExtractionCode, mouseRelativeToElem(dropTarget, event));
+    insertCode(dropTarget.dataset.loc, droppedExtractionCode, compensateForMovedElems(dropTarget, mouseRelativeToElem(dropTarget, event)));
   } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
     setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
@@ -1137,7 +1137,8 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.style.left = `${pos.x}px`;
     textboxDiv.style.top  = `${pos.y}px`;
     vbsHolder.appendChild(textboxDiv);
-    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code, pos), _ => abortTextEdit(textboxDiv));
+    const insertPos = compensateForMovedElems(vbsHolder, pos);
+    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code, insertPos), _ => abortTextEdit(textboxDiv));
     textboxDiv.focus();
   }
 }
@@ -1555,6 +1556,23 @@ function relayout() {
 // This happens in initFrameNos
 // window.addEventListener('DOMContentLoaded', relayout);
 
+// Boxes may be displayed much further down than their raw position.
+// So new raw positions need to be relative to old raw positions.
+// Position relative the box just above the click point.
+function compensateForMovedElems(vbsHolder, rawPos) {
+  const boxesPositionedAboveRawPos =
+    Array.from(vbsHolder.children).filter(box => box.classList.contains("box") && box.dataset.top && parseInt(box.style.top) <= rawPos.y);
+
+  const baseBox = boxesPositionedAboveRawPos.reverse()[0];
+
+  if (baseBox) {
+    console.log(baseBox);
+    return { x: rawPos.x, y: rawPos.y - (parseInt(baseBox.style.top) - parseInt(baseBox.dataset.top)) };
+  } else {
+    return rawPos;
+  }
+}
+
 
 
 //////////////// rec checkboxes /////////////////////////////////
@@ -1918,7 +1936,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const vbsHolder = vbsHolderForInsert(valueElem);
     if (vbsHolder.classList.contains("top-level")) {
       // Actually insert a binding at the top level.
-      insertCode(vbsHolder.dataset.loc, valueElem.dataset.destructionCode, vectorAdd(mouseRelativeToElem(vbsHolder, event), {x: 0, y: 70}));
+      insertCode(vbsHolder.dataset.loc, valueElem.dataset.destructionCode, vectorAdd(compensateForMovedElems(vbsHolder, mouseRelativeToElem(vbsHolder, event), {x: 0, y: 70})));
     } else {
       destruct(vbsHolder.dataset.loc, valueElem.dataset.destructionCode);
     }
