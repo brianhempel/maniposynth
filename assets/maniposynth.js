@@ -1925,3 +1925,31 @@ window.addEventListener('DOMContentLoaded', () => {
     event.stopImmediatePropagation();
   });
 });
+
+
+
+/////////////////// Value Superscripts Setting ///////////////////
+
+valueSuperscriptCheckbox = null;
+
+function updateValueSuperscripts() {
+  if (valueSuperscriptCheckbox.checked) {
+    window.sessionStorage.setItem("show-values-in-green-exp-labels", "true")
+    document.querySelectorAll(".exp > .values").forEach(show);
+  } else {
+    window.sessionStorage.setItem("show-values-in-green-exp-labels", "false")
+    document.querySelectorAll(".exp > .values").forEach(hide);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  valueSuperscriptCheckbox = document.getElementById("show-values-in-green-exp-labels");
+
+  if (window.sessionStorage.getItem("show-values-in-green-exp-labels") === "false") {
+    valueSuperscriptCheckbox.checked = false;
+    updateValueSuperscripts();
+  }
+
+  valueSuperscriptCheckbox.addEventListener("change", updateValueSuperscripts);
+});
+

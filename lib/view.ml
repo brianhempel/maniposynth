@@ -897,6 +897,13 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
     ; body @@
       [ nav @@
         [ img ~attrs:[("src", "/assets/maniposynth.svg")]
+        ; span ~attrs:[("class","settings tool")]
+          [ img ~attrs:[("src", "/assets/settings-gear.svg")]; " ▾"
+          ; div ~attrs:["class","settings-pane"]
+            [  checkbox ~attrs:[("id", "show-values-in-green-exp-labels");("checked","checked")] ()
+            ;  label ~attrs:[("for","show-values-in-green-exp-labels")] ["Show value superscripts in green expression labels."]
+            ]
+          ]
         ; span ~attrs:[("class","undo tool")] ["Undo (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
         ; span ~attrs:[("class","redo tool")] ["Redo  (⇧" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
         ] @ [drawing_tools final_tenv structure_items]

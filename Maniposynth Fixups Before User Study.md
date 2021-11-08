@@ -130,59 +130,143 @@
 - [x] hard-code `hd::tail` names for list
 
 - [x] destruct should work at the top level...
+
 - [x] still offering too many values for autocomplete
+
 - [x] highlight holes in red
+
 - [x] try making holes bigger
+
 - [x] need to resize top-level canvas vertically so you can double-click to add code when scrolled down
+
 - [x] typing boolean expression at top level produces an assert
+
 - [x] allow multi-arg asserts
+
 - [x] create new bindings near old bindings
+
 - [x] new top-level bindings should be *last* by default, not immediately before last
+
 - [x] assert on TV result (but top-level only for now)
+
 - [x] undo doesn't work with synth
+
 - [x] key command for synth
-- [ ] synth!
+
+- [x] fix synth hanging
+
+- [x] setting to hide vals in exp labels
+
+- [ ] vertical movement is now offffffff
+
+  ```ocaml
+  type nat = Z | S of nat
+  
+  let rec plus x2 x1 =
+    match x1 with Z -> x2 | S nat -> plus (S x2) nat
+    [@@pos 0, 139]
+  
+  let () = assert (plus (S (S (S Z))) (S Z) = S (S (S (S Z)))) [@@pos 142, 149]
+  
+  let () = assert (plus (S Z) (S (S Z)) = S (S (S Z))) [@@pos 20, 499]
+  
+  let rec int_of_nat x1 =
+    match x1 with Z -> 0 | S nat2 -> succ (int_of_nat nat2)
+    [@@pos 329, 1027]
+  
+  let () = assert (int_of_nat (S (S (S Z))) = 3) [@@pos 783, 665]
+  
+  let () = assert (int_of_nat (S (S Z)) = 2) [@@pos 407, 505]
+  ```
+
+  
+
+- [ ] trim down the synth env
+
 - [ ] "new function" tool
+
 - [ ] "add arg" tool
+
+- [ ] tool log output is getting noisy...something with asserts...??
+
+- [ ] statistics for synth
+
 - [x] "add example" tool (for function)
+
 - [ ] divergence produces junk frames: combine identical frames?
+
 - [ ] tools offscreen
+
 - [ ] shouldn't be able to drag values from out of frame
+
 - [ ] inline?
+
 - [ ] val superscripts are wrong color in return exps
+
 - [ ] vis pane shouldn't show for selected val superscripts
+
 - [ ] tooltips describing what the pieces are?
+
 - [ ] don't allow same names in a scope?
+
 - [ ] two ret values displayed for `List.rev @@ x:: List.rev list`
+
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
+
 - [ ] highlight var value origins on hover
+
 - [ ] show type errors
+
 - [ ] hide hints once there's stuff
+
 - [ ] pink subvalue names should not show out-of-scope
+
 - [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
+
 - [x] too easy to switch frame
+
 - [x] align values coming into function, one frame per column
+
 - [x] click to switch frame?
+
 - [ ] automatically visualize recurse calls and rets
+
 - [ ] legend explaining TV parts?
+
 - [ ] allow comments
+
 - [ ] get rid of inspector
+
 - [x] double-click to insert code should position the new TV
+
 - [x] autocomplete with trees is UUUUUGGGGLLLYYY
+
 - [ ] ensure tool works if subdirs have spaces
+
 - [x] placing left and right extraction vbs was not working
+
 - [x] bigger things not pushing smaller things out of the way
+
 - [x] represent func values as unapplied val tools? Make sure they always insert calls
+
 - [ ] click on canvas vals to insert code into textbox
-- [ ] setting to hide vals in exp labels?
+
 - [ ] annoying "Serialization failure (): output_value: abstract value (Custom)" cluttering logs
+
 - [x] Maniposynth mission statement as the top-level background?
+
 - [ ] hovering over scrutinee shows tooltip for entire match (because it's an exp, which we don't show tooltips for, but it's a the child of the match elem, which we are showing tooltips for)
+
 - [ ] animate layout changes? (clunky because involves page reload)
+
 - [ ] parans for vals?
+
 - [ ] show destruct button on relevant patterns as well?
+
 - [ ] add submit button for all textboxes (with hotkey noted)? participants don't have a problem with this
+
 - [ ] autocomplete to vised values?
+
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 
 

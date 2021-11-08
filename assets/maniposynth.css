@@ -94,7 +94,7 @@ div.top-matter div {
   /* min-height: calc(100vh - 2.75rem); */
   min-height: 100vh;
 }
-nav img {
+nav > img {
   margin: 0 0.4rem 0 0.5rem;
   height: 3.8rem;
   margin-bottom: -1.3em;
@@ -114,6 +114,10 @@ nav img {
 .tool:hover {
   background: var(--color);
 }
+.settings img {
+  height: 1.3em;
+  vertical-align: middle;
+}
 .tool.left-of-menu {
   padding: 0 1.5rem 0 1rem;
 }
@@ -123,19 +127,24 @@ nav img {
   padding: 0;
   text-align: center;
 }
-.tool-menu > .tools {
+.tool-menu > .tools,
+.settings > .settings-pane {
   display: none;
   position: absolute;
   margin-left: -1rem;
   z-index: 100; /* don't ask me why this is needed for the hover not to fail */
   text-align: left;
 }
-.tool-menu:hover > .tools {
+.tool-menu:hover > .tools,
+.settings:hover > .settings-pane {
   display: block;
   background: lightgray;
 }
 .tool-menu > .tools > .tool {
   display: block;
+}
+.settings-pane {
+  padding: var(--padding) 1rem;
 }
 
 .box {
