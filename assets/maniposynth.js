@@ -144,12 +144,12 @@ function insertCode(vbsLoc, code, pos) {
   ]);
 }
 
-function setPos(loc, x, y) {
+function setPos(loc, pos) {
   doAction([
     "SetPos",
     loc,
-    x,
-    y
+    pos.x,
+    pos.y
   ]);
 }
 
@@ -1410,13 +1410,13 @@ window.addEventListener('DOMContentLoaded', () => {
         if ((dx !== 0 || dy !== 0) && !dropTarget) {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
-          setPos(elem.dataset.loc, x, y);
+          setPos(elem.dataset.loc, compensateForMovedElems(dropTarget, { x : x, y : y }));
           atEndOfDragSoPreventClickSelect = true;
         } else if (dropTarget) {
           const dropTargetOffsetFromMouse = topLeftOffsetFromMouse(dropTarget, event);
           const x = stuffMoving.offsetFromMouse.dx - dropTargetOffsetFromMouse.dx;
           const y = stuffMoving.offsetFromMouse.dy - dropTargetOffsetFromMouse.dy;
-          moveVb(dropTarget.dataset.loc, elem.dataset.loc, { x : x, y : y });
+          moveVb(dropTarget.dataset.loc, elem.dataset.loc, compensateForMovedElems(dropTarget, { x : x, y : y }));
           atEndOfDragSoPreventClickSelect = true;
         } else {
           elem.style.zIndex = "auto";
