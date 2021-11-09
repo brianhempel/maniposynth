@@ -448,12 +448,12 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
       end
     end
     ||&~ (fun () -> ctor_name_to_show ^ recurse ~in_list:(ctor_name = "::") None arg)
-  | Prim _           -> "prim"
-  | Fexpr _          -> "fexpr"
-  | ModVal _         -> "modval"
-  | InChannel _      -> "inchannel"
-  | OutChannel _     -> "outchannel"
-  | Record entry_map ->
+  | Prim (prim_name, _) -> prim_name
+  | Fexpr _             -> "fexpr"
+  | ModVal _            -> "modval"
+  | InChannel _         -> "inchannel"
+  | OutChannel _        -> "outchannel"
+  | Record entry_map    ->
     entry_map
     |> SMap.bindings
     |> List.map begin fun (field_name, value_ref) ->

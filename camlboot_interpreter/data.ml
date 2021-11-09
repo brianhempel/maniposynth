@@ -27,7 +27,7 @@ and value_ =
   | Float of float
   | Tuple of value list
   | Constructor of string * int * value option
-  | Prim of (value -> value)
+  | Prim of string * (value -> value)
   | Fexpr of fexpr
   | ModVal of mdl
   | InChannel of in_channel
@@ -204,7 +204,8 @@ let rec pp_print_value ff { v_; _ } =
   | Fexpr _ -> Format.fprintf ff "<fexpr>"
   | Fun _ -> Format.fprintf ff "<fun>"
   | Function _ -> Format.fprintf ff "<function>"
-  | Prim _ | Lz _ | Fun_with_extra_args _ -> Format.fprintf ff "<function_other>"
+  | Prim (prim_name, _) ->  Format.fprintf ff "<prim %s>" prim_name
+  | Lz _ | Fun_with_extra_args _ -> Format.fprintf ff "<function_other>"
   | String s -> Format.fprintf ff "%S" (Bytes.to_string s)
   | Float f -> Format.fprintf ff "%f" f
   | Tuple l ->

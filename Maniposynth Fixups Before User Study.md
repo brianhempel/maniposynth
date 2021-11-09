@@ -163,6 +163,8 @@
 
 - [x] fixup new assert positioning
 
+- [ ] divergence produces junk frames: combine identical frames?
+
 - [ ] "new function" tool
 
 - [ ] "add arg" tool
@@ -171,11 +173,15 @@
 
 - [ ] statistics for synth
 
+- [x] render primitives
+
 - [x] "add example" tool (for function)
+
+- [ ] autocomplete constants for examples
 
 - [ ] text edit in-place, instead of in inspector
 
-- [ ] divergence produces junk frames: combine identical frames?
+- [ ] undo remembers text edit steps
 
 - [ ] tools offscreen
 
@@ -218,8 +224,6 @@
 - [ ] legend explaining TV parts?
 
 - [ ] allow comments
-
-- [ ] get rid of inspector
 
 - [x] double-click to insert code should position the new TV
 

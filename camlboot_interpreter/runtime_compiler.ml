@@ -358,6 +358,7 @@ let new_lex_engine_wrapper tables n lexbuf =
 
 let parse_engine_prim =
   prim4
+    "parse_engine"
     parse_engine_wrapper
     wrap_exn
     id
@@ -367,7 +368,7 @@ let parse_engine_prim =
     wrap_parser_output
 
 let lex_engine_prim =
-  prim3 lex_engine_wrapper wrap_exn id unwrap_int id wrap_int
+  prim3 "lex_engine" lex_engine_wrapper wrap_exn id unwrap_int id wrap_int
 
 let new_lex_engine_prim =
-  prim3 new_lex_engine_wrapper wrap_exn id unwrap_int id wrap_int
+  prim3 "new_lex_engine" new_lex_engine_wrapper wrap_exn id unwrap_int id wrap_int

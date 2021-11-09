@@ -235,7 +235,7 @@ let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
       then apply_one (apply_optional_noarg vf) arg
       else eval_expr fillings prims (pattern_bind fillings prims !fenv_ref lookup_exp_typed trace_state frame_no arg [] p arg) lookup_exp_typed trace_state frame_no e
     | Function (cl, fenv_ref) -> eval_match fillings prims !fenv_ref lookup_exp_typed trace_state frame_no cl (Ok arg)
-    | Prim prim -> prim arg
+    | Prim (_, prim_f) -> prim_f arg
     | _ ->
       (* Format.eprintf "Trying to apply a nonfunction: %a@." pp_print_value vf; *)
       new_vtrace Bomb
@@ -1065,7 +1065,7 @@ and eval_structitem ?fuel_per_binding fillings prims env lookup_exp_typed trace_
       try SMap.find prim_name prims
       with Not_found ->
         new_vtrace @@ Prim
-          (fun _ ->
+          (prim_name, fun _ ->
             Format.eprintf "Unimplemented primitive %s as %s %a@." prim_name name Location.print_loc loc;
             failwith ("Unimplemented primitive " ^ prim_name))
     in
