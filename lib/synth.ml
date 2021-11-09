@@ -825,7 +825,8 @@ let refine prog fillings reqs file_name next =
               begin match Env.lookup_constructor (Longident.Lident ctor_name) tenv with
               | { cstr_res = { desc = Types.Tconstr (type_path, _, _); _ } ; _ } -> Some type_path
               | _ -> None
-              end
+              | exception Not_found -> None
+            end
             | _ -> None
             | exception Not_found -> None
           end

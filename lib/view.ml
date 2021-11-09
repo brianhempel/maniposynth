@@ -259,7 +259,10 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     (* Envir.env_get_value_or_lvar *)
     exp_to_assert_on |>& begin fun exp_to_assert_on ->
       stuff.assert_results
-      |>@? Assert_comparison.does_lhs_match env exp_to_assert_on
+      |>@? begin fun assert_result ->
+        Assert_comparison.does_lhs_match env exp_to_assert_on assert_result
+        || Assert_comparison.does_lhs_match stuff.final_env exp_to_assert_on assert_result
+      end
     end ||& []
   in
   (* print_endline @@ string_of_int (List.length assert_results); *)

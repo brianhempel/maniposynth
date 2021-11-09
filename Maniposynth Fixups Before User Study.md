@@ -173,6 +173,8 @@
 
 - [ ] statistics for synth
 
+- [ ] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think)
+
 - [x] render primitives
 
 - [x] "add example" tool (for function)
