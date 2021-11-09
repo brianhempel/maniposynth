@@ -753,7 +753,7 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
     (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
         [ table @@ param_rows @ [ret_row] ] @
-        [ div ~attrs:[("class", "add-expectation")] ["+"]] @
+        [ div ~attrs:[("class", "add-expectation");("title", "Add example call")] ["+"]] @
         local_canvas_vbs_and_returns_htmls stuff body
       end
     (* ] *)
