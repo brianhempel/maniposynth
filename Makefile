@@ -6,7 +6,7 @@
 	touch ./_build/default/server.exe; dune build --auto-promote server.exe
 
 run: ./_build/default/server.exe
-	./_build/default/server.exe
+	OCAMLRUNPARAM=b ./_build/default/server.exe
 
 profile:
 	# Must already be running, samples for 10 seconds

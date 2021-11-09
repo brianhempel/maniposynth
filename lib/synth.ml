@@ -38,7 +38,7 @@ let string_of_req (_env, exp, value) =
 let dont_care = new_vtrace ExDontCare
 
 let eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no exp =
-  Eval.with_fuel 100 begin fun () ->
+  Eval.with_fuel 1000 begin fun () ->
     try Eval.eval_expr fillings prims env lookup_exp_typed trace_state frame_no exp
     with _ -> new_vtrace Bomb
   end (fun () -> new_vtrace Bomb)
@@ -49,7 +49,7 @@ let pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no
   end (fun () -> raise Eval.Match_fail)
 
 let eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no mod_exp =
-  Eval.with_fuel 100 begin fun () ->
+  Eval.with_fuel 1000 begin fun () ->
     Some (Eval.eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no mod_exp)
   end (fun () -> None)
 
@@ -120,14 +120,13 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 
 
 
-(* val push_down_req : fillings -> req -> hole_req list *)
-
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let rec push_down_req fillings ((env, exp, value) as req) : req list =
+let rec push_down_req_ fillings ((env, exp, value) as req) : req list =
   let open Eval in
-  let recurse = push_down_req fillings in
+  (* print_endline @@ "Pushing down " ^ string_of_req req; *)
+  let recurse = push_down_req_ fillings in
   let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
   match exp.pexp_desc with
@@ -334,6 +333,9 @@ let rec push_down_req fillings ((env, exp, value) as req) : req list =
   | Pexp_object _ -> [req]
   | Pexp_pack _ -> [req]
   | Pexp_extension _ -> [req]
+
+let push_down_req fillings req =
+  try push_down_req_ fillings req with _ -> [req]
 
 let exp_size exp =
   let size = ref 0 in
@@ -784,9 +786,9 @@ let refine prog fillings reqs file_name next =
   let hole_locs       = hole_locs prog fillings in
   let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false in
   let is_ex_dont_care = function { v_ = ExDontCare; _ } -> true | _ -> false in
-  reqs |> List.iter (string_of_req %> print_endline);
-  hole_locs |> List.iter (Loc.to_string %> print_endline);
-  reqs' |> List.iter (string_of_req %> print_endline);
+  (* reqs |> List.iter (string_of_req %> print_endline); *)
+  (* hole_locs |> List.iter (Loc.to_string %> print_endline); *)
+  (* reqs' |> List.iter (string_of_req %> print_endline); *)
   let prog = apply_fillings fillings prog in
   let (_, _, tenv) =
     try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
@@ -857,12 +859,14 @@ let fill_holes prog reqs file_name : fillings option =
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
-    (* let code = StructItems.to_string (apply_fillings fillings prog) in
-    if String.includes "succ (length" code && String.includes "-> 0" code then begin
+    (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
+    (* print_endline code; *)
+    (* if String.includes "succ (length" code && String.includes "-> 0" code then begin
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ code);
       reqs |> List.for_all (is_req_satisified_by fillings)
     end else
       false *)
+    (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
     reqs |> List.for_all (is_req_satisified_by fillings)
   end
   (* Return first valid filling. *)
