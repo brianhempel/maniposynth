@@ -163,6 +163,10 @@
 
 - [x] fixup new assert positioning
 
+- [x] show type errors
+
+- [x] don't crash on un-recoverable type error
+
 - [ ] divergence produces junk frames: combine identical frames?
 
 - [ ] "new function" tool
@@ -206,8 +210,6 @@
 - [ ] click out of expression editor with only a space caused an `undefined` to be inserted
 
 - [ ] highlight var value origins on hover
-
-- [ ] show type errors
 
 - [ ] hide hints once there's stuff
 

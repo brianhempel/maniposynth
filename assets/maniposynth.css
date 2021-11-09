@@ -687,3 +687,21 @@ table.subvalue-annotations td {
   display: inline-block;
   margin-top: 1rem;
 }
+
+.type-error {
+  display: block;
+  position: absolute;
+  width: 400px;
+  z-index: 1;
+  background-color: red;
+  color: white;
+  box-shadow: 3px 3px 3px rgba(0,0,0,0.3);
+  font-weight: bold;
+  padding: 5px;
+  margin-top: 4px;
+}
+.has-type-error {
+  padding: 10px;
+  margin: -3px;
+  text-decoration: underline wavy red;
+}

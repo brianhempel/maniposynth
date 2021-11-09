@@ -23,6 +23,7 @@ type stuff =
   ; assert_results : Data.assert_result list
   ; type_lookups   : Typing.lookups
   ; names_in_prog  : string list
+  ; type_errors    : (Location.t * Env.t * Typecore.error) list
   ; final_env      : Data.env
   }
 
@@ -32,6 +33,7 @@ let empty_stuff =
   ; assert_results = []
   ; type_lookups   = Typing.empty_lookups
   ; names_in_prog  = []
+  ; type_errors    = []
   ; final_env      = Envir.empty_env
   }
 
@@ -92,6 +94,12 @@ let box ?(attrs = []) ~loc ~parsetree_attrs klass inners =
 
 let hint str = span ~attrs:[("class","hint")] [str]
 
+let type_error_htmls stuff loc =
+  stuff.type_errors
+  |>@? (Tup3.fst %> (=) loc)
+  |>@ begin fun (_, tenv, err) ->
+    span ~attrs:[("class","type-error")] [Typing.string_of_error tenv err]
+  end
 
 let html_of_pat ?(attrs = []) stuff pat =
   let code = Pat.to_string @@ Pat.apply_mapper (Attrs.mapper (fun _ -> [])) pat in (* Don't show vis attrs. *)
@@ -105,8 +113,11 @@ let html_of_pat ?(attrs = []) stuff pat =
     else
       []
   in
-  span ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat")] @ perhaps_type_attr @ perhaps_extraction_attr)
-    [code]
+  let type_error_htmls = type_error_htmls stuff pat.ppat_loc in
+  let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
+  span
+    ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat" ^ perhaps_type_error_class)] @ perhaps_type_attr @ perhaps_extraction_attr)
+    (type_error_htmls @ [code])
 
 let string_of_arg_label =
   let open Asttypes in function
@@ -562,7 +573,11 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
         end
     in
     let perhaps_exp_class = if Exp.is_hole exp then " hole" else "" in
-    span ~attrs:([("class","exp" ^ perhaps_exp_class)] @ attrs) [if needs_parens then "(" ^ inner ^ ")" else inner]
+    let type_error_htmls = type_error_htmls stuff exp.pexp_loc in
+    let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
+    span
+      ~attrs:([("class","exp" ^ perhaps_exp_class ^ perhaps_type_error_class)] @ attrs)
+      (type_error_htmls @ [if needs_parens then "(" ^ inner ^ ")" else inner])
   in
   let values_for_exp =
     if show_result && not (Exp.is_hole exp) && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
@@ -878,13 +893,14 @@ let drawing_tools tenv prog =
     (common_phrases_menu @ prog_funcs_menu @ ctor_menus)
 
 
-let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups final_env final_tenv =
+let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups type_errors final_env final_tenv =
   let names_in_prog = StructItems.deep_names structure_items in
   let stuff =
     { trace          = trace
     ; prog           = structure_items
     ; assert_results = assert_results
     ; type_lookups   = type_lookups
+    ; type_errors    = type_errors
     ; names_in_prog  = names_in_prog
     ; final_env      = final_env
     }

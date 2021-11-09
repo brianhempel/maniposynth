@@ -1975,3 +1975,18 @@ window.addEventListener('DOMContentLoaded', () => {
   valueSuperscriptCheckbox.addEventListener("change", updateValueSuperscripts);
 });
 
+
+
+
+/////////////////// Type errors ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Turn off hole pulsing.
+  if (document.querySelectorAll('.type-error').length > 0) {
+    document.querySelectorAll('.hole').forEach(elem => {
+      elem.style.animation = "none"
+      elem.style.fontSize = "1em"
+    });
+  }
+});
+

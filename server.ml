@@ -58,8 +58,14 @@ let render_maniposynth out_chan url =
   let callables = Read_execution_env.callables_of_file path in
   let trace = Tracing.run_with_tracing path in
   let html_str = View.html_str callables trace bindings_skels in *)
-  let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file_with_error_recovery path in
-  let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
+  let (type_lookups, final_tenv, type_errors) =
+    try
+      let (typed_struct, _, final_tenv, type_errors) = Typing.typedtree_sig_env_of_file_with_error_recovery path in
+      let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
+      (type_lookups, final_tenv, type_errors)
+    with Typecore.Error (loc, tenv, err) ->
+      (Typing.empty_lookups, Typing.initial_env, [(loc, tenv, err)])
+  in
   let ((trace, final_env), assert_results) =
     let open Camlboot_interpreter in
     Eval.with_gather_asserts begin fun () ->
@@ -74,7 +80,7 @@ let render_maniposynth out_chan url =
   in
   (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)
-  let html_str = View.html_str parsed trace assert_results type_lookups file_final_env final_tenv in
+  let html_str = View.html_str parsed trace assert_results type_lookups type_errors file_final_env final_tenv in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
@@ -98,7 +104,7 @@ let render_suggestions out_chan uri =
     let callables = Read_execution_env.callables_of_file file_path in
     let trace = Tracing.run_with_tracing file_path in
     let html_str = View.html_str callables trace bindings_skels in *)
-    let (typed_struct, _, final_tenv) = Typing.typedtree_sig_env_of_file_with_error_recovery file_path in
+    let (typed_struct, _, final_tenv, _type_errors) = Typing.typedtree_sig_env_of_file_with_error_recovery file_path in
     let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
     let selected_value_id = List.assoc_opt "selected_value_id" query_params |>&& List.hd_opt |>& int_of_string in
     let suggestions = Suggestions.suggestions type_lookups final_tenv parsed vbs_loc value_ids_visible value_strs ?selected_value_id q_str in
@@ -155,7 +161,7 @@ let handle_connection in_chan out_chan =
         let action = Action.t_of_yojson action_yojson in
         let path = String.drop 1 url in
         let parsed = Camlboot_interpreter.Interp.parse path in
-        let (_, _, final_tenv) = Typing.typedtree_sig_env_of_parsed_with_error_recovery parsed path in
+        let (_, _, final_tenv, _type_errors) = Typing.typedtree_sig_env_of_parsed_with_error_recovery parsed path in
         let parsed' = Action.f path final_tenv action parsed in
         (* Pprintast.structure Format.std_formatter parsed'; *)
         Undo_redo.perhaps_initialize_undo_history path;

@@ -668,45 +668,49 @@ and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v
     | _ -> mismatch pat.ppat_loc; assert false)
   | Ppat_construct (c, p) ->
     let cn = lident_name c.txt in
-    let dn = env_get_constr env c in
-    (match v_ with
-    | Constructor (ccn, ddn, e) ->
-      if cn <> ccn then raise Match_fail;
-      if dn <> ddn then raise Match_fail;
-      (match (p, e) with
-      | None, None -> env
-      | Some p, Some e -> pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child 0]) p e
-      | _ -> mismatch pat.ppat_loc; assert false)
-    | String _ ->
-      assert (lident_name c.txt = "Format");
-      let p =
-        match p with
-        | None -> mismatch pat.ppat_loc; assert false
-        | Some p -> p
-      in
-      let fmt_ebb_of_string =
-        let lid =
-          Longident.(Ldot (Lident "CamlinternalFormat", "fmt_ebb_of_string"))
+    begin try
+      let dn = env_get_constr env c in
+      (match v_ with
+      | Constructor (ccn, ddn, e) ->
+        if cn <> ccn then raise Match_fail;
+        if dn <> ddn then raise Match_fail;
+        (match (p, e) with
+        | None, None -> env
+        | Some p, Some e -> pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child 0]) p e
+        | _ -> mismatch pat.ppat_loc; assert false)
+      | String _ ->
+        assert (lident_name c.txt = "Format");
+        let p =
+          match p with
+          | None -> mismatch pat.ppat_loc; assert false
+          | Some p -> p
         in
-        match env_get_value_or_lvar env { loc = c.loc; txt = lid } with
-          | Instance_variable _ -> assert false
-          | Value v -> v
-      in
-      let fmt = apply fillings prims lookup_exp_typed trace_state fmt_ebb_of_string [ (Nolabel, v) ] in
-      let fmt =
-        match fmt.v_ with
-        | Constructor ("Fmt_EBB", _, Some fmt) -> fmt
-        | _ -> mismatch pat.ppat_loc; assert false
-      in
-      (* What the heck is this *)
-      let tupv = intro @@ new_vtrace @@ Tuple [ fmt; v ] in
-      pattern_bind fillings prims env lookup_exp_typed trace_state frame_no tupv [] p tupv
-    | Bomb
-    | Hole _ ->
+        let fmt_ebb_of_string =
+          let lid =
+            Longident.(Ldot (Lident "CamlinternalFormat", "fmt_ebb_of_string"))
+          in
+          match env_get_value_or_lvar env { loc = c.loc; txt = lid } with
+            | Instance_variable _ -> assert false
+            | Value v -> v
+        in
+        let fmt = apply fillings prims lookup_exp_typed trace_state fmt_ebb_of_string [ (Nolabel, v) ] in
+        let fmt =
+          match fmt.v_ with
+          | Constructor ("Fmt_EBB", _, Some fmt) -> fmt
+          | _ -> mismatch pat.ppat_loc; assert false
+        in
+        (* What the heck is this *)
+        let tupv = intro @@ new_vtrace @@ Tuple [ fmt; v ] in
+        pattern_bind fillings prims env lookup_exp_typed trace_state frame_no tupv [] p tupv
+      | Bomb
+      | Hole _ ->
+        raise BombExn
+      | _ ->
+        (* Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v; *)
+        assert false)
+    with Not_found -> (* Bad ctor in pat position. *)
       raise BombExn
-    | _ ->
-      (* Format.eprintf "cn = %s@.v = %a@." cn pp_print_value v; *)
-      assert false)
+    end
   | Ppat_variant (name, p) ->
     (match v_ with
     | Constructor (cn, _, e) ->

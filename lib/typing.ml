@@ -31,6 +31,11 @@ let initial_env =
   in
   env_with_hole
 
+let string_of_error tenv err =
+  ignore (Format.flush_str_formatter ());
+  Typecore.report_error tenv Format.str_formatter err;
+  Format.flush_str_formatter ()
+
 let typedtree_sig_env_of_parsed parsed file_name =
   Env.set_unit_name @@ Compenv.module_of_filename formatter file_name file_name;
   (* print_endline @@ Compenv.module_of_filename formatter path path; *)
@@ -46,25 +51,31 @@ let typedtree_sig_env_of_parsed parsed file_name =
 
 let rec typedtree_sig_env_of_parsed_with_error_recovery parsed file_name =
   try
-    typedtree_sig_env_of_parsed parsed file_name
-  with Typecore.Error (loc, _env, _err) as e ->
+    let (tt, sig_, tenv) = typedtree_sig_env_of_parsed parsed file_name in
+    (tt, sig_, tenv, [])
+  with Typecore.Error (loc, err_env, err) as e ->
     (* Try to recover by replacing the troublesome location with a hole. *)
-    let error_loc_replaced_with_hole = Exp.replace loc Exp.hole parsed in
+    let error_loc_replaced_with_hole =
+      parsed
+      |> Exp.replace loc { Exp.hole with pexp_loc = loc }
+      |> Pat.replace loc { (Pat.any ()) with ppat_loc = loc }
+    in
     if error_loc_replaced_with_hole <> parsed then
-      typedtree_sig_env_of_parsed_with_error_recovery error_loc_replaced_with_hole file_name
+      let (tt, sig_, tenv, other_errors) = typedtree_sig_env_of_parsed_with_error_recovery error_loc_replaced_with_hole file_name in
+      (tt, sig_, tenv, (loc, err_env, err) :: other_errors)
     else
       raise e
 
 (* Returns (typedtree_structure, signature, env) *)
 let typedtree_sig_env_of_file_with_error_recovery path =
   let parsed = Camlboot_interpreter.Interp.parse path in
-  let (typed_struct, signature, env) =
+  let (typed_struct, signature, env, errors) =
     typedtree_sig_env_of_parsed_with_error_recovery parsed path
   in
   (* Printtyped.implementation formatter typedtree;
   Printtyp.signature formatter signature;
   Format.pp_print_newline formatter (); *)
-  (typed_struct, signature, env)
+  (typed_struct, signature, env, errors)
 
 let target_loc = ref Location.none
 exception Found_exp of Typedtree.expression
@@ -113,7 +124,7 @@ let type_lookups_of_typed_structure typed_struct : lookups =
   exp_typed_lookup_of_typed_structure typed_struct *)
 
 let exp_typed_lookup_of_parsed_with_error_recovery parsed file_name =
-  let (typed_struct, _, _) = typedtree_sig_env_of_parsed_with_error_recovery parsed file_name in
+  let (typed_struct, _, _, _) = typedtree_sig_env_of_parsed_with_error_recovery parsed file_name in
   (type_lookups_of_typed_structure typed_struct).lookup_exp
 
 (* let type_expression_opt ?(type_env = initial_env) exp =

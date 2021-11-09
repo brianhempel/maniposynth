@@ -77,6 +77,17 @@ module Tup3 = struct
   let map_thd f (x, y, z) = (x, y, f z)
 end
 
+module Tup4 = struct
+  let fst (x, _, _, _)  = x
+  let snd (_, x, _, _)  = x
+  let thd (_, _, x, _)  = x
+  let frth (_, _, _, x) = x
+  let map_fst f (x, y, z, u)  = (f x, y, z, u)
+  let map_snd f (x, y, z, u)  = (x, f y, z, u)
+  let map_thd f (x, y, z, u)  = (x, y, f z, u)
+  let map_frth f (x, y, z, u) = (x, y, z, f u)
+end
+
 module List = struct
   include List
 

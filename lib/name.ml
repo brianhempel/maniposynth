@@ -107,7 +107,7 @@ let gen_from_exp ?(avoid = []) ?type_env exp prog =
       let type_env =
         match type_env with
         | Some type_env -> type_env
-        | None          -> Typing.typedtree_sig_env_of_parsed_with_error_recovery prog "unknown.ml" |> Tup3.thd
+        | None          -> Typing.typedtree_sig_env_of_parsed_with_error_recovery prog "unknown.ml" |> Tup4.thd
       in
       Type.of_exp_opt ~type_env exp
       |>& base_name_from_type
