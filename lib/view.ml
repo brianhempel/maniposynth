@@ -255,10 +255,11 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
       None
   in
   let matching_asserts =
+    (* [] *)
     (* Envir.env_get_value_or_lvar *)
     exp_to_assert_on |>& begin fun exp_to_assert_on ->
       stuff.assert_results
-      |>@? Assert_comparison.does_lhs_match stuff.final_env exp_to_assert_on
+      |>@? Assert_comparison.does_lhs_match env exp_to_assert_on
     end ||& []
   in
   (* print_endline @@ string_of_int (List.length assert_results); *)
@@ -332,7 +333,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
         perhaps_type_attr @
         perhaps_code_to_assert_on @
         perhaps_destruction_code @
-        [("class", "value " ^ value_class ^ perhaps_assert_class ^ perhaps_expectation_class); ("data-vtrace", Serialize.string_of_vtrace value.vtrace)]
+        [("class", "value " ^ value_class ^ perhaps_assert_class ^ perhaps_expectation_class)(* ; ("data-vtrace", Serialize.string_of_vtrace value.vtrace) *)]
       )
       [str]
   in
