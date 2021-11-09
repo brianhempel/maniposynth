@@ -499,12 +499,16 @@ function onVisualize(code) {
 function makeAssert(elem, codeToAssertOn, expectationCode) {
   // const loc = containingLoc(elem);
   // Put all asserts at the top level for now.
-  const loc = document.querySelector(".top-level").dataset.loc;
+  const vbsHolder = document.querySelector(".top-level");
+  const loc = vbsHolder.dataset.loc;
   let pos = { x: 100, y: 100 };
   // Position below top-level ancestor
   for (const ancestor of selfAndParents(elem).reverse()) {
-    if (ancestor.dataset.left && ancestor.dataset.top) {
-      pos = { x: parseInt(ancestor.dataset.left) + 50, y: parseInt(ancestor.dataset.top) + ancestor.offsetHeight };
+    if (ancestor == elem) { break; }
+    if (ancestor.classList.contains("box")) {
+      if (ancestor.style.left && ancestor.style.top) {
+        pos = compensateForMovedElems(vbsHolder, { x: parseInt(ancestor.style.left) + 50, y: parseInt(ancestor.style.top) + ancestor.offsetHeight });
+      }
       break;
     }
   }
@@ -1410,7 +1414,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if ((dx !== 0 || dy !== 0) && !dropTarget) {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
-          setPos(elem.dataset.loc, compensateForMovedElems(dropTarget, { x : x, y : y }));
+          setPos(elem.dataset.loc, compensateForMovedElems(elem.closest(".vbs"), { x : x, y : y }));
           atEndOfDragSoPreventClickSelect = true;
         } else if (dropTarget) {
           const dropTargetOffsetFromMouse = topLeftOffsetFromMouse(dropTarget, event);
@@ -1561,7 +1565,7 @@ function relayout() {
 // Position relative the box just above the click point.
 function compensateForMovedElems(vbsHolder, rawPos) {
   const boxesPositionedAboveRawPos =
-    Array.from(vbsHolder.children).filter(box => box.classList.contains("box") && box.dataset.top && parseInt(box.style.top) <= rawPos.y);
+    Array.from(vbsHolder.children).filter(box => box.classList.contains("box") && box.dataset.top && parseInt(box.style.top) < rawPos.y);
 
   const baseBox = boxesPositionedAboveRawPos.reverse()[0];
 

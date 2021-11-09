@@ -157,9 +157,11 @@
 
 - [x] setting to hide vals in exp labels
 
-- [ ] vertical movement is now offffffff
+- [x] vertical movement is now offffffff
 
 - [x] trim down the synth env
+
+- [x] fixup new assert positioning
 
 - [ ] "new function" tool
 
