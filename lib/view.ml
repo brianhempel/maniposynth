@@ -419,7 +419,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
   String.concat "" assert_result_strs ^
   match value_ with
   | Bomb                -> "💣"
-  | Hole _              -> "??"
+  | Hole _              -> "?"
   | Int int             -> string_of_int int
   | Int32 int32         -> Int32.to_string int32
   | Int64 int64         -> Int64.to_string int64

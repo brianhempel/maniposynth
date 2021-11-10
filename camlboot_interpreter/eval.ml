@@ -101,7 +101,7 @@ let lookup_type_env lookup_exp_typed loc =
   | Some typed_exp -> typed_exp.Typedtree.exp_env
   | None           -> Env.empty
 
-let infer_local_type exp = (Typecore.type_exp Env.empty exp).exp_type
+(* let infer_local_type exp = (Typecore.type_exp Env.empty exp).exp_type *)
 
 (* Based OCaml's Typecore.type_construct *)
 let type_ctor env ctor_lid arg_val_opt =

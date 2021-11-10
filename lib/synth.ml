@@ -847,7 +847,7 @@ let refine prog fillings reqs file_name next =
 
 let fill_holes prog reqs file_name : fillings option =
   Seq.concat
-    [ e_guess Loc_map.empty 6 prog file_name
+    [ e_guess Loc_map.empty 7 prog file_name
     ; refine prog Loc_map.empty reqs file_name
         (fun fillings -> e_guess fillings 6 prog file_name)
     ; refine prog Loc_map.empty reqs file_name

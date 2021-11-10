@@ -404,13 +404,14 @@ table.subvalue-annotations td {
   text-align: center;
   position: relative; /* Without this, tree edges are not drawn correctly in the autocomplete list */
 }
-.value.hole {
+/* .value.hole {
   color: rgba(30,30,30,0.3);
   letter-spacing: -0.25em;
+  padding-right: 0.25em;
 }
 .value.hole .expectation {
   letter-spacing: normal;
-}
+} */
 .fun-returns .value.hole { /* looks better like so...? */
   color: black;
 }
