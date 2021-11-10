@@ -62,7 +62,7 @@ let rec values_equal_for_assert ?(seen_v_s = []) ?(seen_envs = []) ?(seen_mods =
   | Fexpr _, Fexpr _ -> loose (* there's only a few of these *)
   | Fexpr _, _ -> false
 
-  | Prim _, Prim _ -> loose
+  | Prim (name1, _), Prim (name2, _) -> name1 = name2 && loose
   | Prim _, _ -> false
 
   | InChannel chan1, InChannel chan2 -> chan1 = chan2
@@ -231,6 +231,8 @@ let does_lhs_match candidate_env candidate_lhs Data.{ env; lhs_exp; _} =
       let args_equal arg1 arg2 =
         let val1 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims candidate_env (fun _ -> None) Trace.new_trace_state 0 arg1 in
         let val2 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims env           (fun _ -> None) Trace.new_trace_state 0 arg2 in
+        (* if Exp.to_string arg1 = "succ" && Exp.to_string arg2 = "succ" then
+          print_endline @@ string_of_bool (values_equal_for_assert val1 val2); *)
         values_equal_for_assert val1 val2
       in
       List.for_all2 args_equal arg_exps1 arg_exps2

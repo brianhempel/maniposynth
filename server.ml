@@ -75,8 +75,7 @@ let render_maniposynth out_chan url =
   let file_final_env =
     let open Camlboot_interpreter in
     (* open the module, basically *)
-    Envir.env_extend false final_env @@
-      Envir.env_get_module_data final_env  (Shared.Ast.Longident.lident (Data.module_name_of_unit_path path))
+    (Envir.env_get_module_data final_env (Shared.Ast.Longident.lident (Data.module_name_of_unit_path path))).mod_internal_env
   in
   (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)

@@ -146,6 +146,38 @@ let exp_gunk ?(infix = false) stuff exp =
   in
   (code', attrs)
 
+let rec exp_of_value Data.{ v_; _ } =
+  let open Data in
+  let open Ast_helper in
+  let record_value_field_to_exp_field (name, v_ref) =
+    (Loc.lident name, exp_of_value !v_ref)
+  in
+  match v_ with
+  | Bomb | Hole _                         -> Shared.Ast.Exp.simple_var "??"
+  | Int n                                 -> Exp.constant (Const.int n)
+  | Int32 n                               -> Exp.constant (Const.int32 n)
+  | Int64 n                               -> Exp.constant (Const.int64 n)
+  | Nativeint n                           -> Exp.constant (Const.nativeint n)
+  | Fun (arg_label, exp_opt, pat, exp, _) -> Exp.fun_ arg_label exp_opt pat exp
+  | Function (cases, _)                   -> Exp.function_ cases
+  | String bytes                          -> Exp.constant (Const.string (Bytes.to_string bytes))
+  | Float n                               -> Exp.constant (Const.float (string_of_float n))
+  | Tuple vs                              -> Exp.tuple (vs |>@ exp_of_value)
+  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.lident ctor) (v_opt |>& exp_of_value)
+  | Prim (prim_name, _)                   ->
+    let uninfixed = prim_name |> String.drop_prefix "(" |> String.drop_suffix ")" in
+    Shared.Ast.Exp.simple_var @@ if SSet.mem uninfixed Name.pervasives_names then uninfixed else "??"
+  | Fexpr _                               -> Shared.Ast.Exp.simple_var "??"
+  | ModVal _                              -> Shared.Ast.Exp.simple_var "??"
+  | InChannel _                           -> Shared.Ast.Exp.simple_var "??"
+  | OutChannel _                          -> Shared.Ast.Exp.simple_var "??"
+  | Record fields                         -> Exp.record (SMap.bindings fields |>@ record_value_field_to_exp_field) None
+  | Lz _                                  -> Shared.Ast.Exp.simple_var "??"
+  | Array vs                              -> Exp.array (vs |> Array.to_list |>@ exp_of_value)
+  | Fun_with_extra_args (_, _, _)         -> Shared.Ast.Exp.simple_var "??"
+  | Object _                              -> Shared.Ast.Exp.simple_var "??"
+  | ExCall _                              -> Shared.Ast.Exp.simple_var "??"
+  | ExDontCare                            -> Shared.Ast.Exp.simple_var "??"
 
 let rec apply_visualizers (prog : program) assert_results visualizers env type_env value_extraction_exp_opt (value : Data.value) =
   if visualizers = [] then "" else

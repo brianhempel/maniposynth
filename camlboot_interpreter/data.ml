@@ -83,6 +83,7 @@ and mdl_val = {
     mod_modules : mdl SMap.t;
     mod_constructors : int SMap.t;
     mod_classes : class_def SMap.t;
+    mod_internal_env : env
   }
 
 and module_unit_state =

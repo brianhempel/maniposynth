@@ -798,7 +798,7 @@ let refine prog fillings reqs file_name next =
   hole_locs
   |>@@ begin fun hole_loc ->
     let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
-    reqs_on_hole |> List.iter (string_of_req %> print_endline);
+    (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
     if reqs_on_hole = [] then [] else
     let intro_lambda_seqs =
       if reqs_on_hole |> List.for_all (fun (_, _, expected) -> is_ex_call expected) then

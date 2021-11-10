@@ -90,6 +90,7 @@ let make_module_data env =
     mod_modules = exported env.modules;
     mod_constructors = exported env.constructors;
     mod_classes = exported env.classes;
+    mod_internal_env = env;
   }
 
 let prevent_export env =

@@ -167,6 +167,8 @@
 
 - [x] don't crash on un-recoverable type error
 
+- [x] blue expected values should display in the right places
+
 - [ ] divergence produces junk frames: combine identical frames?
 
 - [ ] "new function" tool
@@ -177,7 +179,29 @@
 
 - [ ] statistics for synth
 
-- [ ] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think)
+- [ ] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think) simpler example:
+
+  ```ocaml
+  type nat = Z | S of nat
+  
+  let rec map f list =
+    match list with hd :: tail -> (??) :: map f tail | [] -> []
+    [@@pos 0, 234]
+  
+  let () =
+    assert (map (fun x -> x + 3) [ 1; 2; 3 ] = [ 4; 5; 6 ])
+    [@@pos 271, 244]
+  
+  let () = assert (map succ [ 1; 2; 3 ] = [ 2; 3; 4 ]) [@@pos 581, 387]
+  ```
+
+  
+
+- [ ] synth: also not smart about types of return exps
+
+- [ ] synth: actually say in the interface if it timed out
+
+- [ ] delete on green result values
 
 - [x] render primitives
 
