@@ -179,6 +179,28 @@
 
 - [ ] statistics for synth
 
+- [ ] synth: fails with "F-expr failure" on
+
+  ```ocaml
+  let map list f =
+    match list with
+    | hd :: tail ->
+        let f2 = f hd [@@pos 212, 32] in
+        (??)
+    | [] -> []
+    [@@pos 367, 87]
+  
+  let () =
+    assert (map [ 1; 2; 3 ] string_of_int = [ "1"; "2"; "3" ])
+    [@@pos 817, 97]
+  
+  let () = assert (map [ "1"; "2" ] int_of_string = [ 1; 2 ]) [@@pos 874, 214]
+  
+  let () = assert (map [] int_of_string = []) [@@pos 965, 402]
+  ```
+
+  also doesn't synth when given only tail. (works if you give both)
+
 - [ ] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think) simpler example:
 
   ```ocaml
@@ -205,7 +227,11 @@
 
 - [ ] synth: don't use `< <= > >=` at bool type (lol)
 
+- [ ] text edit in-place, instead of in inspector—and just highlight the clicked subexp
+
 - [ ] delete on green result values
+
+- [x] add (||) and (&&) tools
 
 - [ ] vis on tree in fun params not showing in the right place (P1S2 1:26:05)
 
@@ -217,8 +243,6 @@
 
 - [ ] autocomplete should show exps and vals
 
-- [ ] text edit in-place, instead of in inspector
-
 - [ ] undo remembers text edit steps
 
 - [ ] tools offscreen
@@ -228,6 +252,8 @@
 - [ ] way to distinguish "x = y" between adding an assert, an equality, or a let-binding (suddenly display a dropdown when " = " is typed?)
 
 - [ ] shouldn't be able to drag values from out of frame
+
+- [ ] allow typing "let x = e" at non-top-level
 
 - [ ] inline?
 
@@ -251,7 +277,13 @@
 
 - [ ] pink subvalue names should not show out-of-scope
 
+- [ ] use types to be smarter about type of dragged function (whether it should be a call or not)
+
 - [ ] type-directed drag-to-hole?
+
+- [ ] click branch return that isn't hit yet: auto-gen an example that hits it? (Otherwise you can't double-click edit that expression!)
+
+- [ ] I still feel like it's hard to tell the branch returns apart from each other...show those pats all the time?
 
 - [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
 
