@@ -656,6 +656,7 @@ table.subvalue-annotations td {
   position: fixed;
   z-index: 10;
   font-size: 40px;
+  pointer-events: none;
 }
 
 
@@ -703,5 +704,15 @@ table.subvalue-annotations td {
 .has-type-error {
   padding: 10px;
   margin: -3px;
+  z-index: 10;
   text-decoration: underline wavy red;
+  /* Draw on top of fire. */
+  position: relative;
+  /* background-color: white; */
+}
+.fire-particle {
+  position: absolute;
+  pointer-events: none;
+  /* z-index: -1; */
+  /* font-size: 40px; */
 }

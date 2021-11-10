@@ -199,9 +199,15 @@
 
 - [ ] synth: also not smart about types of return exps
 
+- [ ] synth: should trying using bindings that are after the holes!
+
 - [ ] synth: actually say in the interface if it timed out
 
+- [ ] synth: don't use `< <= > >=` at bool type (lol)
+
 - [ ] delete on green result values
+
+- [ ] vis on tree in fun params not showing in the right place (P1S2 1:26:05)
 
 - [x] render primitives
 
@@ -209,11 +215,17 @@
 
 - [ ] autocomplete constants for examples
 
+- [ ] autocomplete should show exps and vals
+
 - [ ] text edit in-place, instead of in inspector
 
 - [ ] undo remembers text edit steps
 
 - [ ] tools offscreen
+
+- [ ] accept/reject button for each synth filling
+
+- [ ] way to distinguish "x = y" between adding an assert, an equality, or a let-binding (suddenly display a dropdown when " = " is typed?)
 
 - [ ] shouldn't be able to drag values from out of frame
 
@@ -238,6 +250,8 @@
 - [ ] hide hints once there's stuff
 
 - [ ] pink subvalue names should not show out-of-scope
+
+- [ ] type-directed drag-to-hole?
 
 - [ ] try colors only for same name/value; mouseover dims all other colors (what if value has multiple names...same color?)
 

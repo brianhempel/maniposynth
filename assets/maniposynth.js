@@ -1224,6 +1224,73 @@ function gratuitousLamdas() {
 }
 
 
+/////////////////// Type Error Fires ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.has-type-error').forEach(elem => {
+    gratuitousFire(elem)
+  });
+});
+
+function gratuitousFire(elem) {
+  const particleLife  = 4  * 1000;
+  const smokeAfter    = 0.3 * 1000;
+  let frame_n = 0;
+  function makeParticle() {
+    if (frame_n % 2 == 0) { /* Every other frame */
+      const particleStart = new Date();
+      const particle = document.createElement("div");
+      particle.classList.add("fire-particle");
+      particle.style.color = `rgb(${Math.floor(256*Math.random())},${Math.floor(256*Math.random())},${Math.floor(256*Math.random())})`;
+      // particle.innerText = "🔥";
+      particle.style.backgroundImage = "url('assets/fire-particle.png')"
+      particle.style.backgroundSize = "contain";
+      particle.style.width  = "30px";
+      particle.style.height = "30px";
+
+      particle.style.left = `${elem.offsetLeft + 10 + Math.random() * (elem.offsetWidth - 20) - 15}px`;
+      particle.style.top = `${elem.offsetTop + 10 + Math.random() * (elem.offsetHeight - 20) - 15}px`;
+      const vx = 20 + Math.random()*6;
+      let   vy = -40 + Math.random()*10;
+      const vr = 10 * (Math.random() - 0.5) * 20;
+      const g = 0.1 * 60 * 60;
+      let x = -5 + (Math.random() * 10);
+      let y = -5 + (Math.random() * 10);
+      let r = 360 * Math.random();
+      let scale = 1.0;
+      let vscale = 0.4;
+      let startOpacity = 1.0;
+      let opacity = startOpacity;
+      let endOpacity = 0;
+      let lastTime = new Date();
+
+      const moveParticle = _ => {
+        const t = new Date();
+        const age = t - particleStart
+        if (age > particleLife) { particle.remove(); return; }
+        if (age > smokeAfter && particle.style.backgroundImage !== "url('assets/smoke-particle.png')") { particle.style.backgroundImage = "url('assets/smoke-particle.png')"; }
+        particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${scale})`
+        particle.style.opacity   = opacity;
+        const dt = (t - lastTime) * 0.001;
+        lastTime = t;
+        x += vx * dt;
+        y += vy * dt;
+        r += vr * dt;
+        scale += vscale * dt;
+        opacity = endOpacity + (startOpacity - endOpacity) * (1 - age / particleLife);
+        // vy += g * dt;
+        requestAnimationFrame(moveParticle);
+      };
+      moveParticle();
+      elem.parentElement.insertBefore(particle, elem);
+    }
+    frame_n += 1;
+    requestAnimationFrame(makeParticle);
+  }
+  makeParticle();
+}
+
+
 /////////////////// Undo/Redo ///////////////////
 
 isMac = window.navigator.platform.includes("Mac");
