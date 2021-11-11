@@ -150,6 +150,7 @@ let rec apply prims vf args =
     apply_loop vf)
 
 and eval_expr prims env expr =
+  (* if Conf.debug then print_endline (Pprintast.string_of_expression expr); *)
   match expr.pexp_desc with
   | Pexp_ident id ->
      begin match env_get_value_or_lvar env id with
@@ -173,6 +174,7 @@ and eval_expr prims env expr =
         assert false
       | Some expr -> eval_expr prims env expr)
     | func_value ->
+      (* if Conf.debug then print_endline (Pprintast.string_of_expression expr); *)
       let args = List.map (fun (lab, e) -> (lab, eval_expr prims env e)) l in
       if trace
       then (
@@ -753,6 +755,7 @@ and eval_functor_data _env _loc = function
   | Functor (arg_name, body, env) -> (arg_name, body, env)
 
 and eval_structitem prims env it =
+  (* print_endline @@ Pprintast.string_of_structure [it]; *)
   match it.pstr_desc with
   | Pstr_eval (e, _) ->
     let v = eval_expr prims env e in

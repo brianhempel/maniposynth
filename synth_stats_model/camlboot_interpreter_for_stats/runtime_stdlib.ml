@@ -65,6 +65,8 @@ external open_descriptor_out
 
 external open_descriptor_in : int -> in_channel = "caml_ml_open_descriptor_in"
 external open_desc : string -> open_flag list -> int -> int = "caml_sys_open"
+
+let open_desc str = print_endline str; open_desc str
 external close_desc: int -> unit = "caml_sys_close"
 
 external set_out_channel_name

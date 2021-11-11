@@ -1,4 +1,10 @@
-(library
- (name camlboot_interpreter)
- (libraries compiler-libs.common unix)
- )
+; (library
+;  (name camlboot_interpreter_for_stats)
+;  (libraries compiler-libs.common unix)
+;  )
+
+(executable
+  (name interp)
+  ; (modules interp)
+  (libraries compiler-libs.common unix)
+  )

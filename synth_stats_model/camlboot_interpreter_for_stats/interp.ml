@@ -357,9 +357,9 @@ let run_files files =
   |> ignore
 
 (* let _ = load_rec_units stdlib_env [stdlib_flag, "test.ml"] *)
-(* let () =
-  run_files () *)
-  (* print_endline "hello";
+let () =
+  (* run_files () *)
+  (* print_endline "hello"; *)
   let open Conf in
   try match Conf.command () with
     | Some cmd ->
@@ -370,4 +370,4 @@ let run_files files =
       end
     | None -> run_ocamlc ()
   with InternalException e ->
-    Format.eprintf "Code raised exception: %a@." pp_print_value e *)
+    Format.eprintf "Code raised exception: %a@." pp_print_value e
