@@ -56,8 +56,9 @@ module Loc_ = struct
     (* Fresh positions are given new, negative values. *)
     let counter = ref 0
     let next () = decr counter; !counter
+    let newloc_str = "newloc"
     let fresh () =
-      Lexing.{ pos_fname = "newloc"; pos_lnum = next (); pos_bol = -1; pos_cnum = -1 }
+      Lexing.{ pos_fname = newloc_str; pos_lnum = next (); pos_bol = -1; pos_cnum = -1 }
 
     let to_string { Lexing.pos_fname; pos_lnum; pos_bol; pos_cnum } =
       "{ pos_fname = " ^ pos_fname ^
@@ -68,7 +69,9 @@ module Loc_ = struct
 
     let compare pos1 pos2 =
       let open Lexing in
-      Pervasives.compare (pos1.pos_fname, pos1.pos_cnum) (pos2.pos_fname, pos2.pos_cnum)
+      Pervasives.compare
+        (pos1.pos_fname, pos1.pos_cnum, pos1.pos_lnum, pos1.pos_bol)
+        (pos2.pos_fname, pos2.pos_cnum, pos2.pos_lnum, pos2.pos_bol)
   end
 
   (* let none = Location.none *)
@@ -127,6 +130,8 @@ module Type = struct
       |> Parse.core_type
       |> Typetexp.transl_simple_type env false
     end.ctyp_type
+
+  let to_core_type = to_string %> Lexing.from_string %> Parse.core_type
 
   let of_exp ?(type_env = Env.empty) exp = (Typecore.type_exp type_env exp).exp_type
   let of_exp_opt ?(type_env = Env.empty) exp =
@@ -275,7 +280,7 @@ module Type = struct
   let is_int_type    = is_tconstr_with_path Predef.path_int
   let is_char_type   = is_tconstr_with_path Predef.path_char
   let is_float_type  = is_tconstr_with_path Predef.path_float
-  let is_exn_type    =  is_tconstr_with_path Predef.path_exn
+  let is_exn_type    = is_tconstr_with_path Predef.path_exn
   let rec is_var_type typ = match typ.Types.desc with
     | Types.Tvar _
     | Types.Tunivar _ -> true
@@ -287,6 +292,19 @@ module Type = struct
     | Types.Tlink t
     | Types.Tsubst t -> is_arrow_type t
     | _ -> false
+  let rec is_ref_type typ =
+    match typ.Types.desc with
+    | Types.Tconstr (Path.Pdot (_, "ref", _), _, _) -> true
+    | Types.Tlink t
+    | Types.Tsubst t -> is_ref_type t
+    | _ -> false
+
+
+  let rec tvar_name typ = match typ.Types.desc with
+    | Types.Tvar name_opt -> name_opt
+    | Types.Tlink t
+    | Types.Tsubst t      -> tvar_name t
+    | _                   -> None
 
   (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
   (* These all don't work. *)
@@ -527,6 +545,11 @@ module Exp = struct
     | Pexp_constant (Pconst_integer (int_str, None)) -> Some (int_of_string int_str)
     | _ -> None
 
+  let string (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_constant (Pconst_string (str, _)) -> Some str
+    | _ -> None
+
   let ident_lid_loced (exp : expression) =
     match exp.pexp_desc with
     | Pexp_ident lid_loced -> Some lid_loced
@@ -566,6 +589,8 @@ module Exp = struct
   let is_constant    = function { pexp_desc = Pexp_constant _; _ } -> true | _ -> false
   let is_match       = function { pexp_desc = Pexp_match _; _ }    -> true | _ -> false
   let is_ident       = function { pexp_desc = Pexp_ident _; _ }    -> true | _ -> false
+  let is_assert      = function { pexp_desc = Pexp_assert _; _ }   -> true | _ -> false
+  let is_simple_name = simple_name %> (<>) None
 
   let freshen_locs exp =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in

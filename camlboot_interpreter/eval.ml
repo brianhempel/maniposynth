@@ -37,7 +37,7 @@ let fuel = ref max_int
 let with_fuel count f out_of_fuel_f = (* Resets fuel to prior after return/failure. *)
   let prior_fuel = !fuel in
   fuel := count;
-  let out = try f () with No_fuel -> out_of_fuel_f () | e -> fuel := max_int; raise e in
+  let out = try f () with No_fuel -> out_of_fuel_f () | e -> fuel := prior_fuel; raise e in
   fuel := prior_fuel;
   out
 let alloc_fuel count f out_of_fuel_f = (* Subtracts fuel after return/failure. *)

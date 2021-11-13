@@ -66,19 +66,25 @@ let ident_count = counts.local_ident_count + counts.external_ident_count
 let const_count = counts.const_str_count + counts.const_int_count + counts.const_char_count + counts.const_float_count
 let ctor_count  = counts.stdlib_ctor_count + counts.nonstdlib_ctor_count
 
-(* We e-guess 5 term shapes *)
+(* We e-guess 5 term shapes and refine 2 *)
 let term_shape_count =
   ident_count +
   const_count +
   counts.app_count +
   counts.ite_count +
-  ctor_count
+  ctor_count +
+  counts.match_count +
+  counts.fun_count
 
-let ctor_lprob  = lprob_by_counts ctor_count       term_shape_count
-let const_lprob = lprob_by_counts const_count      term_shape_count
-let app_lprob   = lprob_by_counts counts.app_count term_shape_count
-let ite_lprob   = lprob_by_counts counts.ite_count term_shape_count
-let ident_lprob = lprob_by_counts ident_count      term_shape_count
+let ctor_lprob  = lprob_by_counts ctor_count         term_shape_count
+let const_lprob = lprob_by_counts const_count        term_shape_count
+let app_lprob   = lprob_by_counts counts.app_count   term_shape_count
+let ite_lprob   = lprob_by_counts counts.ite_count   term_shape_count
+let ident_lprob = lprob_by_counts ident_count        term_shape_count
+
+let match_lprob = lprob_by_counts counts.match_count term_shape_count
+let fun_lprob   = lprob_by_counts counts.fun_count   term_shape_count
+
 
 (* Given we are going to gen a ctor... *)
 let stdlib_ctor_lprob    = lprob_by_counts counts.stdlib_ctor_count    ctor_count
@@ -89,6 +95,35 @@ let const_str_lprob   = lprob_by_counts counts.const_str_count   const_count
 let const_int_lprob   = lprob_by_counts counts.const_int_count   const_count
 let const_char_lprob  = lprob_by_counts counts.const_char_count  const_count
 let const_float_lprob = lprob_by_counts counts.const_float_count const_count
+
+
+let is_channel typ =
+  match (Type.regular typ).Types.desc with
+  | Types.Tconstr (Path.Pdot (_, "in_channel",  _), [], _) -> true
+  | Types.Tconstr (Path.Pdot (_, "out_channel", _), [], _) -> true
+  | _ -> false
+
+(* Estimate which functions are imperative. *)
+let is_imperative typ =
+  let arg_ts, ret_t = Type.args_and_ret typ in
+  let flat          = arg_ts @ [ret_t] in
+  Type.is_unit_type ret_t ||
+  (Type.is_unit_type (List.hd flat) && List.length flat = 2) ||
+  List.exists is_channel flat ||
+  (typ |> Type.flatten |> List.exists Type.is_ref_type) || (* no refs *)
+  (* If output is a type var, make sure one of the inputs is the same *)
+  match (Type.regular ret_t).desc with
+  | Types.Tvar (Some name) ->
+    not (arg_ts |>@@ Type.flatten |> List.exists (Type.tvar_name %> (=) (Some name)))
+  | _ -> false
+
+
+let unimplemented_prim_names = SSet.of_list ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"]
+let dont_bother_names        = SSet.of_list ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="] (* Don't bother with > and >= because will already guess < and <= *)
+
+let names_to_skip            = SSet.union_all [unimplemented_prim_names; dont_bother_names]
+
+
 
 let stdlib_ctors : (Longident.t * Types.constructor_description * lprob) list =
   let ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
@@ -907,6 +942,11 @@ let const_strs : (expression * Types.type_expr * lprob) list =
   ]
   (* Eliding strings that occur more rarely (not accounted for in counts...oh well it's stats) *)
 
+
+let const_strs_3_chars_or_less =
+  const_strs
+  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 3)
+
 let const_ints : (expression * Types.type_expr * lprob) list =
   begin fun int_str_and_counts ->
     int_str_and_counts |>@ begin fun (int_str, count) ->
@@ -924,7 +964,7 @@ let const_ints : (expression * Types.type_expr * lprob) list =
   ; ("8", 119)
   ; ("5", 108)
   ; ("(-1)", 82)
-  ; ("6", 66)
+  (* ; ("6", 66)
   ; ("16", 63)
   ; ("10", 58)
   ; ("7", 39)
@@ -1051,7 +1091,7 @@ let const_ints : (expression * Types.type_expr * lprob) list =
   ; ("(-1n)", 2)
   ; ("(-1l)", 2)
   ; ("(-1L)", 2)
-  ; ("(-0x8000_0000L)", 2)
+  ; ("(-0x8000_0000L)", 2) *)
   ]
   (* Eliding ints that occur more rarely (not accounted for in counts...oh well it's stats) *)
 
@@ -1106,7 +1146,7 @@ let const_chars : (expression * Types.type_expr * lprob) list =
   ; ("'['", 2)
   ; ("'L'", 2)
   ; ("'('", 2)
-  ; ("'}'", 1)
+  (* ; ("'}'", 1)
   ; ("'|'", 1)
   ; ("'u'", 1)
   ; ("'o'", 1)
@@ -1135,7 +1175,7 @@ let const_chars : (expression * Types.type_expr * lprob) list =
   ; ("'<'", 1)
   ; ("';'", 1)
   ; ("'&'", 1)
-  ; ("'!'", 1)
+  ; ("'!'", 1) *)
   ]
 
 let const_floats : (expression * Types.type_expr * lprob) list =
@@ -1288,7 +1328,9 @@ let local_idents : (int * lprob) list =
 
 let stdlib_idents : (expression * Types.type_expr * lprob) list =
   begin fun indent_str_and_counts ->
-    indent_str_and_counts |>@ begin fun (ident_str, count) ->
+    indent_str_and_counts
+    |>@? (fun (ident_str, _) -> not @@ SSet.mem ident_str names_to_skip)
+    |>@ begin fun (ident_str, count) ->
       let exp = Exp.from_string @@ "( " ^ ident_str ^ " )" in
       let lid =
         match exp.pexp_desc with
@@ -1377,7 +1419,7 @@ let stdlib_idents : (expression * Types.type_expr * lprob) list =
   ; ("Obj.magic", 27)
   ; ("Buffer.add_string", 27)
   ; ("+.", 27)
-  ; ("exit", 26)
+  (* ; ("exit", 26) *)
   ; ("Hashtbl.clear", 26)
   ; ("failwith", 25)
   ; ("Buffer.create", 25)
@@ -1578,3 +1620,19 @@ let stdlib_idents : (expression * Types.type_expr * lprob) list =
   ; ("**", 3)
   ]
   (* Eliding rarer (not accounted for in counts...oh well it's stats) *)
+
+let pervasives_idents_only =
+  stdlib_idents
+  |> List.filter (fun (exp, _, _) -> Exp.is_simple_name exp)
+
+let pervasives_pure_idents_only =
+  pervasives_idents_only
+  |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
+
+
+
+(* Use this to reserve probability for other holes! *)
+let max_single_term_lprob =
+  match local_idents with
+  | (_, best_local_ident_given_ident_lprob)::_ -> mult_lprobs ident_lprob best_local_ident_given_ident_lprob
+  | _ -> failwith "asjndvoisehbvbhskdjvfkjdfs"

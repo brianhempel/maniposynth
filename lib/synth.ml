@@ -42,18 +42,18 @@ let string_of_req (_env, exp, value) =
 let dont_care = new_vtrace ExDontCare
 
 let eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no exp =
-  Eval.with_fuel 1000 begin fun () ->
+  Eval.with_fuel 300 begin fun () ->
     try Eval.eval_expr fillings prims env lookup_exp_typed trace_state frame_no exp
     with _ -> new_vtrace Bomb
   end (fun () -> new_vtrace Bomb)
 
 let pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no root_v path p v =
-  Eval.with_fuel 100 begin fun () ->
+  Eval.with_fuel 50 begin fun () ->
     Eval.pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v path p v
   end (fun () -> raise Eval.Match_fail)
 
 let eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no mod_exp =
-  Eval.with_fuel 1000 begin fun () ->
+  Eval.with_fuel 300 begin fun () ->
     Some (Eval.eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no mod_exp)
   end (fun () -> None)
 
@@ -127,12 +127,22 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Attempt to push the req down to a req(s) on a hole. *)
 (* Modification of Camlboot_interpreter.eval *)
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
-let rec push_down_req_ fillings ((env, exp, value) as req) : req list =
+let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, value) as req) : req list =
   let open Eval in
+  decr fuel;
+  if !fuel <= 0 then raise No_fuel;
   (* print_endline @@ "Pushing down " ^ string_of_req req; *)
-  let recurse = push_down_req_ fillings in
-  let prims, lookup_exp_typed, trace_state, frame_no = Primitives.prims, (fun _ -> None), Trace.new_trace_state, -1 in
+  let recurse = push_down_req_ fillings lookup_exp_typed hit_a_function_f in
+  let prims, trace_state, frame_no = Primitives.prims, Trace.new_trace_state, -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
+  (* let perhaps_add_type_opt v =
+    if v.type_opt = None then
+      match Eval.lookup_type_opt lookup_exp_typed exp.pexp_loc with
+      | Some typ when not (Shared.Ast.Type.is_var_type typ) -> add_type_opt (Some typ) v
+      | _                                                   -> v
+    else
+      v
+  in *)
   match exp.pexp_desc with
   | Pexp_ident { txt = Longident.Lident "??"; _ } ->
     begin match Loc_map.find_opt exp.pexp_loc fillings with
@@ -184,6 +194,7 @@ let rec push_down_req_ fillings ((env, exp, value) as req) : req list =
     begin match value.v_ with
     | ExCall (arg, expected) -> begin try
         let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
+        hit_a_function_f arg_pat body_exp arg expected;
         recurse (env', body_exp, expected)
       with Match_fail -> [req]
       end
@@ -338,8 +349,16 @@ let rec push_down_req_ fillings ((env, exp, value) as req) : req list =
   | Pexp_pack _ -> [req]
   | Pexp_extension _ -> [req]
 
-let push_down_req fillings req =
-  try push_down_req_ fillings req with _ -> [req]
+let push_down_req fillings _prog ?(lookup_exp_typed = fun _ -> None) ?(hit_a_function_f = fun _ _ _ _ -> ()) req =
+  try
+    Eval.with_fuel 300
+      (fun () -> push_down_req_ fillings lookup_exp_typed hit_a_function_f req)
+      (fun () ->
+        (* print_endline "out of fuel";
+        print_endline (StructItems.to_string (apply_fillings fillings prog)); *)
+        [req]
+      )
+  with _ -> [req]
 
 let exp_size exp =
   let size = ref 0 in
@@ -475,6 +494,7 @@ let is_imperative typ =
   Type.is_unit_type ret_t ||
   (Type.is_unit_type (List.hd flat) && List.length flat = 2) ||
   List.exists is_channel flat ||
+  (* If output is a type var, make sure one of the inputs is the same *)
   match (Type.regular ret_t).desc with
   | Types.Tvar (Some name) ->
     Type.flatten typ |> List.exists (function { Types.desc = Types.Tvar (Some name2); _ } -> name = name2 | _ -> false)
@@ -758,7 +778,8 @@ let rec args_seq hole_synth_env func_type arg_count_remaining arg_i min_lprob : 
   match Type.flatten_arrows func_type with
   | (_::_::_) as flat_type ->
     let arg_t = List.nth flat_type arg_i in
-    terms_at_type hole_synth_env arg_t min_lprob
+    let reserve_lprob = max_single_term_lprob *. (float_of_int @@ arg_count_remaining - 1) in
+    terms_at_type hole_synth_env arg_t (div_lprobs min_lprob reserve_lprob)
     |>@@ begin fun (arg, arg_t', lprob) ->
       let func_type' = Type.copy func_type in
       match Type.unify_mutating_opt (List.nth (Type.flatten_arrows func_type') arg_i) (Type.copy arg_t') with
@@ -771,34 +792,6 @@ let rec args_seq hole_synth_env func_type arg_count_remaining arg_i min_lprob : 
 
 
 and ctor_terms hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
-  (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
-  if min_lprob > lprob then [] else
-  let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
-  (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
-  match Typing.can_produce_typ ctor_type_as_arrows typ with
-  | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
-    if arg_count <> cstr_arity then [] else begin (* Ctors must always be fully applied *)
-      (* print_endline @@ Longident.to_string lid ^ "\t\t" ^ Type.to_string ctor_type_as_arrows_unified_with_goal_ret_t; *)
-      args_seq hole_synth_env ctor_type_as_arrows_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
-      |>@ begin fun (arg_terms, ctor_type_as_arrows', args_lprob) ->
-        let out_type = drop_n_args_from_arrow arg_count ctor_type_as_arrows' in
-        let ctor_arg =
-          match arg_count with
-          | 0 -> None
-          | 1 -> Some (List.hd arg_terms)
-          | _ -> Some (Exp.tuple arg_terms)
-        in
-        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
-        ( Exp.construct (Location.mknoloc lid) ctor_arg
-        , out_type
-        , mult_lprobs args_lprob lprob
-        )
-      end
-    end
-  | None ->
-    []
-
-and app_terms hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
   (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
   if min_lprob > lprob then [] else
   let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
@@ -845,25 +838,49 @@ and consts_at_type _hole_synth_env typ min_lprob : (expression * Types.type_expr
   if min_lprob > lprob_1 then [] else
   if Type.is_var_type typ then
     List.concat
-      [ const_strs
+      [ const_strs_3_chars_or_less
       ; const_ints
       ; const_chars
       ; const_floats
       ]
   else
-    if Type.is_string_type typ then const_strs   else
+    if Type.is_string_type typ then const_strs_3_chars_or_less else
     if Type.is_int_type    typ then const_ints   else
     if Type.is_char_type   typ then const_chars  else
     if Type.is_float_type  typ then const_floats else
     []
 
-and apps_at_type _hole_synth_env _typ _min_lprob : (expression * Types.type_expr * lprob) list = []
+and apps_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
+  if min_lprob > lprob_1 then [] else
+  (* (hole_synth_env.local_idents @ stdlib_idents) *)
+  (hole_synth_env.local_idents @ pervasives_pure_idents_only)
+  |>@@ begin fun (fexp, func_type, lprob) ->
+    if min_lprob > lprob then [] else
+    if not (Type.is_arrow_type func_type) then [] else
+    match Typing.can_produce_typ func_type typ with
+    | Some (0, _) -> [] (* functions must be at least partially applied *)
+    | Some (arg_count, func_type_unified_with_goal_ret_t) ->
+      args_seq hole_synth_env func_type_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
+      |>@ begin fun (arg_terms, func_type', args_lprob) ->
+        let out_type = drop_n_args_from_arrow arg_count func_type' in
+        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
+        ( Exp.apply fexp (arg_terms |>@ fun arg -> (Asttypes.Nolabel, arg))
+        , out_type
+        , mult_lprobs args_lprob lprob
+        )
+      end
+    | None ->
+      []
+  end
 
 and ites_at_type _hole_synth_env _typ _min_lprob : (expression * Types.type_expr * lprob) list = []
+  (* if min_lprob > lprob_1 then [] else *)
+
 
 and idents_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
-  (hole_synth_env.local_idents @ stdlib_idents)
+  (* (hole_synth_env.local_idents @ stdlib_idents) *)
+  (hole_synth_env.local_idents @ pervasives_pure_idents_only)
   |>@& begin fun (exp, ident_t, lprob) ->
     if lprob < min_lprob then None else
     Type.unify_opt ident_t typ
@@ -872,13 +889,18 @@ and idents_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr 
 
 and terms_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
-  List.concat
-    [ ctors_at_type  hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
-    ; consts_at_type hole_synth_env typ (div_lprobs min_lprob const_lprob) |>@ Tup3.map_thd (mult_lprobs const_lprob)
-    ; apps_at_type   hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
-    ; ites_at_type   hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
-    ; idents_at_type hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
-    ]
+  let terms =
+    List.concat
+      [ ctors_at_type  hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
+      ; consts_at_type hole_synth_env typ (div_lprobs min_lprob const_lprob) |>@ Tup3.map_thd (mult_lprobs const_lprob)
+      ; apps_at_type   hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
+      ; ites_at_type   hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
+      ; idents_at_type hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
+      ]
+  in
+  (* print_endline @@ "terms at " ^ Type.to_string typ ^ " lprob > " ^ string_of_float min_lprob; *)
+  (* print_endline (terms |>@ Tup3.fst |>@ Exp.to_string |> String.concat "  "); *)
+  terms
 
 let hole_fillings_seq (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env _reqs_on_hole _prog : (fillings * lprob) Seq.t =
   let term_min_lprob = div_lprobs min_lprob lprob in
@@ -893,65 +915,115 @@ let hole_fillings_seq (fillings, lprob) min_lprob hole_loc static_hole_type hole
       (constants_at_type_seq hole_synth_env static_hole_type term_max_lprob term_min_lprob)
       (nonconstants_at_type_seq size_limit hole_synth_env static_hole_type term_max_lprob term_min_lprob) *)
   (* in *)
+  (* print_endline "hi"; *)
+  (* print_endline (Loc.to_string hole_loc); *)
   terms_at_type hole_synth_env static_hole_type term_min_lprob
-  |>@& begin fun (term, _term_t, term_lprob) ->
+  |>@ begin fun (term, _term_t, term_lprob) ->
     (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term ^ "\t" ^ Type.to_string term_t ^ "\t" ^ Type.to_string static_hole_type); *)
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
-    if true (* reqs_on_hole |> List.for_all (is_req_satisified_by fillings) *) then
+    (fillings, mult_lprobs term_lprob lprob)
+    (* if reqs_on_hole |> List.for_all (is_req_satisified_by fillings) then
       Some (fillings, mult_lprobs term_lprob lprob)
     else
-      None
+      None *)
   end
   |> List.to_seq
 
-let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false
+
 let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? Exp.is_hole |>@ Exp.loc
 
-let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Seq.t =
+
+(* Return a list of programs with arg and return types concretized to each assert. *)
+let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs : program list =
+  reqs
+  |>@ begin fun req ->
+    let pats_to_annotate = ref [] in
+    let exps_to_annotate = ref [] in
+    let hit_a_function_f arg_pat f_body arg_val expected_output =
+      begin match arg_val.type_opt with
+      | Some val_type ->
+        pats_to_annotate := (arg_pat.ppat_loc, val_type) :: !pats_to_annotate;
+      | None -> ()
+      end;
+      match expected_output.v_, expected_output.type_opt with
+      | ExCall _, _      -> ()
+      | _, Some out_type -> exps_to_annotate := (f_body.pexp_loc, out_type) :: !exps_to_annotate
+      | _                -> ()
+    in
+    ignore @@ push_down_req fillings prog ~lookup_exp_typed ~hit_a_function_f req;
+    prog
+    |> Exp.map begin fun e ->
+      match List.assoc_opt e.pexp_loc !exps_to_annotate with
+      | Some typ -> Exp.constraint_ e (Type.to_core_type typ)
+      | None     -> e
+    end
+    |> Pat.map begin fun p ->
+      match List.assoc_opt p.ppat_loc !pats_to_annotate with
+      | Some typ -> Pat.constraint_ p (Type.to_core_type typ)
+      | None     -> p
+    end
+    |> apply_fillings fillings
+    |> Exp.replace_by Exp.is_assert Exp.unit (* Asserts on diff types can prematurely produce type-incorrect programs. *)
+  end
+  |> List.dedup_by StructItems.to_string
+
+
+
+
+
+let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name user_ctors : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
-  let rec fillings_seq (fillings, lprob) hole_locs : (fillings * lprob) Seq.t =
+  (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
+  let rec fillings_seq (fillings, lprob) min_lprob hole_locs : (fillings * lprob) Seq.t =
     match hole_locs with
     | [] -> Seq.return (fillings, lprob)
     | hole_loc::rest ->
-      fillings_seq (fillings, lprob) rest
-      |> Seq.flat_map begin function (fillings, lprob) ->
+      fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
+      |> Seq.flat_map begin fun (fillings, lprob) ->
         (* print_endline "retyping prog"; *)
-        let prog = apply_fillings fillings prog in
-        print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
-        let (typed_prog, _, _) =
-          try Typing.typedtree_sig_env_of_parsed prog file_name
-          with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-        in
-        (* print_endline "done"; *)
-        begin match Typing.find_exp_by_loc hole_loc typed_prog with
-        | None ->
-          (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
-          Seq.empty
-        | Some hole_typed_node ->
-          (* let reqs' = reqs |>@@ push_down_req fillings in
-          let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
-          let hole_synth_env =
-            { tenv         = hole_typed_node.exp_env
-            ; user_ctors   = user_ctors
-            ; local_idents = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
-            }
+        let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
+        progs
+        |> List.to_seq
+        |> Seq.flat_map begin fun prog ->
+          (* print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob; *)
+          let (typed_prog, _, _) =
+            try Typing.typedtree_sig_env_of_parsed prog file_name
+            with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
           in
-          print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob);
-          hole_fillings_seq (fillings, lprob) min_lprob hole_loc hole_typed_node.exp_type hole_synth_env [] prog
+          (* print_endline "done"; *)
+          begin match Typing.find_exp_by_loc hole_loc typed_prog with
+          | None ->
+            (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+            Seq.empty
+          | Some hole_typed_node ->
+            (* let reqs' = reqs |>@@ push_down_req fillings in
+            let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
+            let hole_synth_env =
+              { tenv         = hole_typed_node.exp_env
+              ; user_ctors   = user_ctors
+              ; local_idents = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+              }
+            in
+            (* print_endline (hole_loc |> Loc.to_string); *)
+            (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
+            (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
+            (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
+            hole_fillings_seq (fillings, lprob) min_lprob hole_loc hole_typed_node.exp_type hole_synth_env [] prog
+          end
         end
       end
   in
-  fillings_seq (fillings, lprob_1) hole_locs
+  fillings_seq (fillings, lprob) min_lprob hole_locs
   |> Seq.filter (fun (_, lprob) -> lprob <= max_lprob)
   |> Seq.map fst
 
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
 (* If lambda is rhs of a lone binding, make the binding recursive. *)
-(* let refine prog fillings reqs file_name next =
-  let reqs'           = reqs |>@@ push_down_req fillings in
+let refine prog (fillings, lprob) reqs file_name next =
+  let reqs'           = reqs |>@@ push_down_req fillings prog in
   let hole_locs       = hole_locs prog fillings in
   let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false in
   let is_ex_dont_care = function { v_ = ExDontCare; _ } -> true | _ -> false in
@@ -977,7 +1049,7 @@ let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Se
           | _ -> "var"
         in
         let sketch = Exp.from_string @@ "fun " ^ Name.gen ~base_name prog ^ " -> (??)" in
-        [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch)) ]
+        [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs fun_lprob lprob) ]
       else
         []
     in
@@ -1004,36 +1076,44 @@ let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Se
         | Some [type_path] ->
           let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
           let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
-          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch)) ]
+          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs match_lprob lprob) ]
         | _ -> []
       end
     in
     intro_lambda_seqs @ destruct_seqs
   end
   |> Seq.concat
- *)
 
 
-let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) prog reqs file_name user_ctors : fillings option =
-  if max_lprob < abort_lprob then None else
-  let min_lprob = mult_lprobs max_lprob (lprob 0.1) in
+
+let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_typed prog reqs file_name user_ctors : fillings option =
+  if max_lprob < abort_lprob then (print_endline "aborting"; None) else
+  let min_lprob = mult_lprobs max_lprob (lprob 0.05) in
+  print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
+  let e_guess (fillings, lprob) =
+    e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name user_ctors
+  in
   Seq.concat
-    [ e_guess Loc_map.empty max_lprob min_lprob prog file_name user_ctors
-    (* ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> e_guess fillings 6 prog file_name)
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 6 prog file_name))
-    ; refine prog Loc_map.empty reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 6 prog file_name))) *)
+    [ e_guess (Loc_map.empty, lprob_1)
+    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))
+    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob)))
+    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))))
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
-    incr terms_tested_count;
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
-    if !terms_tested_count mod 1_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
+    if !terms_tested_count mod 1_000 = 0 then begin
+      print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
+      (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
+    end;
+    incr terms_tested_count;
+    (* ignore (exit 0); *)
 
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
@@ -1049,7 +1129,7 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) prog reqs fi
   |> begin fun seq ->
     match seq () with
     | Seq.Cons (fillings, _) -> Some fillings
-    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob prog reqs file_name user_ctors (* Keep trying, with lower prob threshold. *)
+    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob lookup_exp_typed prog reqs file_name user_ctors (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1087,10 +1167,11 @@ let results prog _trace assert_results file_name =
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   print_endline @@ "Typing " ^ StructItems.to_string prog;
-  let (_, _, final_tenv) =
+  let (typed_struct, _, final_tenv) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
+  let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
   let user_ctors =
     let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
     let user_ctor_descs =
@@ -1102,7 +1183,7 @@ let results prog _trace assert_results file_name =
     end
   in
   print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
-  match fill_holes prog reqs file_name user_ctors with
+  match fill_holes type_lookups.lookup_exp prog reqs file_name user_ctors with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [prog]
   | Some fillings' ->
@@ -1116,6 +1197,13 @@ let try_async path =
   (* Start synthesis and the synth process killer. *)
   match Unix.fork () with
   | 0 ->
+    (* Uncomment the following if you want performance profiling *)
+    (* begin
+      let pid = Unix.getpid () in
+      print_endline (string_of_int pid);
+      let _ = Unix.create_process "sample" [|"sample"; string_of_int pid; "-mayDie"; "-file"; "synth_profile.txt"|] Unix.stdin Unix.stdout Unix.stderr in
+      ()
+    end *)
     let parsed = Interp.parse path in
     let parsed = make_bindings_with_holes_recursive parsed in
     (* let parsed_with_comments = Parse_unparse.parse_file path in
@@ -1136,6 +1224,7 @@ let try_async path =
         Undo_redo.perhaps_log_revision path
       end;
     | _ -> ()
+    | exception _e -> print_endline "asdfasdf";
     end;
     (* |> List.iteri begin fun i result ->
       let out_path = String.replace ".ml" ("-synth" ^ string_of_int i ^ ".ml") path in
@@ -1145,11 +1234,12 @@ let try_async path =
       output_string out_chan out_str;
       close_out out_chan;
     end; *)
+    print_endline "normal exit";
     exit 0
   | pid ->
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 1;
+    Unix.sleep 15;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;
