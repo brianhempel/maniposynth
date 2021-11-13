@@ -143,6 +143,18 @@ module List = struct
       then new_elem :: rest
       else x :: replace_nth (i-1) new_elem rest
 
+  let findi_opt pred list =
+    let rec loop i = function
+      | []      -> None
+      | x::rest -> if pred x then Some i else loop (i + 1) rest
+    in
+    loop 0 list
+
+  let findi pred list =
+    match findi_opt pred list with
+    | None   -> raise Not_found
+    | Some i -> i
+
   let rec findmap_opt f = function
     | []      -> None
     | x::rest ->
@@ -406,6 +418,10 @@ let (%@) g f = f %> g
 let executable_dir = Filename.dirname Sys.executable_name
 let nativize_path = String.replace "/" Filename.dir_sep
 
+let rec ensure_dir path =
+  if Filename.dirname path <> "." then ensure_dir (Filename.dirname path);
+  try Unix.mkdir path 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+
 (* https://stackoverflow.com/a/53840784 *)
 let string_of_file path =
   let in_chan = open_in path in
@@ -414,10 +430,7 @@ let string_of_file path =
   str
 
 let write_file contents path =
+  ensure_dir (Filename.dirname path);
   let out_chan = open_out path in
   output_string out_chan contents;
   close_out out_chan
-
-let rec ensure_dir path =
-  if Filename.dirname path <> "." then ensure_dir (Filename.dirname path);
-  try Unix.mkdir path 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()

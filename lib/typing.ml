@@ -2,6 +2,7 @@
 
 open Shared
 open Shared.Ast
+open Shared.Util
 
 type lookups =
   { lookup_exp : Location.t -> Typedtree.expression option
@@ -142,3 +143,33 @@ let exp_typed_lookup_of_parsed_with_error_recovery parsed file_name =
   end) in
   Iter.iter_expression typed_exp;
   !locmap *)
+
+let type_of_longident lid tenv =
+  let (_, val_desc) = Env.lookup_value lid tenv in
+  val_desc.val_type
+
+let type_of_name name tenv =
+  type_of_longident (Longident.Lident name) tenv
+
+(* Returns number of args and func type unified with the desired return type. Need to explicitly remember number of args in case desired return type is an arrow. *)
+let rec can_produce_typ t target_t =
+  let t = Type.regular t in
+  let try_right () =
+    begin match t.desc with
+    | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) ->
+      can_produce_typ t_r target_t
+      |>&& begin fun (arg_count, t_r') ->
+        Type.(unify_mutating_opt (copy t) (arrow (new_var ()) t_r'))
+        |>& (fun t' -> (arg_count + 1, t'))
+      end
+    | _ -> None
+    end
+  in
+  begin match Type.unify_opt t target_t with
+  | Some t ->
+    if not (Type.is_var_type target_t && Type.is_arrow_type t) (* no partial applications at type 'a *)
+    then Some (0, t)
+    else try_right ()
+  | None -> try_right ()
+  end
+

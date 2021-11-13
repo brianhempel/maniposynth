@@ -6,3 +6,4 @@ artifact*
 /history/
 *-old.ml
 synth_stats_model/corpus
+synth_stats_model/annotated

@@ -19,49 +19,52 @@ let no_stdlib_flag = []
 let stdlib_units =
   let stdlib_path = stdlib_path () in
   let fullpath file = Filename.concat stdlib_path file in
+  (no_stdlib_flag, fullpath "camlinternalFormatBasics.ml")
+  ::
   (no_stdlib_flag, fullpath "stdlib.ml")
   ::
   List.map (fun file -> stdlib_flag, fullpath file) [
     "sys.ml";
+    "char.ml";
+    "seq.ml";
+    "bytes.ml";
+    "marshal.ml";
+    "obj.ml";
     "callback.ml";
     "complex.ml";
     "float.ml";
-    "char.ml";
-    "bytes.ml";
     "string.ml";
     "bytesLabels.ml";
     "stringLabels.ml";
-    "seq.ml";
     "list.ml";
     "listLabels.ml";
+    (* "ord.ml"; *)
     "set.ml";
     "map.ml";
     "uchar.ml";
     "buffer.ml";
     "stream.ml";
+    "array.ml";
+    "int64.ml";
+    "nativeint.ml";
+    "digest.ml";
+    "random.ml";
+    "camlinternalLazy.ml";
+    "lazy.ml";
+    "hashtbl.ml";
     "genlex.ml";
-    "camlinternalFormatBasics.ml";
     "camlinternalFormat.ml";
     "printf.ml";
     "scanf.ml";
     "format.ml";
-    "obj.ml";
     "gc.ml";
     "camlinternalOO.ml";
     "oo.ml";
-    "camlinternalLazy.ml";
-    "lazy.ml";
     "printexc.ml";
-    "array.ml";
     "arrayLabels.ml";
     "sort.ml";
     "queue.ml";
-    "int64.ml";
     "int32.ml";
-    "nativeint.ml";
-    "digest.ml";
-    "random.ml";
-    "hashtbl.ml";
     "lexing.ml";
     "parsing.ml";
     "weak.ml";
@@ -70,7 +73,6 @@ let stdlib_units =
     "stack.ml";
     "arg.ml";
     "filename.ml";
-    "marshal.ml";
     "bigarray.ml";
     "moreLabels.ml";
     "stdLabels.ml";
@@ -80,7 +82,7 @@ let eval_env_flag ~loc env flag =
   match flag with
   | Open module_ident ->
      let module_ident = Location.mkloc module_ident loc in
-     env_extend false env (env_get_module_data env module_ident)
+     env_extend (Some module_ident.txt) false env (env_get_module_data env module_ident |> snd)
 
 let load_rec_units env flags_and_units =
   let unit_paths = List.map snd flags_and_units in
@@ -98,7 +100,7 @@ let load_rec_units env flags_and_units =
     env
     flags_and_units
 
-let stdlib_env =
+let stdlib_env () =
   let env = Runtime_base.initial_env in
   let env = load_rec_units env stdlib_units in
   env
@@ -222,17 +224,52 @@ module Compiler_files = struct
 
   let middle_end = List.map (Filename.concat "middle_end") [
     "base_types/id_types.ml";
+    "base_types/linkage_name.ml";
     "base_types/compilation_unit.ml";
     "base_types/set_of_closures_id.ml";
-    "base_types/symbol.ml";
     "base_types/variable.ml";
+    "base_types/symbol.ml";
     "base_types/closure_element.ml";
     "base_types/closure_id.ml";
+    "base_types/closure_origin.ml";
     "base_types/var_within_closure.ml";
-    "base_types/linkage_name.ml";
-    "flambda_utils.ml";
-    "simple_value_approx.ml";
+    "base_types/set_of_closures_origin.ml";
+    "base_types/tag.ml";
+    "base_types/static_exception.ml";
+    "base_types/mutable_variable.ml";
+    "base_types/export_id.ml";
+    "projection.ml";
+    "allocated_const.ml";
+    "parameter.ml";
+    "flambda.ml";
+    "flambda_iterators.ml";
+    "internal_variable_names.ml";
     "debuginfo.ml";
+    (* "default_inline.ml"; *)
+    "flambda_utils.ml";
+    "freshening.ml";
+    "inlining_cost.ml";
+    "effect_analysis.ml";
+    "simple_value_approx.ml";
+    "find_recursive_functions.ml";
+    "inlining_stats.ml";
+    "inline_and_simplify_aux.ml";
+    "invariant_params.ml";
+    "flambda_invariants.ml";
+    "closure_conversion_aux.ml";
+    "closure_conversion.ml";
+    "lift_code.ml";
+    "alias_analysis.ml";
+    "inconstant_idents.ml";
+    "lift_constants.ml";
+    "share_constants.ml";
+    "inline_and_simplify.ml";
+    "remove_unused_closure_vars.ml";
+    "ref_to_variables.ml";
+    "initialize_symbol_to_let_symbol.ml";
+    "lift_let_to_initialize_symbol.ml";
+    "remove_unused_program_constructs.ml";
+    "middle_end.ml";
   ]
 
   let asmcomp = List.map (Filename.concat "asmcomp") [
@@ -242,10 +279,6 @@ module Compiler_files = struct
     "compilenv.ml";
     "import_approx.ml";
 
-    "debug/reg_with_debug_info.ml";
-    "debug/reg_availability_set.ml";
-    "debug/available_regs.ml";
-
     "x86_ast.mli";
     "x86_proc.ml";
     "x86_dsl.ml";
@@ -254,8 +287,17 @@ module Compiler_files = struct
     "arch.ml";
     "cmm.ml";
     "reg.ml";
+
+    "debug/reg_with_debug_info.ml";
+    "debug/reg_availability_set.ml";
+
     "mach.ml";
     "proc.ml";
+    "interval.ml";
+    "printcmm.ml";
+    "printmach.ml";
+    "debug/available_regs.ml";
+
 
     "selectgen.ml";
     "spacetime_profiling.ml";
@@ -263,10 +305,14 @@ module Compiler_files = struct
 
     "closure.ml";
     "strmatch.ml";
+    "printclambda.ml";
+    "un_anf.ml";
+    "afl_instrument.ml";
     "cmmgen.ml";
     "linearize.ml";
     "branch_relaxation.ml";
     "emitaux.ml";
+    "x86_masm.ml";
     "emit.ml";
     "comballoc.ml";
     "CSEgen.ml";
@@ -281,9 +327,16 @@ module Compiler_files = struct
     "reload.ml";
     "schedgen.ml";
     "scheduling.ml";
+    "printlinear.ml";
+    "traverse_for_exported_symbols.ml";
+    "build_export_info.ml";
+    "closure_offsets.ml";
+    "flambda_to_clambda.ml";
     "asmgen.ml";
-
     "asmlink.ml";
+    "asmlibrarian.ml";
+    "export_info_for_pack.ml";
+    "asmpackager.ml";
   ]
 
   let bytegen = List.map (Filename.concat "bytecomp") [
@@ -341,10 +394,10 @@ let native_compiler_units =
   )
 
 let run_ocamlc () =
-  ignore (load_rec_units stdlib_env bytecode_compiler_units)
+  ignore (load_rec_units (stdlib_env ()) bytecode_compiler_units)
 
 let run_ocamlopt () =
-  ignore (load_rec_units stdlib_env native_compiler_units)
+  ignore (load_rec_units (stdlib_env ()) native_compiler_units)
 
 let run_files files =
   (* let rev_files = ref [] in
@@ -353,14 +406,49 @@ let run_files files =
   let files = List.rev !rev_files in *)
   files
   |> List.map (fun file -> stdlib_flag, file)
-  |> load_rec_units stdlib_env
+  |> load_rec_units (stdlib_env ())
   |> ignore
 
+let get_stats () =
+  let open Shared.Ast in
+  let open Shared.Util in
+  clear_stats ();
+  print_endline "============= BEGINNING STATISTICS COLLECTION =====================";
+  ignore @@ load_rec_units (stdlib_env ()) native_compiler_units;
+  print_endline "============= ANNOTATING FILES WITH VAR USAGE (FOR MANUAL VERIFICATION THAT WE ARE NOT CRAZY) =====================";
+  native_compiler_units |> List.iter begin fun (_, unit_path) ->
+    let parsed = parse unit_path in
+    let _use_to_exp = function
+      | FirstUse (n, _name) -> Exp.from_string @@ "First " ^ string_of_int n
+      | Reuse (n, _name)    -> Exp.from_string @@ "Reuse " ^ string_of_int n
+      | External lid        -> Exp.ident (Loc.mk lid)
+    in
+    let use2_to_exp = function
+      | NthInEnv (n, _name) -> Exp.from_string @@ "NthInEnv " ^ string_of_int n
+      | External2 lid       -> Exp.ident (Loc.mk lid)
+    in
+    let annotated =
+      parsed |> Exp.map begin fun exp ->
+        match exp.pexp_desc with
+        | Pexp_ident _ ->
+          begin match Loc_map.find_opt exp.pexp_loc stats.var_uses2 with
+          | Some var_use2 -> { exp with pexp_attributes = Attr.set_exp "use" (use2_to_exp var_use2) exp.pexp_attributes }
+          | None -> exp
+          end
+        | _ -> exp
+      end
+    in
+    write_file (StructItems.to_string annotated) (Filename.concat "annotated" (Filename.basename unit_path))
+  end;
+  stats
+
+
+
 (* let _ = load_rec_units stdlib_env [stdlib_flag, "test.ml"] *)
-let () =
+(* let () = *)
   (* run_files () *)
   (* print_endline "hello"; *)
-  let open Conf in
+  (* let open Conf in
   try match Conf.command () with
     | Some cmd ->
       begin match cmd with
@@ -370,4 +458,4 @@ let () =
       end
     | None -> run_ocamlc ()
   with InternalException e ->
-    Format.eprintf "Code raised exception: %a@." pp_print_value e
+    Format.eprintf "Code raised exception: %a@." pp_print_value e *)

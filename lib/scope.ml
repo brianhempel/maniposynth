@@ -231,3 +231,16 @@ let rename_pat_by_loc loc name' prog =
   prog
   |> map_exps_with_scope_prog SMap.empty handle_root_pat apply_subst_on_exp
   |> Pat.map_by is_target_pat (fun pat -> { pat with ppat_desc = (Pat.var name').ppat_desc })
+
+
+exception Found_names of string list
+
+(* Names in file only. Nearest name first (with the exception of as-pats, oh well). *)
+let names_at_loc loc prog =
+  let init_scope_info = [] in
+  let handle_root_pat names pat = Pat.names pat @ names in
+  let f names exp = if exp.pexp_loc = loc then raise (Found_names names) else exp in
+  try
+    ignore @@ (map_exps_with_scope_prog init_scope_info handle_root_pat f prog);
+    raise Not_found
+  with Found_names names -> names

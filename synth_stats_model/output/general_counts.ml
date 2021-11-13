@@ -1,0 +1,21 @@
+let counts =
+  { local_ident_count    = 79553
+  ; external_ident_count = 29224
+  ; tup2_count           = 5009
+  ; tup3_count           = 1100
+  ; tup4_count           = 131
+  ; tup5_count           = 67
+  ; const_str_count      = 6268
+  ; const_int_count      = 7267
+  ; const_char_count     = 308
+  ; const_float_count    = 60
+  ; let_count            = 7553
+  ; fun_count            = 21093
+  ; app_count            = 41968
+  ; match_count          = 3939
+  ; ite_count            = 2779
+  ; stdlib_ctor_count    = 9293
+  ; nonstdlib_ctor_count = 7784 (* include polymorphic variants *)
+  ; record_count         = 1262
+  ; field_count          = 5403
+  }

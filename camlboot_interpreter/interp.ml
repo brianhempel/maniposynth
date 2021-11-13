@@ -103,7 +103,7 @@ let load_rec_units ?fuel_per_top_level_binding ?(fillings = Shared.Loc_map.empty
 
 (* THIS IS WHAT TAKES FOREVER WHEN THE INTERPRETER INTERPRETS ITSELF *)
 (* LAZY LOAD STDLIB MODULES AS NEEDED? *)
-let stdlib_env =
+let stdlib_env () =
   let env = Runtime_base.initial_env in
   let env = load_rec_units env (fun _ -> None) Trace.new_trace_state stdlib_units in
   env
@@ -346,10 +346,10 @@ let native_compiler_units () =
   )
 
 let run_ocamlc () =
-  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state (bytecode_compiler_units ()))
+  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) Trace.new_trace_state (bytecode_compiler_units ()))
 
 let run_ocamlopt () =
-  ignore (load_rec_units stdlib_env (fun _ -> None) Trace.new_trace_state (native_compiler_units ()))
+  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) Trace.new_trace_state (native_compiler_units ()))
 
 
 let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
@@ -362,7 +362,7 @@ let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
     try
       files
       |> List.map (fun file -> stdlib_flag, file)
-      |> load_rec_units ?fuel_per_top_level_binding stdlib_env lookup_exp_typed trace_state
+      |> load_rec_units ?fuel_per_top_level_binding (stdlib_env ()) lookup_exp_typed trace_state
     with InternalException value ->
       Format.eprintf "Uncaught exception in interpreter: %a@." pp_print_value value;
       Envir.empty_env
@@ -375,7 +375,7 @@ let run_parsed ?fuel_per_top_level_binding lookup_exp_typed parsed file_name =
   let frame_no = trace_state.frame_no in
   let fillings = Shared.Loc_map.empty in
   let loc = Location.in_file file_name in
-  let local_env = eval_env_flag ~loc stdlib_env (Open (Longident.Lident "Stdlib")) in
+  let local_env = eval_env_flag ~loc (stdlib_env ()) (Open (Longident.Lident "Stdlib")) in
   begin try
     ignore @@ eval_structure ?fuel_per_binding:fuel_per_top_level_binding fillings Primitives.prims local_env lookup_exp_typed trace_state frame_no parsed
   with InternalException value ->
@@ -383,7 +383,7 @@ let run_parsed ?fuel_per_top_level_binding lookup_exp_typed parsed file_name =
   end;
   trace_state.trace
 
-(* let _ = load_rec_units stdlib_env [stdlib_flag, "test.ml"] *)
+(* let _ = load_rec_units (stdlib_env ()) [stdlib_flag, "test.ml"] *)
 (* let () =
   run_files () *)
   (* print_endline "hello";

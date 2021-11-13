@@ -1,8 +1,24 @@
 EXCLUDE_QUERY_DIR
+B /Users/brian/.opam/4.07.1/lib/base64
+B /Users/brian/.opam/4.07.1/lib/biniou
+B /Users/brian/.opam/4.07.1/lib/bytes
+B /Users/brian/.opam/4.07.1/lib/easy-format
 B /Users/brian/.opam/4.07.1/lib/ocaml
 B /Users/brian/.opam/4.07.1/lib/ocaml/compiler-libs
-B ../../_build/default/synth_stats_model/camlboot_interpreter_for_stats/.interp.eobjs/byte
+B /Users/brian/.opam/4.07.1/lib/yojson
+B ../../_build/default/camlboot_interpreter/.camlboot_interpreter.objs/byte
+B ../../_build/default/lib/.maniposynth_lib.objs/byte
+B ../../_build/default/shared/.shared.objs/byte
+B ../../_build/default/synth_stats_model/camlboot_interpreter_for_stats/.camlboot_interpreter_for_stats.objs/byte
+S /Users/brian/.opam/4.07.1/lib/base64
+S /Users/brian/.opam/4.07.1/lib/biniou
+S /Users/brian/.opam/4.07.1/lib/bytes
+S /Users/brian/.opam/4.07.1/lib/easy-format
 S /Users/brian/.opam/4.07.1/lib/ocaml
 S /Users/brian/.opam/4.07.1/lib/ocaml/compiler-libs
+S /Users/brian/.opam/4.07.1/lib/yojson
+S ../../camlboot_interpreter
+S ../../lib
+S ../../shared
 S .
-FLG -open Dune__exe -w @1..3@5..28@30..39@43@46..47@49..57@61..62-40 -strict-sequence -strict-formats -short-paths -keep-locs
+FLG -open Camlboot_interpreter_for_stats -w @1..3@5..28@30..39@43@46..47@49..57@61..62-40 -strict-sequence -strict-formats -short-paths -keep-locs

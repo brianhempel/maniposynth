@@ -38,7 +38,7 @@ let prim5 f wrap_exn unwrap1 unwrap2 unwrap3 unwrap4 unwrap5 wrap =
 let id x = x
 
 let builtin_exn_id env id =
-  Envir.env_get_constr env (Location.mknoloc (Longident.Lident id))
+  snd @@ Envir.env_get_constr env (Location.mknoloc (Longident.Lident id))
 
 let exn0 env name = ptr @@ Constructor (name, builtin_exn_id env name, None)
 

@@ -502,4 +502,4 @@ let prims =
 let prims =
   List.fold_left (fun env (name, v) -> SMap.add name v env) SMap.empty prims
 
-let () = Runtime_compiler.apply_ref := Eval.apply prims
+(* let () = Runtime_compiler.apply_ref := Eval.apply prims *)

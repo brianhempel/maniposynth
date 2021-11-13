@@ -5,12 +5,6 @@
  ; (preprocess (pps ppx_yojson_conv))
  )
 
-(executable
- (name synth_stats_model)
- (modules synth_stats_model)
- (libraries compiler-libs.common camlboot_interpreter maniposynth_lib yojson uri synth_stats_model)
- )
-
 ; (executable
 ;  (name scratch)
 ;  (modules scratch)

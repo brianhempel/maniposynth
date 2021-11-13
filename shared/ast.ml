@@ -65,6 +65,10 @@ module Loc_ = struct
       "; pos_bol = " ^ string_of_int pos_bol ^
       "; pos_cnum = " ^ string_of_int pos_cnum ^ " " ^
       "}"
+
+    let compare pos1 pos2 =
+      let open Lexing in
+      Pervasives.compare (pos1.pos_fname, pos1.pos_cnum) (pos2.pos_fname, pos2.pos_cnum)
   end
 
   (* let none = Location.none *)
@@ -86,7 +90,15 @@ module Loc_ = struct
     "; loc_ghost = " ^ string_of_bool loc_ghost ^ " " ^
     "}"
 
-  let compare = compare
+  let compare loc1 loc2 =
+    let open Location in
+    match Pos.compare loc1.loc_start loc2.loc_start with
+    | 0 ->
+      begin match Pos.compare loc1.loc_end loc2.loc_end with
+      | 0 -> Pervasives.compare loc1.loc_ghost loc2.loc_ghost
+      | n -> n
+      end
+    | n -> n
 end
 
 module Longident = struct
@@ -257,9 +269,13 @@ module Type = struct
     | Types.Tlink t
     | Types.Tsubst t -> is_tconstr_with_path target_path t
     | _ -> false
-  let is_unit_type = is_tconstr_with_path Predef.path_unit
-  let is_bool_type = is_tconstr_with_path Predef.path_bool
-  let is_exn_type =  is_tconstr_with_path Predef.path_exn
+  let is_unit_type   = is_tconstr_with_path Predef.path_unit
+  let is_bool_type   = is_tconstr_with_path Predef.path_bool
+  let is_string_type = is_tconstr_with_path Predef.path_string
+  let is_int_type    = is_tconstr_with_path Predef.path_int
+  let is_char_type   = is_tconstr_with_path Predef.path_char
+  let is_float_type  = is_tconstr_with_path Predef.path_float
+  let is_exn_type    =  is_tconstr_with_path Predef.path_exn
   let rec is_var_type typ = match typ.Types.desc with
     | Types.Tvar _
     | Types.Tunivar _ -> true

@@ -1,4 +1,4 @@
-(library
- (name synth_stats_model)
- (libraries compiler-libs.common shared maniposynth_lib)
+(executable
+ (name make_stats)
+ (libraries compiler-libs.common shared maniposynth_lib camlboot_interpreter_for_stats unix)
  )

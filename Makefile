@@ -12,10 +12,10 @@ profile:
 	# Must already be running, samples for 10 seconds
 	sample server.exe
 
-synth_stats:
-	cd synth_stats_model; make corpus
-	dune build --auto-promote synth_stats_model.exe
-	./_build/default/synth_stats_model.exe
+# synth_stats:
+# 	cd synth_stats_model; make corpus
+# 	dune build --auto-promote synth_stats_model.exe
+# 	./_build/default/synth_stats_model.exe
 
 # Artifact for distributing to study participants.
 artifact.zip: ./_build/default/server.exe ./assets/*
@@ -52,7 +52,7 @@ interpret_intepreter_interpreting_simple_ml:
 
 repl:
 	# See .ocamlinit for preamble commands run.
-	dune utop
+	dune utop || ./_build/default/.utop/utop.exe
 
 clean:
 	rm -rf _build/

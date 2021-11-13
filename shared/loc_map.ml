@@ -1,7 +1,7 @@
 open Ast
 open Util
 
-include Map.Make(Loc)
+include MapPlus(Loc)
 
 (* Functions for when you have a list of items per loc. *)
 let all_at_loc loc   map = find_opt loc map ||& []

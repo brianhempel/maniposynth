@@ -5,16 +5,12 @@ open Shared
 open Shared.Ast
 open Shared.Util
 
-open Stats_model
-
 
 (* Next things to do to make fast:
   - type var unification with in a filling...so it doesn't compare a list to a number
   - when a hole has type 'a, don't try items with a more specific static type
   - try using assert information to speculate types on holes, from specific to general (e.g. if assert result is (int list), try (int list), ('a list), and 'a)
 *)
-
-let terms_tested_count = ref 0
 
 type fillings = expression Loc_map.t
 
@@ -419,29 +415,25 @@ let nonconstant_names_at_loc target_loc prog =
     SSet.empty
   with Found_names names ->
     (* print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names; *)
-    SSet.of_list names
+    SSet.of_seq (List.to_seq names)
 
-type hole_synth_env =
-    { tenv         : Env.t
-    ; user_ctors   : (Longident.t * Types.constructor_description * lprob) list
-    ; local_idents : (expression * Types.type_expr * lprob) list
-    }
-(* type hole_synth_env =
+
+type synth_env =
     { nonconstant_names                : SSet.t
     ; tenv                             : Env.t
     ; mutable constants_at_t           : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
     ; mutable nonconstants_at_t        : (Types.type_expr * (expression * Types.type_expr) Seq.t) list
     ; mutable funcs_that_can_produce_t : (Types.type_expr * (Types.type_expr (* func type, already unified with the ret type *) * (int (* number of arguments needed *) * string list ref (* function names at that type *))) Seq.t) list
-    } *)
+    }
 
-(* let new_hole_synth_env nonconstant_names tenv =
+let new_synth_env nonconstant_names tenv =
   (* print_endline "------------------------------ new synth env ------------------------------"; *)
   { nonconstant_names        = nonconstant_names
   ; tenv                     = tenv
   ; constants_at_t           = []
   ; nonconstants_at_t        = []
   ; funcs_that_can_produce_t = []
-  } *)
+  }
 
 let is_req_satisified_by fillings (env, exp, expected) =
   (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
@@ -457,10 +449,10 @@ let is_req_satisified_by fillings (env, exp, expected) =
 
 
 (* Based on the corpus in synth_stats_model *)
-(* let corpus_ints_90th_percentile = [0; 1; 2; 8; -1; 3; 4; 5; 10; 7; 16; 17; 255] *)
-(* let ints = corpus_ints_90th_percentile |>@ (fun int -> (Exp.int_lit int, Predef.type_int)) *)
+let corpus_ints_90th_percentile = [0; 1; 2; 8; -1; 3; 4; 5; 10; 7; 16; 17; 255]
+let ints = corpus_ints_90th_percentile |>@ (fun int -> (Exp.int_lit int, Predef.type_int))
 (* let ints = [(Exp.int_lit 0, Predef.type_int); (Exp.int_lit 1, Predef.type_int)] *)
-(* let strings = [(Exp.string_lit "", Predef.type_string)] *)
+let strings = [(Exp.string_lit "", Predef.type_string)]
 
 let is_channel typ =
   match (Type.regular typ).Types.desc with
@@ -492,15 +484,15 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
 
 
 
-(* let constants_at_type_seq hole_synth_env typ =
-  match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.constants_at_t with
+let constants_at_type_seq synth_env typ =
+  match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.constants_at_t with
   | Some seq -> seq
   | None ->
     (*
     print_endline @@ "Recomputing constants at " ^ Type.to_string typ(*  ^ "\n" ^ Type.to_string_raw typ ^ "\n" *);
     *)
-    (* ignore (List.assoc_by_opt (Type.equal_ignoring_id_and_scope ~show:true typ) hole_synth_env.constants_at_t); *)
-    (* print_endline (fst (List.split hole_synth_env.constants_at_t) |>@ Type.to_string_raw |> String.concat ", "); *)
+    (* ignore (List.assoc_by_opt (Type.equal_ignoring_id_and_scope ~show:true typ) synth_env.constants_at_t); *)
+    (* print_endline (fst (List.split synth_env.constants_at_t) |>@ Type.to_string_raw |> String.concat ", "); *)
     let lits =
       match (Type.regular typ).desc with
       | Types.Tvar _                                              -> ints @ strings
@@ -528,13 +520,13 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
         let target_is_var = Type.is_var_type typ in
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
         if SSet.mem name names_to_skip then out else
-        if SSet.mem name hole_synth_env.nonconstant_names then out else
+        if SSet.mem name synth_env.nonconstant_names then out else
         if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
         match Type.unify_opt desc.Types.val_type typ with
         | Some type' -> (Exp.simple_var name, type') :: out
         | None -> out
       in
-      Env.fold_values f None(* not looking in a nested module *) hole_synth_env.tenv []
+      Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
     in
     let ctors_at_type =
       let f {Types.cstr_name; cstr_arity; cstr_res; _} out =
@@ -544,22 +536,22 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
         | Some type' -> (Exp.construct (Longident.lident cstr_name) None, type') :: out
         | None -> out
       in
-      Env.fold_constructors f None(* not looking in a nested module *) hole_synth_env.tenv []
+      Env.fold_constructors f None(* not looking in a nested module *) synth_env.tenv []
     in
     let seq = List.to_seq (lits @ idents_at_type @ ctors_at_type) in
-    hole_synth_env.constants_at_t <- hole_synth_env.constants_at_t @ [(typ, seq)];
-    seq *)
+    synth_env.constants_at_t <- synth_env.constants_at_t @ [(typ, seq)];
+    seq
 
-(* let rec nonconstants_at_type_seq size_limit hole_synth_env (typ : Types.type_expr) =
-  if size_limit <= 0 || SSet.is_empty hole_synth_env.nonconstant_names then Seq.empty else
+let rec nonconstants_at_type_seq size_limit synth_env (typ : Types.type_expr) =
+  if size_limit <= 0 || SSet.is_empty synth_env.nonconstant_names then Seq.empty else
   let idents_at_type_seq =
-    match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.nonconstants_at_t with
+    match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.nonconstants_at_t with
     | Some seq -> seq
     | None ->
       (* print_endline @@ "Recomputing nonconstants at " ^ Type.to_string typ; *)
       let target_is_var = Type.is_var_type typ in
       let f name _path desc out =
-        if not (SSet.mem name hole_synth_env.nonconstant_names) then out else
+        if not (SSet.mem name synth_env.nonconstant_names) then out else
         if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
         if SSet.mem name names_to_skip then out else
         if target_is_var && Type.is_arrow_type desc.Types.val_type then out else (* Don't use unapplied functions at type 'a *)
@@ -568,48 +560,27 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
         | None -> out
       in
       let seq =
-        Env.fold_values f None(* not looking in a nested module *) hole_synth_env.tenv []
+        Env.fold_values f None(* not looking in a nested module *) synth_env.tenv []
         (* |> (fun names -> print_endline @@ String.concat " " (names |>@ Exp.to_string); names) *)
         |> List.to_seq
       in
-      hole_synth_env.nonconstants_at_t <- hole_synth_env.nonconstants_at_t @ [(typ, seq)];
+      synth_env.nonconstants_at_t <- synth_env.nonconstants_at_t @ [(typ, seq)];
       seq
   in
   let applys_seq () =
     if size_limit <= 2 then Seq.empty else
     let func_types_seq =
-      match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.funcs_that_can_produce_t with
+      match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) synth_env.funcs_that_can_produce_t with
       | Some func_types -> func_types
       | None ->
         (* print_endline @@ "Recomputing possible funcs/ctors at " ^ Type.to_string typ; *)
-        let rec can_produce_typ t = (* Returns number of args and func type unified with the desired return type. Need to explicitly remember number of args in case desired return type is an arrow. *)
-          let t = Type.regular t in
-          let try_right () =
-            begin match t.desc with
-            | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) ->
-              can_produce_typ t_r
-              |>&& begin fun (arg_count, t_r') ->
-                Type.(unify_mutating_opt (copy t) (arrow (new_var ()) t_r'))
-                |>& (fun t' -> (arg_count + 1, t'))
-              end
-            | _ -> None
-            end
-          in
-          begin match Type.unify_opt t typ with
-          | Some t ->
-            if not (Type.is_var_type typ && Type.is_arrow_type t) (* no partial applications at type 'a *)
-            then Some (0, t)
-            else try_right ()
-          | None -> try_right ()
-          end
-        in
         let values_folder name _path desc out =
           if is_imperative desc.Types.val_type then out else (* Don't use imperative functions *)
           if SSet.mem name names_to_skip then out else
           let name_type = Type.regular desc.Types.val_type in
           match name_type.desc with
           | Types.Tarrow (Asttypes.Nolabel, _arg_t, t_r, _) ->
-            begin match can_produce_typ t_r with
+            begin match Typing.can_produce_typ t_r typ with
             | Some (arg_count, t_r_unified_with_goal_ret_t) ->
               Type.(unify_mutating_opt (copy name_type) (arrow (new_var ()) t_r_unified_with_goal_ret_t))
               |>& (fun name_type' -> (* print_endline (name ^ " : " ^ Type.to_string name_type' ^ " for " ^ Type.to_string typ); *) (name, arg_count + 1, name_type') :: out )
@@ -624,7 +595,7 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
           (* Pretend ctors are arrows to reuse logic above (and below) *)
           let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
           (* print_endline @@ cstr_name ^ " : " ^ Type.to_string ctor_type_as_arrows ^ " vs " ^ Type.to_string_raw typ; *)
-          begin match can_produce_typ ctor_type_as_arrows with
+          begin match Typing.can_produce_typ ctor_type_as_arrows typ with
           | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
             (* print_endline cstr_name; *)
             if arg_count <> cstr_arity then out else (* Ctors must always be fully applied *)
@@ -634,9 +605,9 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
         in
         let func_types_seq =
           let list_of_name_args_func_type1 : (string * int * Types.type_expr) list =
-            Env.fold_values values_folder None(* not looking in a nested module *) hole_synth_env.tenv [] in
+            Env.fold_values values_folder None(* not looking in a nested module *) synth_env.tenv [] in
           let list_of_name_args_func_type2 : (string * int * Types.type_expr) list =
-            Env.fold_constructors ctors_folder None(* not looking in a nested module *) hole_synth_env.tenv [] in
+            Env.fold_constructors ctors_folder None(* not looking in a nested module *) synth_env.tenv [] in
           let gather (name, arg_count, func_type) out : (Types.type_expr * (int * string list ref)) list =
             match List.assoc_by_opt (Type.equal_ignoring_id_and_scope func_type) out with
             | None -> (func_type, (arg_count, ref [name])) :: out
@@ -645,7 +616,7 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
           List.fold_right gather (list_of_name_args_func_type1 @ list_of_name_args_func_type2) []
           |> List.to_seq
         in
-        hole_synth_env.funcs_that_can_produce_t <- hole_synth_env.funcs_that_can_produce_t @ [(typ, func_types_seq)];
+        synth_env.funcs_that_can_produce_t <- synth_env.funcs_that_can_produce_t @ [(typ, func_types_seq)];
         func_types_seq
     in
     func_types_seq
@@ -658,7 +629,7 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
         | (_::_::_) as flat_type ->
           let arg_t = List.nth flat_type arg_i_to_unify in
           let seq1 =
-            nonconstants_at_type_seq (size_limit-arg_count+1) hole_synth_env arg_t
+            nonconstants_at_type_seq (size_limit-arg_count+1) synth_env arg_t
             |> Seq.flat_map begin fun (arg, arg_t') ->
               let arg_size = exp_size arg in
               let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
@@ -672,7 +643,7 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
           in
           let seq2 () =
             if arg_count = 1 && not non_constant_used then Seq.empty else
-            constants_at_type_seq hole_synth_env arg_t
+            constants_at_type_seq synth_env arg_t
             |> Seq.flat_map begin fun (arg, arg_t') ->
               let func_type' = Type.unflatten_arrows @@ List.replace_nth arg_i_to_unify arg_t' flat_type in
               begin match Type.unify_opt func_type func_type' with
@@ -722,206 +693,53 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
   (* Try to avoid unnecessary type unification if we don't get that far in the sequence. *)
   Seq.append_lazy idents_at_type_seq applys_seq
   (* idents_at_type_seq *)
- *)
 
+let terms_tested_count = ref 0
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 (* prog should already have fillings applied to it *)
 
-let local_idents_at_loc loc tenv prog : (expression * Types.type_expr * lprob) list =
-  let local_names = Scope.names_at_loc loc prog in
-  let local_name_count = List.length local_names in
-  (* local_names *)
-  (* |>@& begin fun name -> (name, Typing.type_of_name name tenv)) *)
-  Stats_model.local_idents |>@& begin fun (nth, lprob) ->
-    if nth >= local_name_count then None else
-    let name = List.nth local_names nth in
-    Some
-      ( Exp.simple_var name
-      , Typing.type_of_name name tenv
-      , lprob
-      )
-  end
-
-let rec drop_n_args_from_arrow n typ =
-  if n <= 0 then typ else
-  begin match (Type.regular typ).desc with
-  | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) -> drop_n_args_from_arrow (n - 1) t_r
-  | _                                          -> failwith "huuuuuuh?"
-  end
-
-(* arg_count_remaining and arg_i are separate, to support partial applications. *)
-(* May be able to cache here (don't forget about lprob!) *)
-let rec args_seq hole_synth_env func_type arg_count_remaining arg_i min_lprob : (expression list * Types.type_expr * lprob) list =
-  if arg_count_remaining <= 0 then [([], func_type, lprob_1)] else
-  if min_lprob > lprob_1 then [] else
-  match Type.flatten_arrows func_type with
-  | (_::_::_) as flat_type ->
-    let arg_t = List.nth flat_type arg_i in
-    terms_at_type hole_synth_env arg_t min_lprob
-    |>@@ begin fun (arg, arg_t', lprob) ->
-      let func_type' = Type.copy func_type in
-      match Type.unify_mutating_opt (List.nth (Type.flatten_arrows func_type') arg_i) (Type.copy arg_t') with
-      | None   -> []
-      | Some _ ->
-        args_seq hole_synth_env func_type' (arg_count_remaining-1) (arg_i+1) (div_lprobs min_lprob lprob)
-        |>@ (fun (args_r, func_type'', later_lprob) -> (arg::args_r, func_type'', mult_lprobs later_lprob lprob))
-    end
-  | _ -> failwith "this shouldn't happen"
-
-
-and ctor_terms hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
-  (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
-  if min_lprob > lprob then [] else
-  let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
-  (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
-  match Typing.can_produce_typ ctor_type_as_arrows typ with
-  | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
-    if arg_count <> cstr_arity then [] else begin (* Ctors must always be fully applied *)
-      (* print_endline @@ Longident.to_string lid ^ "\t\t" ^ Type.to_string ctor_type_as_arrows_unified_with_goal_ret_t; *)
-      args_seq hole_synth_env ctor_type_as_arrows_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
-      |>@ begin fun (arg_terms, ctor_type_as_arrows', args_lprob) ->
-        let out_type = drop_n_args_from_arrow arg_count ctor_type_as_arrows' in
-        let ctor_arg =
-          match arg_count with
-          | 0 -> None
-          | 1 -> Some (List.hd arg_terms)
-          | _ -> Some (Exp.tuple arg_terms)
-        in
-        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
-        ( Exp.construct (Location.mknoloc lid) ctor_arg
-        , out_type
-        , mult_lprobs args_lprob lprob
-        )
-      end
-    end
-  | None ->
-    []
-
-and app_terms hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
-  (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
-  if min_lprob > lprob then [] else
-  let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
-  (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
-  match Typing.can_produce_typ ctor_type_as_arrows typ with
-  | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
-    if arg_count <> cstr_arity then [] else begin (* Ctors must always be fully applied *)
-      (* print_endline @@ Longident.to_string lid ^ "\t\t" ^ Type.to_string ctor_type_as_arrows_unified_with_goal_ret_t; *)
-      args_seq hole_synth_env ctor_type_as_arrows_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
-      |>@ begin fun (arg_terms, ctor_type_as_arrows', args_lprob) ->
-        let out_type = drop_n_args_from_arrow arg_count ctor_type_as_arrows' in
-        let ctor_arg =
-          match arg_count with
-          | 0 -> None
-          | 1 -> Some (List.hd arg_terms)
-          | _ -> Some (Exp.tuple arg_terms)
-        in
-        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
-        ( Exp.construct (Location.mknoloc lid) ctor_arg
-        , out_type
-        , mult_lprobs args_lprob lprob
-        )
-      end
-    end
-  | None ->
-    []
-
-and stdlib_ctors_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  stdlib_ctors |>@@ ctor_terms hole_synth_env typ min_lprob
-
-and nonstdlib_ctors_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  hole_synth_env.user_ctors |>@@ ctor_terms hole_synth_env typ min_lprob
-
-and ctors_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  List.concat
-    [ stdlib_ctors_at_type    hole_synth_env typ (div_lprobs min_lprob stdlib_ctor_lprob)    |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)
-    ; nonstdlib_ctors_at_type hole_synth_env typ (div_lprobs min_lprob nonstdlib_ctor_lprob) |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob)
-    ]
-
-and consts_at_type _hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  if Type.is_var_type typ then
-    List.concat
-      [ const_strs
-      ; const_ints
-      ; const_chars
-      ; const_floats
-      ]
-  else
-    if Type.is_string_type typ then const_strs   else
-    if Type.is_int_type    typ then const_ints   else
-    if Type.is_char_type   typ then const_chars  else
-    if Type.is_float_type  typ then const_floats else
-    []
-
-and apps_at_type _hole_synth_env _typ _min_lprob : (expression * Types.type_expr * lprob) list = []
-
-and ites_at_type _hole_synth_env _typ _min_lprob : (expression * Types.type_expr * lprob) list = []
-
-and idents_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  (hole_synth_env.local_idents @ stdlib_idents)
-  |>@& begin fun (exp, ident_t, lprob) ->
-    if lprob < min_lprob then None else
-    Type.unify_opt ident_t typ
-    |>& (fun t' -> (exp, t', lprob))
-  end
-
-and terms_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  List.concat
-    [ ctors_at_type  hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
-    ; consts_at_type hole_synth_env typ (div_lprobs min_lprob const_lprob) |>@ Tup3.map_thd (mult_lprobs const_lprob)
-    ; apps_at_type   hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
-    ; ites_at_type   hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
-    ; idents_at_type hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
-    ]
-
-let hole_fillings_seq (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env _reqs_on_hole _prog : (fillings * lprob) Seq.t =
-  let term_min_lprob = div_lprobs min_lprob lprob in
-  (* let terms_seq = *)
+let hole_fillings_seq fillings size_limit hole_loc static_hole_type tenv _reqs_on_hole prog : fillings Seq.t =
+  let terms_seq =
     (* let nonconstant_names = SSet.empty in *)
     (* print_endline (Loc.to_string hole_loc);
     print_endline (string_of_int (List.length reqs_on_hole));
     print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req)); *)
-    (* let nonconstant_names = nonconstant_names_at_loc hole_loc prog in *)
-  (* let hole_synth_env = new_hole_synth_env tenv in *)
-    (* Seq.append
-      (constants_at_type_seq hole_synth_env static_hole_type term_max_lprob term_min_lprob)
-      (nonconstants_at_type_seq size_limit hole_synth_env static_hole_type term_max_lprob term_min_lprob) *)
-  (* in *)
-  terms_at_type hole_synth_env static_hole_type term_min_lprob
-  |>@& begin fun (term, _term_t, term_lprob) ->
+    let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
+    let synth_env = new_synth_env nonconstant_names tenv in
+    Seq.append (constants_at_type_seq synth_env static_hole_type) (nonconstants_at_type_seq size_limit synth_env static_hole_type)
+  in
+  terms_seq
+  |> Seq.filter_map begin fun (term, _term_t) ->
     (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term ^ "\t" ^ Type.to_string term_t ^ "\t" ^ Type.to_string static_hole_type); *)
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
+    incr terms_tested_count;
+    (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
+    if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
     if true (* reqs_on_hole |> List.for_all (is_req_satisified_by fillings) *) then
-      Some (fillings, mult_lprobs term_lprob lprob)
+      Some fillings
     else
       None
   end
-  |> List.to_seq
 
 let is_hole { pexp_desc; _ } = match pexp_desc with Pexp_ident { txt = Longident.Lident "??"; _ } -> true | _ -> false
 let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? Exp.is_hole |>@ Exp.loc
 
-let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Seq.t =
+let e_guess fillings size_limit prog file_name : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
-  let rec fillings_seq (fillings, lprob) hole_locs : (fillings * lprob) Seq.t =
+  let rec fillings_seq fillings size_limit hole_locs : fillings Seq.t =
     match hole_locs with
-    | [] -> Seq.return (fillings, lprob)
+    | [] -> Seq.return fillings
     | hole_loc::rest ->
-      fillings_seq (fillings, lprob) rest
-      |> Seq.flat_map begin function (fillings, lprob) ->
+      fillings_seq fillings size_limit rest
+      |> Seq.flat_map begin function fillings ->
         (* print_endline "retyping prog"; *)
         let prog = apply_fillings fillings prog in
-        print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
+        (* print_endline @@ "Typing " ^ StructItems.to_string prog; *)
         let (typed_prog, _, _) =
-          try Typing.typedtree_sig_env_of_parsed prog file_name
+          try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
           with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
         in
         (* print_endline "done"; *)
@@ -932,25 +750,17 @@ let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Se
         | Some hole_typed_node ->
           (* let reqs' = reqs |>@@ push_down_req fillings in
           let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
-          let hole_synth_env =
-            { tenv         = hole_typed_node.exp_env
-            ; user_ctors   = user_ctors
-            ; local_idents = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
-            }
-          in
-          print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob);
-          hole_fillings_seq (fillings, lprob) min_lprob hole_loc hole_typed_node.exp_type hole_synth_env [] prog
+          hole_fillings_seq fillings size_limit hole_loc hole_typed_node.exp_type hole_typed_node.exp_env [] prog
         end
       end
   in
-  fillings_seq (fillings, lprob_1) hole_locs
-  |> Seq.filter (fun (_, lprob) -> lprob <= max_lprob)
-  |> Seq.map fst
+  List.init size_limit (fun i -> fillings_seq fillings (i+1) hole_locs)
+  |> Seq.concat
 
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
 (* If lambda is rhs of a lone binding, make the binding recursive. *)
-(* let refine prog fillings reqs file_name next =
+let refine prog fillings reqs file_name next =
   let reqs'           = reqs |>@@ push_down_req fillings in
   let hole_locs       = hole_locs prog fillings in
   let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false in
@@ -960,7 +770,7 @@ let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Se
   (* reqs' |> List.iter (string_of_req %> print_endline); *)
   let prog = apply_fillings fillings prog in
   let (_, _, tenv) =
-    try Typing.typedtree_sig_env_of_parsed prog file_name
+    try Typing.typedtree_sig_env_of_parsed prog file_name (* This SHOULD catch errors but some are slipping by... :/ *)
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let avoid_names = StructItems.deep_names prog in
@@ -1011,15 +821,13 @@ let e_guess fillings max_lprob min_lprob prog file_name user_ctors : fillings Se
     intro_lambda_seqs @ destruct_seqs
   end
   |> Seq.concat
- *)
 
 
-let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) prog reqs file_name user_ctors : fillings option =
-  if max_lprob < abort_lprob then None else
-  let min_lprob = mult_lprobs max_lprob (lprob 0.1) in
+
+let fill_holes prog reqs file_name : fillings option =
   Seq.concat
-    [ e_guess Loc_map.empty max_lprob min_lprob prog file_name user_ctors
-    (* ; refine prog Loc_map.empty reqs file_name
+    [ e_guess Loc_map.empty 7 prog file_name
+    ; refine prog Loc_map.empty reqs file_name
         (fun fillings -> e_guess fillings 6 prog file_name)
     ; refine prog Loc_map.empty reqs file_name
         (fun fillings -> refine prog fillings reqs file_name
@@ -1027,14 +835,10 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) prog reqs fi
     ; refine prog Loc_map.empty reqs file_name
         (fun fillings -> refine prog fillings reqs file_name
         (fun fillings -> refine prog fillings reqs file_name
-        (fun fillings -> e_guess fillings 6 prog file_name))) *)
+        (fun fillings -> e_guess fillings 6 prog file_name)))
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
-    incr terms_tested_count;
-    (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
-    if !terms_tested_count mod 1_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
-
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
     (* if String.includes "succ (length" code && String.includes "-> 0" code then begin
@@ -1048,8 +852,8 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) prog reqs fi
   (* Return first valid filling. *)
   |> begin fun seq ->
     match seq () with
+    | Seq.Nil -> None
     | Seq.Cons (fillings, _) -> Some fillings
-    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob prog reqs file_name user_ctors (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1086,27 +890,12 @@ let results prog _trace assert_results file_name =
   let reqs = assert_results |>@ req_of_assert_result in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  print_endline @@ "Typing " ^ StructItems.to_string prog;
-  let (_, _, final_tenv) =
-    try Typing.typedtree_sig_env_of_parsed prog file_name
-    with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-  in
-  let user_ctors =
-    let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
-    let user_ctor_descs =
-      Env.fold_constructors List.cons None(* not looking in a nested module *) final_tenv []
-      |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
-    in
-    user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
-      (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
-    end
-  in
-  print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
-  match fill_holes prog reqs file_name user_ctors with
+  match fill_holes prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [prog]
   | Some fillings' ->
     print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
+    (* Fill holes until fixpoint or bored. *)
     prog
     |> apply_fillings fillings'
     |> fun x -> [x]
@@ -1149,7 +938,7 @@ let try_async path =
   | pid ->
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 1;
+    Unix.sleep 15;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;

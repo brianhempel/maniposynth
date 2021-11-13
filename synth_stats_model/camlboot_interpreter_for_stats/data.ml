@@ -4,6 +4,115 @@ open Parsetree
 module SMap = Map.Make (String)
 module SSet = Set.Make (String)
 
+module Loc_map = Shared.Loc_map
+
+type var_kind
+  = FirstUse of int * string
+  | Reuse of int * string
+  | External of Longident.t
+
+type var_kind2
+  = NthInEnv of int * string
+  | External2 of Longident.t
+
+type stats = {
+  mutable name_expansions      : Longident.t Loc_map.t;
+  mutable var_uses             : var_kind Loc_map.t;
+  mutable var_uses2            : var_kind2 Loc_map.t;
+  mutable local_ident_count    : int;
+  mutable local_idents         : var_kind list;
+  mutable local_idents2        : var_kind2 list;
+  mutable external_ident_count : int;
+  mutable stdlib_idents        : Longident.t list;
+  mutable tup2_count           : int;
+  mutable tup3_count           : int;
+  mutable tup4_count           : int;
+  mutable tup5_count           : int;
+  mutable const_str_count      : int;
+  mutable const_strs           : expression list;
+  mutable const_int_count      : int;
+  mutable const_ints           : expression list;
+  mutable const_char_count     : int;
+  mutable const_chars          : expression list;
+  mutable const_float_count    : int;
+  mutable const_floats         : expression list;
+  mutable let_count            : int;
+  mutable fun_count            : int;
+  mutable app_count            : int;
+  mutable match_count          : int;
+  mutable ite_count            : int;
+  mutable stdlib_ctor_count    : int;
+  mutable stdlib_ctors         : Longident.t list;
+  mutable nonstdlib_ctor_count : int; (* include polymorphic variants *)
+  mutable record_count         : int;
+  mutable field_count          : int;
+}
+
+let empty_stats () =
+  { name_expansions      = Loc_map.empty
+  ; var_uses             = Loc_map.empty
+  ; var_uses2            = Loc_map.empty
+  ; local_ident_count    = 0
+  ; local_idents         = []
+  ; local_idents2        = []
+  ; external_ident_count = 0
+  ; stdlib_idents        = []
+  ; tup2_count           = 0
+  ; tup3_count           = 0
+  ; tup4_count           = 0
+  ; tup5_count           = 0
+  ; const_str_count      = 0
+  ; const_strs           = []
+  ; const_int_count      = 0
+  ; const_ints           = []
+  ; const_char_count     = 0
+  ; const_chars          = []
+  ; const_float_count    = 0
+  ; const_floats         = []
+  ; let_count            = 0
+  ; fun_count            = 0
+  ; app_count            = 0
+  ; match_count          = 0
+  ; ite_count            = 0
+  ; stdlib_ctor_count    = 0
+  ; stdlib_ctors         = []
+  ; nonstdlib_ctor_count = 0 (* include polymorphic variants *)
+  ; record_count         = 0
+  ; field_count          = 0
+  }
+
+(* Global stats *)
+let stats = empty_stats ()
+let clear_stats () =
+  stats.name_expansions      <- Loc_map.empty;
+  stats.var_uses             <- Loc_map.empty;
+  stats.local_ident_count    <- 0;
+  stats.local_idents         <- [];
+  stats.external_ident_count <- 0;
+  stats.stdlib_idents        <- [];
+  stats.tup2_count           <- 0;
+  stats.tup3_count           <- 0;
+  stats.tup4_count           <- 0;
+  stats.tup5_count           <- 0;
+  stats.const_str_count      <- 0;
+  stats.const_strs           <- [];
+  stats.const_int_count      <- 0;
+  stats.const_ints           <- [];
+  stats.const_char_count     <- 0;
+  stats.const_chars          <- [];
+  stats.const_float_count    <- 0;
+  stats.const_floats         <- [];
+  stats.let_count            <- 0;
+  stats.fun_count            <- 0;
+  stats.app_count            <- 0;
+  stats.match_count          <- 0;
+  stats.ite_count            <- 0;
+  stats.stdlib_ctor_count    <- 0;
+  stats.stdlib_ctors         <- [];
+  stats.nonstdlib_ctor_count <- 0; (* include polymorphic variants *)
+  stats.record_count         <- 0;
+  stats.field_count          <- 0;
+
 type module_unit_id = Path of string
 module UStore = Map.Make(struct
   type t = module_unit_id
@@ -67,9 +176,10 @@ and value_ =
 
 and fexpr = Location.t -> (arg_label * expression) list -> expression option
 
-and 'a env_map = (bool * 'a) SMap.t
+and 'a env_map = (string * (bool * Longident.t option * 'a)) list
 (* the boolean tracks whether the value should be exported in the
    output environment *)
+(* Longident is original source if var is imported from another module *)
 
 and env = {
   values : value_or_lvar env_map;
@@ -80,7 +190,7 @@ and env = {
 }
 
 and value_or_lvar =
-  | Value of value
+  | Value of (Location.t option ref * Location.t) (* most recent use, introduction location *)
   | Instance_variable of object_value * string
 
 and class_def = class_expr * env ref
@@ -91,10 +201,10 @@ and mdl =
   | Functor of string * module_expr * env
 
 and mdl_val = {
-    mod_values : value SMap.t;
-    mod_modules : mdl SMap.t;
-    mod_constructors : int SMap.t;
-    mod_classes : class_def SMap.t;
+    mod_values : (string * (Longident.t option * Location.t)) list; (* source module, introduction location *)
+    mod_modules : (string * (Longident.t option * mdl)) list;
+    mod_constructors : (string * (Longident.t option * int)) list;
+    mod_classes : (string * (Longident.t option * class_def)) list;
   }
 
 and module_unit_state =
@@ -381,14 +491,14 @@ let next_exn_id =
 
 exception No_module_data
 let get_module_data loc = function
-  | Module data -> data
-  | Functor _ ->
+  | (lid_opt, Module data) -> (lid_opt, data)
+  | (_, Functor _) ->
      Format.eprintf "%a@.Tried to access the components of a functor@."
        Location.print_loc loc;
      raise No_module_data
-  | Unit (unit_id, unit_state) ->
+  | (lid_opt, Unit (unit_id, unit_state)) ->
      begin match !unit_state with
-       | Initialized data -> data
+       | Initialized data -> (lid_opt, data)
        | exception Not_found ->
           Format.eprintf "%a@.Tried to access the undeclared unit %a@."
            Location.print_loc loc
