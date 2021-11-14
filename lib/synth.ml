@@ -442,6 +442,7 @@ let nonconstant_names_at_loc target_loc prog =
 
 type hole_synth_env =
     { tenv              : Env.t
+    ; hole_type         : Types.type_expr
     ; user_ctors        : (Longident.t * Types.constructor_description * lprob) list
     ; nonconstant_names : SSet.t
     ; local_idents      : (expression * Types.type_expr * lprob) list
@@ -999,48 +1000,60 @@ let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog req
 let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name user_ctors : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
-  (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
-  let rec fillings_seq (fillings, lprob) min_lprob hole_locs : (fillings * lprob) Seq.t =
-    match hole_locs with
-    | [] -> Seq.return (fillings, lprob)
-    | hole_loc::rest ->
-      fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
-      |> Seq.flat_map begin fun (fillings, lprob) ->
-        (* print_endline "retyping prog"; *)
-        let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
-        progs
-        |> List.to_seq
-        |> Seq.flat_map begin fun prog ->
-          (* print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob; *)
-          let (typed_prog, _, _) =
-            try Typing.typedtree_sig_env_of_parsed prog file_name
-            with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-          in
-          (* print_endline "done"; *)
-          begin match Typing.find_exp_by_loc hole_loc typed_prog with
-          | None ->
-            (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
-            Seq.empty
+  let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
+  let prog_and_typed_progs =
+    progs
+    |>@ begin fun prog ->
+      print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
+      let (typed_prog, _, _) =
+        try Typing.typedtree_sig_env_of_parsed prog file_name
+        with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
+                    (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+      in
+      (prog, typed_prog)
+    end
+  in
+  let hole_locs_progs_and_synth_envs : (Location.t * (program * hole_synth_env) Seq.t) list =
+    hole_locs
+    |>@ begin fun hole_loc ->
+      let progs_and_synth_envs =
+        prog_and_typed_progs |>@@ begin fun (prog, typed_prog) ->
+          match Typing.find_exp_by_loc hole_loc typed_prog with
+          | None -> []
           | Some hole_typed_node ->
             (* let reqs' = reqs |>@@ push_down_req fillings in
             let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
-            let hole_synth_env =
-              { tenv              = hole_typed_node.exp_env
-              ; user_ctors        = user_ctors
-              ; nonconstant_names = nonconstant_names_at_loc hole_loc prog
-              ; local_idents      = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
-              }
-            in
-            (* print_endline (hole_loc |> Loc.to_string); *)
-            (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
-            (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
             (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
-            hole_fillings_seq ~cant_be_constant:false (fillings, lprob) min_lprob hole_loc hole_typed_node.exp_type hole_synth_env [] prog
-          end
+            [ ( prog
+              , { tenv              = hole_typed_node.exp_env
+                ; hole_type         = hole_typed_node.exp_type
+                ; user_ctors        = user_ctors
+                ; nonconstant_names = nonconstant_names_at_loc hole_loc prog
+                ; local_idents      = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+                }
+              )
+            ]
         end
+      in
+      (hole_loc, List.to_seq progs_and_synth_envs)
+    end
+  in
+  (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
+  let rec fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs : (fillings * lprob) Seq.t =
+    match hole_locs_progs_and_synth_envs with
+    | [] -> Seq.return (fillings, lprob)
+    | (hole_loc, prog_and_synth_envs)::rest ->
+      fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
+      |> Seq.flat_map begin fun (fillings, lprob) ->
+        (* print_endline "retyping prog"; *)
+        (* progs *)
+        prog_and_synth_envs
+        |> Seq.flat_map begin fun (prog, hole_synth_env) ->
+            hole_fillings_seq ~cant_be_constant:false (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env [] prog
+          end
       end
   in
-  fillings_seq (fillings, lprob) min_lprob hole_locs
+  fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs
   |> Seq.filter (fun (_, lprob) -> lprob <= max_lprob)
   |> Seq.map fst
 
@@ -1136,7 +1149,7 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
-    if !terms_tested_count mod 100 = 0 then begin
+    if !terms_tested_count mod 1_000 = 0 then begin
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
     end;
@@ -1267,7 +1280,7 @@ let try_async path =
   | pid ->
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 600;
+    Unix.sleep 60;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;
