@@ -791,7 +791,7 @@ let rec args_seq ~cant_be_constant hole_synth_env func_type arg_count_remaining 
       | None   -> []
       | Some _ ->
         let remainder_cant_be_constant =
-          cant_be_constant && (not term_cant_be_constant (* <-- a cheaper check *) || is_constant hole_synth_env arg)
+          cant_be_constant && is_constant hole_synth_env arg
         in
         args_seq ~cant_be_constant:remainder_cant_be_constant hole_synth_env func_type' (arg_count_remaining-1) (arg_i+1) (div_lprobs min_lprob lprob)
         |>@ (fun (args_r, func_type'', later_lprob) -> (arg::args_r, func_type'', mult_lprobs later_lprob lprob))
@@ -1056,13 +1056,14 @@ let refine prog (fillings, lprob) reqs file_name next =
   (* hole_locs |> List.iter (Loc.to_string %> print_endline); *)
   (* reqs' |> List.iter (string_of_req %> print_endline); *)
   let prog = apply_fillings fillings prog in
-  let (_, _, tenv) =
+  let (typed_prog, _, tenv) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let avoid_names = StructItems.deep_names prog in
   hole_locs
   |>@@ begin fun hole_loc ->
+    match Typing.find_exp_by_loc hole_loc typed_prog with None -> [] | Some hole_typed_node ->
     let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
     (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
     if reqs_on_hole = [] then [] else
@@ -1079,9 +1080,11 @@ let refine prog (fillings, lprob) reqs file_name next =
         []
     in
     let destruct_seqs =
-      nonconstant_names_at_loc hole_loc prog
-      |> SSet.elements
-      |>@@ begin fun scrutinee_name ->
+      let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
+      local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+      |>@& (fun (e, _t, scrutinee_lprob) -> Exp.simple_name e |>& fun name -> (name, scrutinee_lprob))
+      |>@? (fun (name, _) -> SSet.mem name nonconstant_names)
+      |>@@ begin fun (scrutinee_name, scrutinee_lprob) ->
         let ctor_type_path_opts_at_name =
           (* Ensure the name is always a ctor... *)
           reqs_on_hole
@@ -1101,7 +1104,7 @@ let refine prog (fillings, lprob) reqs file_name next =
         | Some [type_path] ->
           let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
           let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
-          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs match_lprob lprob) ]
+          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs scrutinee_lprob (mult_lprobs match_lprob lprob)) ]
         | _ -> []
       end
     in
@@ -1264,7 +1267,7 @@ let try_async path =
   | pid ->
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 15;
+    Unix.sleep 600;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;
