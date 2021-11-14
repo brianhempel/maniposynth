@@ -1176,9 +1176,9 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
     [ e_guess (Loc_map.empty, lprob_1)
     ; refine prog (Loc_map.empty, lprob_1) reqs file_name
         (fun (fillings, lprob) -> e_guess (fillings, lprob))
-    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+    (* ; refine prog (Loc_map.empty, lprob_1) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
-        (fun (fillings, lprob) -> e_guess (fillings, lprob)))
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))) *)
     (* ; refine prog (Loc_map.empty, lprob_1) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
