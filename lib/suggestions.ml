@@ -44,9 +44,9 @@ let ctors_in_modules tenv mods =
   mods |>@@ (fun module_lid_opt -> Env.fold_constructors f module_lid_opt tenv [])
 
 let should_ignore typ name =
-  Synth.is_imperative typ (* Don't use imperative functions *)
-  || SSet.mem name Synth.unimplemented_prim_names (* Interpreter doesn't implement some primitives *)
-  || SSet.mem name Synth.dont_bother_names
+  Stats_model.is_imperative typ (* Don't use imperative functions *)
+  || SSet.mem name Stats_model.unimplemented_prim_names (* Interpreter doesn't implement some primitives *)
+  || SSet.mem name Stats_model.dont_bother_names
 
 let var_names_in_modules tenv mods =
   let f name path desc out =
