@@ -804,6 +804,10 @@ and ctor_terms ~cant_be_constant hole_synth_env typ min_lprob (lid, { Types.cstr
   (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
   if min_lprob > lprob then [] else
   let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
+  (* print_endline @@ (Type.to_string typ); *)
+  (* print_endline @@ (Type.to_string ctor_type_as_arrows); *)
+  (* print_endline @@ (Typing.can_produce_typ ctor_type_as_arrows typ <> None |> string_of_bool); *)
+  (* ignore (exit 0); *)
   (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
   match Typing.can_produce_typ ctor_type_as_arrows typ with
   | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
@@ -997,7 +1001,7 @@ let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog req
 
 
 
-let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name user_ctors : fillings Seq.t =
+let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name : fillings Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
   let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
@@ -1024,11 +1028,24 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
             (* let reqs' = reqs |>@@ push_down_req fillings in
             let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
             (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
+            let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
+            let user_ctors =
+              let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
+              let user_ctor_descs =
+                Env.fold_constructors List.cons None(* not looking in a nested module *) typed_prog.str_final_env []
+                |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
+              in
+              user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
+                (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
+              end
+            in
+            print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
+            print_endline @@ "Nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", ");
             [ ( prog
               , { tenv              = hole_typed_node.exp_env
                 ; hole_type         = hole_typed_node.exp_type
                 ; user_ctors        = user_ctors
-                ; nonconstant_names = nonconstant_names_at_loc hole_loc prog
+                ; nonconstant_names = nonconstant_names
                 ; local_idents      = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
                 }
               )
@@ -1127,12 +1144,12 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 
 
-let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_typed prog reqs file_name user_ctors : fillings option =
+let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_typed prog reqs file_name : fillings option =
   if max_lprob < abort_lprob then (print_endline "aborting"; None) else
   let min_lprob = mult_lprobs max_lprob (lprob 0.02) in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
-    e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name user_ctors
+    e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
   in
   Seq.concat
     [ e_guess (Loc_map.empty, lprob_1)
@@ -1141,10 +1158,10 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
     ; refine prog (Loc_map.empty, lprob_1) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
         (fun (fillings, lprob) -> e_guess (fillings, lprob)))
-    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+    (* ; refine prog (Loc_map.empty, lprob_1) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
         (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
-        (fun (fillings, lprob) -> e_guess (fillings, lprob))))
+        (fun (fillings, lprob) -> e_guess (fillings, lprob)))) *)
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function fillings ->
@@ -1170,7 +1187,7 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
   |> begin fun seq ->
     match seq () with
     | Seq.Cons (fillings, _) -> Some fillings
-    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob lookup_exp_typed prog reqs file_name user_ctors (* Keep trying, with lower prob threshold. *)
+    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob lookup_exp_typed prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1208,23 +1225,12 @@ let results prog _trace assert_results file_name =
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   print_endline @@ "Typing " ^ StructItems.to_string prog;
-  let (typed_struct, _, final_tenv) =
+  let (typed_struct, _, _) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-  let user_ctors =
-    let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
-    let user_ctor_descs =
-      Env.fold_constructors List.cons None(* not looking in a nested module *) final_tenv []
-      |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
-    in
-    user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
-      (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
-    end
-  in
-  print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
-  match fill_holes type_lookups.lookup_exp prog reqs file_name user_ctors with
+  match fill_holes type_lookups.lookup_exp prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [prog]
   | Some fillings' ->

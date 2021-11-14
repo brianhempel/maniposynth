@@ -155,6 +155,7 @@ let type_of_name name tenv =
 let rec can_produce_typ t target_t =
   let t = Type.regular t in
   let try_right () =
+    (* print_endline "try_right"; *)
     begin match t.desc with
     | Types.Tarrow (Asttypes.Nolabel, _, t_r, _) ->
       can_produce_typ t_r target_t
@@ -167,6 +168,7 @@ let rec can_produce_typ t target_t =
   in
   begin match Type.unify_opt t target_t with
   | Some t ->
+    (* print_endline "unify1 success"; *)
     if not (Type.is_var_type target_t && Type.is_arrow_type t) (* no partial applications at type 'a *)
     then Some (0, t)
     else try_right ()
