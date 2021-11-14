@@ -442,11 +442,13 @@ let nonconstant_names_at_loc target_loc prog =
     SSet.of_list names
 
 type hole_synth_env =
-    { tenv              : Env.t
-    ; hole_type         : Types.type_expr
-    ; user_ctors        : (Longident.t * Types.constructor_description * lprob) list
-    ; nonconstant_names : SSet.t
-    ; local_idents      : (expression * Types.type_expr * lprob) list
+    { tenv                               : Env.t
+    ; hole_type                          : Types.type_expr
+    ; user_ctors                         : (Longident.t * Types.constructor_description * lprob) list
+    ; nonconstant_names                  : SSet.t
+    ; local_idents                       : (expression * Types.type_expr * lprob) list
+    ; mutable nonconstant_idents_at_type : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
+    ; mutable idents_at_type             : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     }
 (* type hole_synth_env =
     { nonconstant_names                : SSet.t
@@ -751,6 +753,14 @@ let names_to_skip = SSet.union_all [unimplemented_prim_names; dont_bother_names;
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 (* prog should already have fillings applied to it *)
 
+let build_cache_list typ idents =
+  idents
+  |>@& begin fun (exp, ident_t, lprob) ->
+    Type.unify_opt ident_t typ
+    |>& (fun t' -> (exp, t', lprob))
+  end
+  |> List.sort_by (fun (_, _, lprob) -> -.lprob)
+
 let local_idents_at_loc loc tenv prog : (expression * Types.type_expr * lprob) list =
   let local_names = Scope.names_at_loc loc prog in
   let local_name_count = List.length local_names in
@@ -898,16 +908,32 @@ and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression 
   if min_lprob > lprob_1 then [] else
   (* (hole_synth_env.local_idents @ stdlib_idents) *)
   begin if cant_be_constant then
-    hole_synth_env.local_idents
-    |>@? (fun (e, _, _) -> SSet.mem (Exp.simple_name e ||& "") hole_synth_env.nonconstant_names)
+    begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.nonconstant_idents_at_type with
+    | None ->
+      let idents =
+        hole_synth_env.local_idents
+        |>@? (fun (e, _, _) -> SSet.mem (Exp.simple_name e ||& "") hole_synth_env.nonconstant_names)
+        |> build_cache_list typ
+      in
+      hole_synth_env.nonconstant_idents_at_type <- (typ, idents)::hole_synth_env.nonconstant_idents_at_type;
+      idents
+    | Some idents -> idents
+    end
   else
-    hole_synth_env.local_idents @ pervasives_pure_idents_only
+    begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.idents_at_type with
+    | None ->
+      let idents = build_cache_list typ (hole_synth_env.local_idents @ pervasives_pure_idents_only) in
+      hole_synth_env.idents_at_type <- (typ, idents)::hole_synth_env.idents_at_type;
+      idents
+    | Some idents -> idents
+    end
   end
-  |>@& begin fun (exp, ident_t, lprob) ->
+  |> List.take_while (fun (_, _, lprob) -> lprob >= min_lprob)
+  (* |>@& begin fun (exp, ident_t, lprob) ->
     if lprob < min_lprob then None else
     Type.unify_opt ident_t typ
     |>& (fun t' -> (exp, t', lprob))
-  end
+  end *)
 
 and terms_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
@@ -1062,11 +1088,13 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
             print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
             print_endline @@ "Nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", ");
             [ ( prog
-              , { tenv              = hole_typed_node.exp_env
-                ; hole_type         = hole_typed_node.exp_type
-                ; user_ctors        = user_ctors
-                ; nonconstant_names = nonconstant_names
-                ; local_idents      = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+              , { tenv                       = hole_typed_node.exp_env
+                ; hole_type                  = hole_typed_node.exp_type
+                ; user_ctors                 = user_ctors
+                ; nonconstant_names          = nonconstant_names
+                ; local_idents               = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+                ; nonconstant_idents_at_type = []
+                ; idents_at_type             = []
                 }
               )
             ]

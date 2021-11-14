@@ -183,7 +183,7 @@ let rec eval_expr prims env expr : unit =
       | Value ({ contents = None } as last_use_ref, _intro_loc), None ->
         (* Var is unqualified. First use. *)
         (* Count the number of unused vars before it in the env *)
-        let newer_env_vars, _ = env.values |> List.take_while (fun (k, _) -> name <> k) in
+        let newer_env_vars = env.values |> List.take_while (fun (k, _) -> name <> k) in
         let newer_unused_count =
           let count = ref 0 in
           newer_env_vars |> List.iter begin fun (_, (_exported, source_mod_path, val_or_lvar)) ->
@@ -205,7 +205,7 @@ let rec eval_expr prims env expr : unit =
       | Value ({ contents = Some var_most_recent_use_loc } as last_use_ref, _intro_loc), None ->
         (* Var is unqualified. Reuse *)
         (* Sort the env variables by most recent use locations and mark the var as a copy of nth most recently used variable *)
-        let more_recently_used_vars, _=
+        let more_recently_used_vars =
           env.values
           |>@& begin fun (name, (_exported, source_mod_path, val_or_lvar)) ->
             match val_or_lvar with

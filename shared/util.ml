@@ -126,15 +126,13 @@ module List = struct
 
   let suffix len list = drop (length list - len) list
 
-  let rec take_while pred list =
-    match list with
-    | [] -> ([], [])
-    | x::rest ->
-      if pred x then
-        let (matches, rest') = take_while pred rest in
-        (x::matches, rest')
-      else
-        ([], list)
+  let take_while pred list =
+    let rec loop out list =
+      match list with
+      | x::rest when pred x -> loop (x::out) rest
+      | _                   -> out
+    in
+    loop [] list
 
   let rec replace_nth i new_elem = function
     | [] -> raise (Invalid_argument "List.replace_nth called on a list that is too short")
