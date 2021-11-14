@@ -125,8 +125,9 @@ let names_to_skip            = SSet.union_all [unimplemented_prim_names; dont_bo
 
 
 
-let stdlib_ctors : (Longident.t * Types.constructor_description * lprob) list =
+let stdlib_ctors : (Longident.t * Types.constructor_description * lprob) Seq.t =
   let ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
+  List.to_seq @@
   begin fun lid_and_counts ->
     lid_and_counts |>@& begin fun (lid_str, count) ->
       match Longident.parse lid_str, List.find_opt (fun { Types.cstr_name; _ } -> cstr_name = lid_str) ctor_descs with
@@ -171,7 +172,8 @@ let stdlib_ctors : (Longident.t * Types.constructor_description * lprob) list =
   ; ("Arg.Clear", 1)
   ]
 
-let const_strs : (expression * Types.type_expr * lprob) list =
+let const_strs : (expression * Types.type_expr * lprob) Seq.t =
+  List.to_seq @@
   begin fun str_str_and_counts ->
     str_str_and_counts |>@ begin fun (str_str, count) ->
       ( Exp.from_string str_str
@@ -945,17 +947,18 @@ let const_strs : (expression * Types.type_expr * lprob) list =
 
 let const_strs_3_chars_or_less =
   const_strs
-  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 3)
+  |> Seq.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 3)
 
 let const_strs_2_chars_or_less =
   const_strs
-  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 2)
+  |> Seq.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 2)
 
 let const_strs_1_char_or_less =
   const_strs
-  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 1)
+  |> Seq.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 1)
 
-let const_ints : (expression * Types.type_expr * lprob) list =
+let const_ints : (expression * Types.type_expr * lprob) Seq.t =
+  List.to_seq @@
   begin fun int_str_and_counts ->
     int_str_and_counts |>@ begin fun (int_str, count) ->
       ( Exp.from_string int_str
@@ -1103,7 +1106,8 @@ let const_ints : (expression * Types.type_expr * lprob) list =
   ]
   (* Eliding ints that occur more rarely (not accounted for in counts...oh well it's stats) *)
 
-let const_chars : (expression * Types.type_expr * lprob) list =
+let const_chars : (expression * Types.type_expr * lprob) Seq.t =
+  List.to_seq @@
   begin fun char_str_and_counts ->
     char_str_and_counts |>@ begin fun (char_str, count) ->
       ( Exp.from_string char_str
@@ -1186,7 +1190,8 @@ let const_chars : (expression * Types.type_expr * lprob) list =
   ; ("'!'", 1) *)
   ]
 
-let const_floats : (expression * Types.type_expr * lprob) list =
+let const_floats : (expression * Types.type_expr * lprob) Seq.t =
+  List.to_seq @@
   begin fun float_str_and_counts ->
     float_str_and_counts |>@ begin fun (float_str, count) ->
       ( Exp.from_string float_str
@@ -1213,7 +1218,8 @@ let const_floats : (expression * Types.type_expr * lprob) list =
   ]
 
 (* Keyed by how recently introduced. *)
-let local_idents : (int * lprob) list =
+let local_idents : (int * lprob) Seq.t =
+  List.to_seq @@
   begin fun nth_str_and_counts ->
     nth_str_and_counts |>@ begin fun (nth_str, count) ->
       ( nth_str |> String.drop_prefix "NthInEnv " |> int_of_string
@@ -1334,7 +1340,8 @@ let local_idents : (int * lprob) list =
   ]
   (* Eliding rarer (not accounted for in counts...oh well it's stats) *)
 
-let stdlib_idents : (expression * Types.type_expr * lprob) list =
+let stdlib_idents : (expression * Types.type_expr * lprob) Seq.t =
+  List.to_seq @@
   begin fun indent_str_and_counts ->
     indent_str_and_counts
     |>@? (fun (ident_str, _) -> not @@ SSet.mem ident_str names_to_skip)
@@ -1631,19 +1638,19 @@ let stdlib_idents : (expression * Types.type_expr * lprob) list =
 
 let stdlib_pure_idents =
   stdlib_idents
-  |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
+  |> Seq.filter (fun (_, typ, _) -> not (is_imperative typ))
 
 let pervasives_idents_only =
   stdlib_idents
-  |> List.filter (fun (exp, _, _) -> Exp.is_simple_name exp)
+  |> Seq.filter (fun (exp, _, _) -> Exp.is_simple_name exp)
 
 let pervasives_pure_idents_only =
   pervasives_idents_only
-  |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
+  |> Seq.filter (fun (_, typ, _) -> not (is_imperative typ))
 
 
 (* Use this to reserve probability for other holes! *)
 let max_single_term_lprob =
-  match local_idents with
+  match local_idents |> List.of_seq with
   | (_, best_local_ident_given_ident_lprob)::_ -> mult_lprobs ident_lprob best_local_ident_given_ident_lprob
   | _ -> failwith "asjndvoisehbvbhskdjvfkjdfs"
