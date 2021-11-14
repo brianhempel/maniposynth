@@ -694,9 +694,27 @@ and apps_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * 
       []
   end *)
 
-and ites_at_type ~cant_be_constant _hole_synth_env _typ _min_lprob : (expression * Types.type_expr * lprob) list =
-  let _ = cant_be_constant in []
-  (* if min_lprob > lprob_1 then [] else *)
+and ites_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
+  if min_lprob > max_single_term_lprob *. 3.0 then [] else
+  let else_terms =
+    terms_at_type ~cant_be_constant:false hole_synth_env typ (div_lprobs min_lprob (max_single_term_lprob *. 2.0))
+  in
+  else_terms
+  |>@@ begin fun (else_term, else_t, else_lprob) ->
+    let then_terms =
+      terms_at_type ~cant_be_constant:(cant_be_constant && is_constant hole_synth_env else_term) hole_synth_env else_t (div_lprobs min_lprob (mult_lprobs else_lprob max_single_term_lprob))
+    in
+    then_terms
+    |>@@ begin fun (then_term, then_t, then_lprob) ->
+      let conditional_terms =
+        terms_at_type ~cant_be_constant:true hole_synth_env Predef.type_bool (div_lprobs min_lprob (mult_lprobs else_lprob then_lprob))
+      in
+      conditional_terms
+      |>@@ begin fun (cond_term, _, cond_lprob) ->
+        [(Exp.ifthenelse cond_term then_term (Some else_term), then_t, mult_lprobs cond_lprob (mult_lprobs else_lprob then_lprob))]
+      end
+    end
+  end
 
 
 and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
