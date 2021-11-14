@@ -1120,7 +1120,7 @@ let const_chars : (expression * Types.type_expr * lprob) list =
   ; ("'%'", 12)
   ; ("'.'", 11)
   ; ("'\\000'", 10)
-  ; ("'+'", 9)
+  (*; ("'+'", 9)
   ; ("'a'", 8)
   ; ("'\"'", 8)
   ; ("'\\t'", 7)
@@ -1154,7 +1154,7 @@ let const_chars : (expression * Types.type_expr * lprob) list =
   ; ("'['", 2)
   ; ("'L'", 2)
   ; ("'('", 2)
-  (* ; ("'}'", 1)
+  ; ("'}'", 1)
   ; ("'|'", 1)
   ; ("'u'", 1)
   ; ("'o'", 1)
@@ -1200,7 +1200,7 @@ let const_floats : (expression * Types.type_expr * lprob) list =
   ; ("0.", 11)
   ; ("0.5", 5)
   ; ("10.", 3)
-  ; ("8.", 2)
+  (* ; ("8.", 2)
   ; ("1024.", 2)
   ; ("1.", 2)
   ; ("0.33333", 2)
@@ -1209,7 +1209,7 @@ let const_floats : (expression * Types.type_expr * lprob) list =
   ; ("1e3", 1)
   ; ("1073741824.0", 1)
   ; ("0x1.921fb54442d18p+1", 1)
-  ; ("0.1", 1)
+  ; ("0.1", 1) *)
   ]
 
 (* Keyed by how recently introduced. *)
@@ -1629,6 +1629,10 @@ let stdlib_idents : (expression * Types.type_expr * lprob) list =
   ]
   (* Eliding rarer (not accounted for in counts...oh well it's stats) *)
 
+let stdlib_pure_idents =
+  stdlib_idents
+  |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
+
 let pervasives_idents_only =
   stdlib_idents
   |> List.filter (fun (exp, _, _) -> Exp.is_simple_name exp)
@@ -1636,7 +1640,6 @@ let pervasives_idents_only =
 let pervasives_pure_idents_only =
   pervasives_idents_only
   |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
-
 
 
 (* Use this to reserve probability for other holes! *)

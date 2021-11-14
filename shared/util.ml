@@ -249,6 +249,10 @@ module List = struct
   let max = function
     | x::xs -> List.fold_left max x xs
     | []    -> raise @@ Invalid_argument "List.max needs to be given a non-empty list"
+
+  let min = function
+    | x::xs -> List.fold_left min x xs
+    | []    -> raise @@ Invalid_argument "List.max needs to be given a non-empty list"
 end
 
 module Seq = struct
@@ -419,8 +423,8 @@ let executable_dir = Filename.dirname Sys.executable_name
 let nativize_path = String.replace "/" Filename.dir_sep
 
 let rec ensure_dir path =
-  if Filename.dirname path <> "." then ensure_dir (Filename.dirname path);
-  try Unix.mkdir path 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
+  if Filename.dirname path <> "." && Filename.dirname path <> "/" then ensure_dir (Filename.dirname path);
+  try if Filename.basename path <> "." && Filename.basename path <> "/" then Unix.mkdir path 0o700 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
 
 (* https://stackoverflow.com/a/53840784 *)
 let string_of_file path =

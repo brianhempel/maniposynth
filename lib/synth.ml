@@ -15,6 +15,7 @@ open Stats_model
 *)
 
 let terms_tested_count = ref 0
+let timeout_secs       = 10.0
 
 type fillings = expression Loc_map.t
 
@@ -997,26 +998,45 @@ let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog req
   end
   |> List.dedup_by StructItems.to_string
 
+let count_type_var_annotations (prog, typed_prog) =
+  let n = ref 0 in
+  prog
+  |> Exp.iter begin function
+    | { pexp_desc = Pexp_constraint (_, core_type); _} -> n := !n + (core_type |> Type.from_core_type ~env:typed_prog.Typedtree.str_final_env |> Type.flatten |> List.count Type.is_var_type)
+    | _ -> ()
+  end;
+  prog
+  |> Pat.iter begin function
+    | { ppat_desc = Ppat_constraint (_, core_type); _} -> n := !n + (core_type |> Type.from_core_type ~env:typed_prog.Typedtree.str_final_env |> Type.flatten |> List.count Type.is_var_type)
+    | _ -> ()
+  end;
+  !n
 
 
-
-
-let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name : fillings Seq.t =
+let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name : (fillings * lprob) Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
   let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
+  print_endline @@ string_of_int (List.length progs) ^ " programs";
   let prog_and_typed_progs =
-    progs
-    |>@ begin fun prog ->
-      print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
-      let (typed_prog, _, _) =
-        try Typing.typedtree_sig_env_of_parsed prog file_name
-        with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-                    (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
-      in
-      (prog, typed_prog)
-    end
+    let progs' =
+      progs
+      |>@ begin fun prog ->
+        print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
+        let (typed_prog, _, _) =
+          try Typing.typedtree_sig_env_of_parsed prog file_name
+          with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
+                      (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+        in
+        (prog, typed_prog)
+      end
+    in
+    (* Only keep progs with a minium number of type vars in the added annotations. *)
+    let min_type_var_annotations_count = progs' |>@ count_type_var_annotations |> List.fold_left min max_int in
+    progs'
+    |>@? (count_type_var_annotations %> (=) min_type_var_annotations_count)
   in
+  print_endline @@ string_of_int (List.length prog_and_typed_progs) ^ " programs will be used";
   let hole_locs_progs_and_synth_envs : (Location.t * (program * hole_synth_env) Seq.t) list =
     hole_locs
     |>@ begin fun hole_loc ->
@@ -1064,6 +1084,7 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
       |> Seq.flat_map begin fun (fillings, lprob) ->
         (* print_endline "retyping prog"; *)
         (* progs *)
+        (* ignore (exit 0); *)
         prog_and_synth_envs
         |> Seq.flat_map begin fun (prog, hole_synth_env) ->
             hole_fillings_seq ~cant_be_constant:false (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env [] prog
@@ -1072,7 +1093,6 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
   in
   fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs
   |> Seq.filter (fun (_, lprob) -> lprob <= max_lprob)
-  |> Seq.map fst
 
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
@@ -1144,9 +1164,10 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 
 
-let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_typed prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed prog reqs file_name : fillings option =
+  if hole_locs prog Loc_map.empty = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob < abort_lprob then (print_endline "aborting"; None) else
-  let min_lprob = mult_lprobs max_lprob (lprob 0.02) in
+  let min_lprob = mult_lprobs max_lprob (lprob 0.05) in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
     e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
@@ -1164,7 +1185,7 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
         (fun (fillings, lprob) -> e_guess (fillings, lprob)))) *)
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
-  |> Seq.filter begin function fillings ->
+  |> Seq.filter begin function (fillings, _lprob) ->
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
     if !terms_tested_count mod 1_000 = 0 then begin
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
@@ -1172,7 +1193,6 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
     end;
     incr terms_tested_count;
     (* ignore (exit 0); *)
-
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
     (* if String.includes "succ (length" code && String.includes "-> 0" code then begin
@@ -1186,8 +1206,15 @@ let rec fill_holes ?(max_lprob = lprob_1) ?(abort_lprob = -10000.0) lookup_exp_t
   (* Return first valid filling. *)
   |> begin fun seq ->
     match seq () with
-    | Seq.Cons (fillings, _) -> Some fillings
-    | Seq.Nil                -> fill_holes ~max_lprob:min_lprob lookup_exp_typed prog reqs file_name (* Keep trying, with lower prob threshold. *)
+    | Seq.Cons (fillings_lprob, rest) ->
+      (* We have one candidate, but it might not be the most probable of the batch, so grab the rest. *)
+      let candidates = fillings_lprob :: List.of_seq rest in
+      candidates |> List.sort_by snd |> List.last_opt |>& fst
+    | Seq.Nil ->
+      if Unix.time () -. start_sec > timeout_secs then
+        (print_endline "Synth timeout"; None)
+      else
+        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1230,7 +1257,7 @@ let results prog _trace assert_results file_name =
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-  match fill_holes type_lookups.lookup_exp prog reqs file_name with
+  match fill_holes start_sec type_lookups.lookup_exp prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
   | None -> print_endline "synth failed"; [prog]
   | Some fillings' ->
@@ -1241,9 +1268,13 @@ let results prog _trace assert_results file_name =
 
 let try_async path =
   if Unix.fork () = 0 then () else (* Don't hold up the request. *)
+    let synth_happening_path = Filename.concat executable_dir (nativize_path "assets/still_synthesizing.html") in
+    (* print_endline synth_happening_path; *)
+    write_file "" synth_happening_path;
+
   (* Start synthesis and the synth process killer. *)
-  match Unix.fork () with
-  | 0 ->
+  (* match Unix.fork () with *)
+  (* | 0 -> *)
     (* Uncomment the following if you want performance profiling *)
     (* begin
       let pid = Unix.getpid () in
@@ -1281,15 +1312,16 @@ let try_async path =
       output_string out_chan out_str;
       close_out out_chan;
     end; *)
-    print_endline "normal exit";
+    (* print_endline "normal exit"; *)
+    Sys.remove synth_happening_path;
     exit 0
-  | pid ->
+  (* | pid -> *)
     (* Start process killer *)
     (* Kill synthesis after 5 seconds. *)
-    Unix.sleep 60;
+    (* Unix.sleep 60;
     begin match Unix.waitpid [WNOHANG] pid with
     | (0, _) ->
       Unix.kill pid 9;
       print_endline "Synth timeout"
     | _ -> ()
-    end
+    end *)

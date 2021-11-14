@@ -124,13 +124,11 @@ module Type = struct
   let to_string typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.type_expr typ
   (* let to_string_raw typ = Printtyp.reset (); Formatter_to_stringifier.f Printtyp.raw_type_expr typ *)
   let to_string_raw typ = Formatter_to_stringifier.f Printtyp.raw_type_expr typ
+  let from_core_type ?(env = Env.empty) core_type = (Typetexp.transl_simple_type env false core_type).ctyp_type
   let from_string ?(env = Env.empty) str =
-    begin
-      Lexing.from_string str
-      |> Parse.core_type
-      |> Typetexp.transl_simple_type env false
-    end.ctyp_type
-
+    Lexing.from_string str
+    |> Parse.core_type
+    |> from_core_type ~env
   let to_core_type = to_string %> Lexing.from_string %> Parse.core_type
 
   let of_exp ?(type_env = Env.empty) exp = (Typecore.type_exp type_env exp).exp_type

@@ -1183,11 +1183,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function gratuitousLamdas() {
   const particleLife  = 5  * 1000;
-  const generatorLife = 15 * 1000;
-  const generatorStart = new Date();
-  let synthTimeout = false;
+  // const generatorLife = 15 * 1000;
+  // const generatorStart = new Date();
+  let synthDone = false;
+  function checkIfStillSynthesizing() {
+    let request = new XMLHttpRequest();
+    request.open("GET", "/assets/still_synthesizing.html");
+    request.setRequestHeader("Content-type", "text/html");
+    request.addEventListener("loadend", () => {
+      if(request.status === 200) {
+        window.setTimeout(checkIfStillSynthesizing, 500);
+      } else {
+        synthDone = true
+      }
+    });
+    request.send();
+  }
+  window.setTimeout(checkIfStillSynthesizing, 500);
+
   function makeLambda() {
-    if (new Date() - generatorStart > generatorLife) { synthTimeout = true; return; }
+    // if (new Date() - generatorStart > generatorLife) { synthTimeout = true; return; }
     const particleStart = new Date();
     const particle = document.createElement("div");
     particle.classList.add("gratuitous-lambda");
@@ -1207,7 +1222,7 @@ function gratuitousLamdas() {
       const t = new Date();
       if (t - particleStart > particleLife) { particle.remove(); return; }
       particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg)`
-      if (synthTimeout) { particle.innerText = "😞" }
+      // if (synthTimeout) { particle.innerText = "😞" }
       const dt = (t - lastTime) * 0.001;
       lastTime = t;
       x += vx * dt;
@@ -1218,7 +1233,9 @@ function gratuitousLamdas() {
     };
     moveParticle();
     document.body.appendChild(particle);
-    requestAnimationFrame(makeLambda);
+    if (!synthDone) {
+      requestAnimationFrame(makeLambda);
+    }
   }
   makeLambda();
 }
