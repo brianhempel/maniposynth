@@ -449,7 +449,8 @@ type hole_synth_env =
     ; local_idents                       : (expression * Types.type_expr * lprob) list
     ; mutable nonconstant_idents_at_type : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable idents_at_type             : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
-    ; mutable functions_producing_type   : (Types.type_expr * (expression * int * Types.type_expr * lprob) list (* Sorted, most probable first, type unified with goal type *)) list
+    ; mutable functions_producing_type   : (Types.type_expr * (expression  * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count, type unified with goal type *)) list
+    ; mutable ctors_producing_type       : (Types.type_expr * (Longident.t * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count type unified with goal type *)) list
     }
 let is_req_satisified_by fillings (env, exp, expected) =
   (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
@@ -523,7 +524,7 @@ let rec args_seq ~cant_be_constant hole_synth_env func_type arg_count_remaining 
   | _ -> failwith "this shouldn't happen"
 
 
-and ctor_terms ~cant_be_constant hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
+(* and ctor_terms ~cant_be_constant hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
   (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
   if min_lprob > lprob then [] else
   let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
@@ -554,22 +555,67 @@ and ctor_terms ~cant_be_constant hole_synth_env typ min_lprob (lid, { Types.cstr
       end
     end
   | None ->
-    []
+    [] *)
 
-and stdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
+(* and stdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
-  stdlib_ctors |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob
 
-and nonstdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
+    stdlib_ctors |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)
+    (* | Some std *)
+  |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob *)
+
+(* and nonstdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
-  hole_synth_env.user_ctors |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob
+  hole_synth_env.user_ctors |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob) |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob *)
 
 and ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > lprob_1 then [] else
-  List.concat
-    [ stdlib_ctors_at_type     ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob stdlib_ctor_lprob)    |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)
-    ; nonstdlib_ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob nonstdlib_ctor_lprob) |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob)
-    ]
+  begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.ctors_producing_type with
+  | None ->
+    let ctors_producing_type =
+      begin
+        (stdlib_ctors              |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)) @
+        (hole_synth_env.user_ctors |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob))
+      end
+      |>@& begin fun (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) ->
+        (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
+        let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
+        (* print_endline @@ (Type.to_string typ); *)
+        (* print_endline @@ (Type.to_string ctor_type_as_arrows); *)
+        (* print_endline @@ (Typing.can_produce_typ ctor_type_as_arrows typ <> None |> string_of_bool); *)
+        (* ignore (exit 0); *)
+        (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
+        match Typing.can_produce_typ ctor_type_as_arrows typ with
+        | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) when arg_count = cstr_arity -> (* Ctors must always be fully applied *)
+          Some (lid, arg_count, ctor_type_as_arrows_unified_with_goal_ret_t, lprob)
+        | _ ->
+          None
+      end
+      |> List.sort_by (fun (_, _, _, lprob) -> -.lprob)
+    in
+    hole_synth_env.ctors_producing_type <- (typ, ctors_producing_type) :: hole_synth_env.ctors_producing_type;
+    ctors_producing_type
+  | Some ctors_producing_type ->
+    ctors_producing_type
+  end
+  |> List.take_while (fun (_, _, _, lprob) -> lprob >= min_lprob)
+  |>@@ begin fun (lid, arg_count, ctor_type_as_arrows_unified_with_goal_ret_t, lprob) ->
+    args_seq ~cant_be_constant hole_synth_env ctor_type_as_arrows_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
+    |>@ begin fun (arg_terms, ctor_type_as_arrows', args_lprob) ->
+      let out_type = drop_n_args_from_arrow arg_count ctor_type_as_arrows' in
+      let ctor_arg =
+        match arg_count with
+        | 0 -> None
+        | 1 -> Some (List.hd arg_terms)
+        | _ -> Some (Exp.tuple arg_terms)
+      in
+      (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
+      ( Exp.construct (Location.mknoloc lid) ctor_arg
+      , out_type
+      , mult_lprobs args_lprob lprob
+      )
+    end
+  end
 
 and all_consts_ordered =
   List.concat
@@ -845,6 +891,7 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
                 ; nonconstant_idents_at_type = []
                 ; idents_at_type             = []
                 ; functions_producing_type   = []
+                ; ctors_producing_type       = []
                 }
               )
             ]
