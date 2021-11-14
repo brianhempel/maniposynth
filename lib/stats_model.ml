@@ -119,7 +119,7 @@ let is_imperative typ =
 
 
 let unimplemented_prim_names = SSet.of_list ["**"; "abs_float"; "acos"; "asin"; "atan"; "atan2"; "ceil"; "copysign"; "cos"; "cosh"; "exp"; "expm1"; "floor"; "hypot"; "ldexp"; "mod_float"; "sin"; "sinh"; "~-."; "sqrt"; "log"; "log10"; "log1p"; "tan"; "tanh"; "frexp"; "classify_float"; "modf"]
-let dont_bother_names        = SSet.of_list ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="] (* Don't bother with > and >= because will already guess < and <= *)
+let dont_bother_names        = SSet.of_list ["__POS__"; "__POS_OF__"; "__MODULE__"; "__LOC__"; "__LOC_OF__"; "__LINE__"; "__LINE_OF__"; "__FILE__"; "??"; "~+"; ">"; ">="; "@@"] (* Don't bother with > and >= because will already guess < and <= *)
 
 let names_to_skip            = SSet.union_all [unimplemented_prim_names; dont_bother_names]
 
@@ -946,6 +946,14 @@ let const_strs : (expression * Types.type_expr * lprob) list =
 let const_strs_3_chars_or_less =
   const_strs
   |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 3)
+
+let const_strs_2_chars_or_less =
+  const_strs
+  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 2)
+
+let const_strs_1_char_or_less =
+  const_strs
+  |> List.filter (fun (str_exp, _, _) -> (Exp.string str_exp |>& String.length ||& max_int) <= 1)
 
 let const_ints : (expression * Types.type_expr * lprob) list =
   begin fun int_str_and_counts ->
