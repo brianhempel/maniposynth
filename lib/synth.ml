@@ -503,7 +503,7 @@ let is_constant hole_synth_env exp =
 (* May be able to cache here (don't forget about lprob!) *)
 let rec args_seq ~cant_be_constant hole_synth_env func_type arg_count_remaining arg_i min_lprob : (expression list * Types.type_expr * lprob) list =
   if arg_count_remaining <= 0 then (if cant_be_constant then [] else [([], func_type, lprob_1)]) else
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > max_single_term_lprob then [] else
   match Type.flatten_arrows func_type with
   | (_::_::_) as flat_type ->
     let arg_t = List.nth flat_type arg_i in
@@ -731,7 +731,7 @@ and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression 
   end *)
 
 and terms_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > max_single_term_lprob then [] else
   let terms =
     if cant_be_constant then
       List.concat
@@ -1027,6 +1027,11 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
     reqs |> List.for_all (is_req_satisified_by fillings)
+  end
+  |> Seq.filter begin fun (fillings, _) ->
+    (* One final typecheck...apparently x :: x isn't valid... *)
+    try ignore @@ Typing.typedtree_sig_env_of_parsed (apply_fillings fillings prog) file_name; true
+    with _ -> false
   end
   (* Return first valid filling. *)
   |> begin fun seq ->
