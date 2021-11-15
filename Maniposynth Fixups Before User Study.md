@@ -177,7 +177,7 @@
 
 - [x] tool log output is getting noisy...something with asserts...??
 
-- [ ] statistics for synth
+- [x] statistics for synth
 
 - [ ] synth: fails with "F-expr failure" on
 
@@ -201,7 +201,7 @@
 
   also doesn't synth when given only tail. (works if you give both)
 
-- [ ] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think) simpler example:
+- [x] synth: for fold, I don't think the synthesizer trying the higher order function `f` in function position (type is `'a` I think) simpler example:
 
   ```ocaml
   type nat = Z | S of nat
@@ -219,11 +219,15 @@
 
   
 
-- [ ] synth: also not smart about types of return exps
+- [x] synth: also not smart about types of return exps
+
+- [x] synth: multiple contradictory reqs on hole should always guess non-constants
+
+- [x] synth: single req on hole should only guess the constant in the req
 
 - [ ] synth: should trying using bindings that are after the holes!
 
-- [ ] synth: actually say in the interface if it timed out
+- [ ] ~~synth: actually say in the interface if it timed out~~
 
 - [ ] synth: don't use `< <= > >=` at bool type (lol)
 
@@ -247,7 +251,7 @@
 
 - [ ] tools offscreen
 
-- [ ] accept/reject button for each synth filling
+- [x] accept/reject button for each synth filling
 
 - [ ] way to distinguish "x = y" between adding an assert, an equality, or a let-binding (suddenly display a dropdown when " = " is typed?)
 

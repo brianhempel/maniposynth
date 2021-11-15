@@ -417,21 +417,27 @@ module Common
   (Node : sig
     type t
     val loc : t -> Location.t
-    val iter : (t -> unit) -> program -> unit
     val mapper : (t -> t) -> Ast_mapper.mapper
-    val iter_dflt : Ast_iterator.iterator -> t -> unit
+    val iterator : (t -> unit) -> Ast_iterator.iterator
+    val default_iterator : Ast_iterator.iterator -> t -> unit
     val apply_mapper : Ast_mapper.mapper -> t -> t
   end) = struct
 
   (* type t = Node.t *)
   let loc = Node.loc
-  let iter = Node.iter
   let mapper = Node.mapper
+  let iter f prog =
+    let iterator = Node.iterator f in
+    iterator.structure iterator prog
+  let iterator = Node.iterator
   let apply_mapper = Node.apply_mapper
 
   let map f struct_items =
     let mapper = Node.mapper f in
     mapper.structure mapper struct_items
+
+  let map_node f = apply_mapper (mapper f)
+
 
   exception Found of Node.t
 
@@ -479,14 +485,14 @@ module Common
     let children = ref [] in
     let iter_exp_no_recurse _ e = children := e :: !children in
     let iter_once = { dflt_iter with expr = iter_exp_no_recurse } in
-    Node.iter_dflt iter_once node;
+    Node.default_iterator iter_once node;
     List.rev !children (* Return the children left-to-right. *)
 
   let child_pats node =
     let children = ref [] in
     let iter_pat_no_recurse _ p = children := p :: !children in
     let iter_once = { dflt_iter with pat = iter_pat_no_recurse } in
-    Node.iter_dflt iter_once node;
+    Node.default_iterator iter_once node;
     List.rev !children (* Return the children left-to-right. *)
 
   let freshen_locs node =
@@ -500,14 +506,13 @@ module Exp = struct
   include Common(struct
     type t = expression
     let loc { pexp_loc; _ } = pexp_loc
-    let iter f struct_items =
+    let iterator f  =
       let iter_exp iter e = dflt_iter.expr iter e; f e in
-      let iter = { dflt_iter with expr = iter_exp } in
-      iter.structure iter struct_items
+      { dflt_iter with expr = iter_exp }
     let mapper f =
       let map_exp mapper e = f (dflt_mapper.expr mapper e) in
       { dflt_mapper with expr = map_exp }
-    let iter_dflt = dflt_iter.expr
+    let default_iterator = dflt_iter.expr
     let apply_mapper (mapper : Ast_mapper.mapper) exp = mapper.expr mapper exp
   end)
 
@@ -599,14 +604,13 @@ module Pat = struct
   include Common(struct
     type t = pattern
     let loc { ppat_loc; _ } = ppat_loc
-    let iter f struct_items =
+    let iterator f =
       let iter_pat iter p = dflt_iter.pat iter p; f p in
-      let iter = { dflt_iter with pat = iter_pat } in
-      iter.structure iter struct_items
+      { dflt_iter with pat = iter_pat }
     let mapper f =
       let map_pat mapper p = f (dflt_mapper.pat mapper p) in
       { dflt_mapper with pat = map_pat }
-    let iter_dflt = dflt_iter.pat
+    let default_iterator = dflt_iter.pat
     let apply_mapper (mapper : Ast_mapper.mapper) pat = mapper.pat mapper pat
   end)
 
@@ -692,14 +696,13 @@ module Vb = struct
   include Common(struct
     type t = value_binding
     let loc { pvb_loc; _ } = pvb_loc
-    let iter f struct_items =
+    let iterator f =
       let iter_vb iter vb = dflt_iter.value_binding iter vb; f vb in
-      let iter = { dflt_iter with value_binding = iter_vb } in
-      iter.structure iter struct_items
+      { dflt_iter with value_binding = iter_vb }
     let mapper f =
       let map_vb mapper vb = f (dflt_mapper.value_binding mapper vb) in
       { dflt_mapper with value_binding = map_vb }
-    let iter_dflt = dflt_iter.value_binding
+    let default_iterator = dflt_iter.value_binding
     let apply_mapper (mapper : Ast_mapper.mapper) vb = mapper.value_binding mapper vb
   end)
 
@@ -943,14 +946,13 @@ module StructItem = struct
   include Common(struct
     type t = structure_item
     let loc { pstr_loc; _ } = pstr_loc
-    let iter f struct_items =
+    let iterator f =
       let iter_si iter si = dflt_iter.structure_item iter si; f si in
-      let iter = { dflt_iter with structure_item = iter_si } in
-      iter.structure iter struct_items
+      { dflt_iter with structure_item = iter_si }
     let mapper f =
       let map_si mapper si = f (dflt_mapper.structure_item mapper si) in
       { dflt_mapper with structure_item = map_si }
-    let iter_dflt = dflt_iter.structure_item
+    let default_iterator = dflt_iter.structure_item
     let apply_mapper (mapper : Ast_mapper.mapper) si = mapper.structure_item mapper si
   end)
 

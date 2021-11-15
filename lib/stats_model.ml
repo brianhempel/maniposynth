@@ -1641,6 +1641,12 @@ let pervasives_pure_idents_only =
   pervasives_idents_only
   |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
 
+let max_single_constant_term_lprob =
+  mult_lprobs const_lprob begin
+    const_strs @ const_ints @ const_chars @ const_floats
+    |>@ Tup3.thd
+    |> List.max
+  end
 
 (* Use this to reserve probability for other holes! *)
 let max_single_term_lprob =

@@ -32,6 +32,23 @@ let rec apply_fillings fillings prog =
   then apply_fillings fillings prog'
   else prog'
 
+let rec apply_fillings_to_exp fillings root_exp =
+  let changed = ref false in
+  let root_exp' =
+    Loc_map.bindings fillings
+    |> List.fold_left begin fun root_exp (loc, e') ->
+      root_exp
+      |> Exp.map_node begin fun e ->
+        if e.pexp_loc = loc then
+          (changed := true; e')
+        else e
+      end
+    end root_exp
+  in
+  if !changed
+  then apply_fillings_to_exp fillings root_exp'
+  else root_exp'
+
 
 (* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
 type req = Data.env * expression * value
@@ -447,6 +464,9 @@ type hole_synth_env =
     ; user_ctors                         : (Longident.t * Types.constructor_description * lprob) list
     ; nonconstant_names                  : SSet.t
     ; local_idents                       : (expression * Types.type_expr * lprob) list
+    ; check_if_constant                  : expression -> bool
+    ; cant_be_constant                   : bool
+    ; single_asserted_exp                : (expression * lprob) option
     ; mutable nonconstant_idents_at_type : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable idents_at_type             : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable functions_producing_type   : (Types.type_expr * (expression  * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count, type unified with goal type *)) list
@@ -496,8 +516,27 @@ let rec drop_n_args_from_arrow n typ =
   | _                                          -> failwith "huuuuuuh?"
   end
 
-let is_constant hole_synth_env exp =
-  not (exp |> Exp.flatten |>@& Exp.simple_name |> List.exists (fun name -> SSet.mem name hole_synth_env.nonconstant_names))
+
+
+exception Not_constant
+
+let is_constant nonconstant_names : expression -> bool =
+  let iterator =
+    Exp.iterator begin function
+      | { pexp_desc = Pexp_ident {txt = Longident.Lident name; _ }; _ }
+        when SSet.mem name nonconstant_names ->
+        raise Not_constant
+      | _ -> ()
+    end
+  in
+  begin function exp ->
+    try
+      iterator.expr iterator exp;
+      true
+    with Not_constant -> false
+  end
+
+  (* not (exp |> Exp.flatten |>@& Exp.simple_name |> List.exists (fun name -> SSet.mem name hole_synth_env.nonconstant_names)) *)
 
 (* arg_count_remaining and arg_i are separate, to support partial applications. *)
 (* May be able to cache here (don't forget about lprob!) *)
@@ -516,7 +555,7 @@ let rec args_seq ~cant_be_constant hole_synth_env func_type arg_count_remaining 
       | None   -> []
       | Some _ ->
         let remainder_cant_be_constant =
-          cant_be_constant && is_constant hole_synth_env arg
+          cant_be_constant && hole_synth_env.check_if_constant arg
         in
         args_seq ~cant_be_constant:remainder_cant_be_constant hole_synth_env func_type' (arg_count_remaining-1) (arg_i+1) (div_lprobs min_lprob lprob)
         |>@ (fun (args_r, func_type'', later_lprob) -> (arg::args_r, func_type'', mult_lprobs later_lprob lprob))
@@ -702,7 +741,7 @@ and ites_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * 
   else_terms
   |>@@ begin fun (else_term, else_t, else_lprob) ->
     let then_terms =
-      terms_at_type ~cant_be_constant:(cant_be_constant && is_constant hole_synth_env else_term) hole_synth_env else_t (div_lprobs min_lprob (mult_lprobs else_lprob max_single_term_lprob))
+      terms_at_type ~cant_be_constant:(cant_be_constant && hole_synth_env.check_if_constant else_term) hole_synth_env else_t (div_lprobs min_lprob (mult_lprobs else_lprob max_single_term_lprob))
     in
     then_terms
     |>@@ begin fun (then_term, then_t, then_lprob) ->
@@ -748,30 +787,33 @@ and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression 
     |>& (fun t' -> (exp, t', lprob))
   end *)
 
-and terms_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
+and terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > max_single_term_lprob then [] else
-  let terms =
-    if cant_be_constant then
-      List.concat
-        [ ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
-        ; apps_at_type                     hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
-        ; ites_at_type   ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
-        ; idents_at_type ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
-        ]
-    else
-      List.concat
-        [ ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
-        ; consts_at_type                   hole_synth_env typ (div_lprobs min_lprob const_lprob) |>@ Tup3.map_thd (mult_lprobs const_lprob)
-        ; apps_at_type                     hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
-        ; ites_at_type   ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
-        ; idents_at_type ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
-        ]
+  let terms1 =
+    List.concat
+    [ ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
+    ; apps_at_type                     hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
+    ; ites_at_type   ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
+    ; idents_at_type ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
+    ]
+  in
+  let terms2 =
+    if cant_be_constant then [] else
+    begin match if_constant_must_be with
+    | None ->
+      consts_at_type hole_synth_env typ (div_lprobs min_lprob const_lprob) |>@ Tup3.map_thd (mult_lprobs const_lprob)
+    | Some (only_allowed_constant_exp, lprob) when lprob >= min_lprob ->
+      (* Don't need to check type because, if present, this exp comes directly from pushing a req down to a hole. *)
+      [(only_allowed_constant_exp, typ, lprob)]
+    | _ ->
+      []
+    end
   in
   (* print_endline @@ "terms at " ^ Type.to_string typ ^ " lprob > " ^ string_of_float min_lprob; *)
   (* print_endline (terms |>@ Tup3.fst |>@ Exp.to_string |> String.concat "  "); *)
-  terms
+  terms2 @ terms1
 
-let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env _reqs_on_hole _prog : (fillings * lprob) Seq.t =
+let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env _reqs_on_hole _prog : (bool * fillings * lprob) Seq.t =
   let term_min_lprob = div_lprobs min_lprob lprob in
   (* let terms_seq = *)
     (* let nonconstant_names = SSet.empty in *)
@@ -786,12 +828,13 @@ let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc sta
   (* in *)
   (* print_endline "hi"; *)
   (* print_endline (Loc.to_string hole_loc); *)
-  terms_at_type ~cant_be_constant hole_synth_env static_hole_type term_min_lprob
+  let if_constant_must_be = hole_synth_env.single_asserted_exp in
+  terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env static_hole_type term_min_lprob
   |>@ begin fun (term, _term_t, term_lprob) ->
     (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term ^ "\t" ^ Type.to_string term_t ^ "\t" ^ Type.to_string static_hole_type); *)
     (* Printast.expression 0 Format.std_formatter term; *)
     let fillings = Loc_map.add hole_loc term fillings in
-    (fillings, mult_lprobs term_lprob lprob)
+    (hole_synth_env.check_if_constant term, fillings, mult_lprobs term_lprob lprob)
     (* if reqs_on_hole |> List.for_all (is_req_satisified_by fillings) then
       Some (fillings, mult_lprobs term_lprob lprob)
     else
@@ -876,6 +919,7 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
     |>@? (count_type_var_annotations %> (=) min_type_var_annotations_count)
   in
   print_endline @@ string_of_int (List.length prog_and_typed_progs) ^ " programs will be used";
+  let reqs' = reqs |>@@ push_down_req fillings prog in
   let hole_locs_progs_and_synth_envs : (Location.t * (program * hole_synth_env) Seq.t) list =
     hole_locs
     |>@ begin fun hole_loc ->
@@ -884,8 +928,10 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
           match Typing.find_exp_by_loc hole_loc typed_prog with
           | None -> []
           | Some hole_typed_node ->
-            (* let reqs' = reqs |>@@ push_down_req fillings in
-            let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in *)
+            let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+            let unique_asserted_exps =
+              reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
+            in
             (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
             let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
             let user_ctors =
@@ -906,6 +952,9 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
                 ; user_ctors                 = user_ctors
                 ; nonconstant_names          = nonconstant_names
                 ; local_idents               = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+                ; check_if_constant          = is_constant nonconstant_names
+                ; cant_be_constant           = List.length unique_asserted_exps >= 2
+                ; single_asserted_exp        = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
                 ; nonconstant_idents_at_type = []
                 ; idents_at_type             = []
                 ; functions_producing_type   = []
@@ -919,23 +968,26 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
     end
   in
   (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
-  let rec fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs : (fillings * lprob) Seq.t =
+  let rec fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs : (bool * fillings * lprob) Seq.t =
     match hole_locs_progs_and_synth_envs with
-    | [] -> Seq.return (fillings, lprob)
+    | [] -> Seq.return (false, fillings, lprob)
     | (hole_loc, prog_and_synth_envs)::rest ->
       fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
-      |> Seq.flat_map begin fun (fillings, lprob) ->
+      |> Seq.flat_map begin fun (any_constant_holes, fillings, lprob) ->
         (* print_endline "retyping prog"; *)
         (* progs *)
         (* ignore (exit 0); *)
         prog_and_synth_envs
         |> Seq.flat_map begin fun (prog, hole_synth_env) ->
-            hole_fillings_seq ~cant_be_constant:false (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env [] prog
+            (* At most one hole can be constant. *)
+            hole_fillings_seq ~cant_be_constant:any_constant_holes (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env [] prog
           end
+        |> Seq.map (Tup3.map_fst (fun hole_is_constant -> hole_is_constant || any_constant_holes))
       end
   in
   fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs
-  |> Seq.filter (fun (_, lprob) -> lprob <= max_lprob)
+  |> Seq.filter (fun (_, _, lprob) -> lprob <= max_lprob)
+  |> Seq.map (fun (_, fillings, lprob) -> (fillings, lprob))
 
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
@@ -1043,8 +1095,9 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       |> Loc_map.for_all begin fun hole_loc filling_exp ->
         let hole_rejected_exp_strs = Loc_map.all_at_loc hole_loc rejected_exp_strs in
         if hole_rejected_exp_strs = [] then true else
-        let hole_exp_str = Exp.to_string filling_exp in
-        (* if String.includes "reverse tail" hole_exp_str then (print_endline hole_exp_str); *)
+        let hole_exp_str = Exp.to_string (apply_fillings_to_exp fillings filling_exp) in
+        (* print_endline hole_exp_str; *)
+        (* if String.includes "[3;2;1]" hole_exp_str then (); *)
         not (List.mem hole_exp_str hole_rejected_exp_strs)
       end
       (* fillings
