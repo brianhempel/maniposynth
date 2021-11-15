@@ -180,6 +180,27 @@ function setRecFlag(vbLoc, isRec) {
   ]);
 }
 
+function acceptSynthResult(loc) {
+  doAction([
+    "AcceptSynthResult",
+    loc,
+  ]);
+}
+
+function rejectSynthResult(loc) {
+  doAction([
+    "RejectSynthResult",
+    loc,
+  ]);
+}
+
+function rejectSynthResultAndContinue(loc) {
+  doAction([
+    "RejectSynthResultAndContinue",
+    loc,
+  ]);
+}
+
 
 // function addCodeToScopeBindings(newCode, scopeIdStr) {
 //   doAction([
@@ -1168,6 +1189,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Synth Button ///////////////////
 
+synthDone = true;
+
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById("synth-button").addEventListener("click", event => { gratuitousLamdas(); doSynth() });
 
@@ -1179,26 +1202,32 @@ window.addEventListener('DOMContentLoaded', () => {
       event.preventDefault();
     }
   });
+
+  checkIfStillSynthesizing();
 });
+
+function checkIfStillSynthesizing() {
+  let request = new XMLHttpRequest();
+  request.open("GET", "/assets/still_synthesizing.html");
+  request.setRequestHeader("Content-type", "text/html");
+  request.addEventListener("loadend", () => {
+    if(request.status === 200) {
+      if (synthDone) { /* Reloaded the page but synth is still going. */
+        gratuitousLamdas();
+      }
+      window.setTimeout(checkIfStillSynthesizing, 500);
+    } else {
+      synthDone = true
+    }
+  });
+  request.send();
+}
 
 function gratuitousLamdas() {
   const particleLife  = 5  * 1000;
   // const generatorLife = 15 * 1000;
   // const generatorStart = new Date();
-  let synthDone = false;
-  function checkIfStillSynthesizing() {
-    let request = new XMLHttpRequest();
-    request.open("GET", "/assets/still_synthesizing.html");
-    request.setRequestHeader("Content-type", "text/html");
-    request.addEventListener("loadend", () => {
-      if(request.status === 200) {
-        window.setTimeout(checkIfStillSynthesizing, 500);
-      } else {
-        synthDone = true
-      }
-    });
-    request.send();
-  }
+  synthDone = false;
   window.setTimeout(checkIfStillSynthesizing, 500);
 
   function makeLambda() {
@@ -1239,6 +1268,22 @@ function gratuitousLamdas() {
   }
   makeLambda();
 }
+
+/////////////////// Synth Management ///////////////////
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-accept-loc]').forEach(elem => {
+    elem.addEventListener("click", event => { acceptSynthResult(elem.dataset.acceptLoc); event.stopImmediatePropagation() });
+  });
+  document.querySelectorAll('[data-reject-loc]').forEach(elem => {
+    elem.addEventListener("click", event => { rejectSynthResult(elem.dataset.rejectLoc); event.stopImmediatePropagation() });
+  });
+  document.querySelectorAll('[data-reject-and-continue-loc]').forEach(elem => {
+    elem.addEventListener("click", event => {rejectSynthResultAndContinue(elem.dataset.rejectAndContinueLoc); event.stopImmediatePropagation() });
+  });
+});
+
+
 
 
 /////////////////// Type Error Fires ///////////////////
@@ -2073,4 +2118,5 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
 

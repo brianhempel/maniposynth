@@ -584,6 +584,15 @@ let html_of_values_for_pat ?(single_line_only = false) stuff pat =
 
 type parens_context = NoParens | NormalArg | NextToInfixOp
 
+let accept_or_reject_options_html exp =
+  span ~attrs:[("class","accept-or-reject-options")]
+    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc)] ["✅ Accept"]
+    ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject"]
+    ; button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"]
+    ]
+
+
+
 (* For exp labels *)
 let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) (stuff : stuff) exp =
   let recurse ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) = html_of_exp ~show_result ~infix ~parens_context ~in_list stuff in
@@ -607,9 +616,17 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let perhaps_exp_class = if Exp.is_hole exp then " hole" else "" in
     let type_error_htmls = type_error_htmls stuff exp.pexp_loc in
     let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
+    let (perhaps_accept_reject_class, perhaps_accept_or_reject_html) =
+      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
+      then
+        ( " accept-or-reject-exp"
+        , [ accept_or_reject_options_html exp ]
+        )
+      else ("", [])
+    in
     span
-      ~attrs:([("class","exp" ^ perhaps_exp_class ^ perhaps_type_error_class)] @ attrs)
-      (type_error_htmls @ [if needs_parens then "(" ^ inner ^ ")" else inner])
+      ~attrs:([("class","exp" ^ perhaps_exp_class ^ perhaps_accept_reject_class ^ perhaps_type_error_class)] @ attrs)
+      (type_error_htmls @ [if needs_parens then "(" ^ inner ^ ")" else inner] @ perhaps_accept_or_reject_html)
   in
   let values_for_exp =
     if show_result && not (Exp.is_hole exp) && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
@@ -705,14 +722,19 @@ and ret_tree_html stuff exp =
   | Pexp_sequence (_, e2)         -> recurse e2
   | Pexp_letmodule (_, _, e)      -> recurse e
   | Pexp_match (scrutinee, cases) ->
+    let perhaps_accept_or_reject =
+      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
+      then [accept_or_reject_options_html exp]
+      else []
+    in
     let (_, attrs) = exp_gunk stuff exp in
     let html_of_case case =
       span ~attrs:[("class","case")] [html_of_pat stuff case.pc_lhs; recurse case.pc_rhs]
     in
-    div ~attrs:[("class","match")]
+    div ~attrs:[("class","match")] @@
       [ div ~attrs:(attrs @ [("class","scrutinee")]) ["⇠ "; html_of_exp ~show_result:false stuff scrutinee; " ⇢"]
       ; div ~attrs:[("class","cases")] (cases |>@ html_of_case)
-      ]
+      ] @ perhaps_accept_or_reject
   | _ -> div ~attrs:[("class", "return")] [render_tv stuff None (Some exp)]
 
 (* Mirrors ret_tree_html *)

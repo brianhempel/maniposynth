@@ -10,20 +10,23 @@ open Shared.Util
 
 type t =
 (*   | DropValueIntoVbs of string * string (* vbs loc str, vtrace str *)
-  | DropValueIntoExp of string * string (* loc str, vtrace str *) *)
-  | AddVis           of string * string (* loc str, vis str *)
-  | RemoveVis        of string * string (* loc str, vis str *)
-  | ReplaceLoc       of string * string (* loc str, code str *)
-  | DeleteLoc        of string (* loc str *)
-  | NewAssert        of string * string * string * (int * int) option (* loc str, lhs code str, rhs code str, pos opt *)
+  | DropValueIntoExp             of string * string (* loc str, vtrace str *) *)
+  | AddVis                       of string * string (* loc str, vis str *)
+  | RemoveVis                    of string * string (* loc str, vis str *)
+  | ReplaceLoc                   of string * string (* loc str, code str *)
+  | DeleteLoc                    of string (* loc str *)
+  | NewAssert                    of string * string * string * (int * int) option (* loc str, lhs code str, rhs code str, pos opt *)
   | Undo
   | Redo
   | DoSynth
-  | InsertCode       of string * string * (int * int) option (* vbs loc str, code, pos opt *)
-  | Destruct         of string * string  (* vbs loc str, scrutinee code *)
-  | SetPos           of string * int * int (* loc str, x, y *)
-  | MoveVb           of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
-  | SetRecFlag       of string * bool (* vb loc str, is rec *)
+  | AcceptSynthResult            of string (* loc *)
+  | RejectSynthResult            of string (* loc *)
+  | RejectSynthResultAndContinue of string (* loc *)
+  | InsertCode                   of string * string * (int * int) option (* vbs loc str, code, pos opt *)
+  | Destruct                     of string * string  (* vbs loc str, scrutinee code *)
+  | SetPos                       of string * int * int (* loc str, x, y *)
+  | MoveVb                       of string * string * (int * int) option (* target vb loc str, mobile vb, new pos opt *)
+  | SetRecFlag                   of string * bool (* vb loc str, is rec *)
 
 (* Manual decoding because yojson_conv_lib messed up merlin and I like editor tooling. *)
 let t_of_yojson (action_yojson : Yojson.Safe.t) =
@@ -44,6 +47,9 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "NewAssert"; `String loc_str; `String lhs_code; `String rhs_code
           ; `List [`String "Some"; x; y]]                                            -> NewAssert (loc_str, lhs_code, rhs_code, Some (float_or_int_to_int x, float_or_int_to_int y))
   | `List [`String "DoSynth"]                                                        -> DoSynth
+  | `List [`String "AcceptSynthResult"; `String loc_str]                             -> AcceptSynthResult loc_str
+  | `List [`String "RejectSynthResult"; `String loc_str]                             -> RejectSynthResult loc_str
+  | `List [`String "RejectSynthResultAndContinue"; `String loc_str]                  -> RejectSynthResultAndContinue loc_str
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
   | `List [`String "InsertCode"; `String vbs_loc_str; `String code
@@ -283,6 +289,11 @@ let clear_asserts_with_hole_rhs old =
     !locs_to_remove
     old
 
+let should_synth_afterward = function
+  | DoSynth
+  | RejectSynthResultAndContinue _ -> true
+  | _ -> false
+
 let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   (* | DropValueIntoVbs (loc_str, vtrace_str) ->
     let loc = Serialize.loc_of_string loc_str in
@@ -317,9 +328,26 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     let loc = Serialize.loc_of_string loc_str in
     add_assert_before_loc loc lhs_code rhs_code xy_opt final_tenv
   | DoSynth ->
-    (* Synth is async. Don't change program here. *)
-    Synth.try_async path;
+    (* Synth handled by caller. *)
     (fun prog -> prog)
+  | AcceptSynthResult loc_str ->
+    let loc = Serialize.loc_of_string loc_str in
+    let change_attrs e =
+      e.pexp_attributes
+      |> Attr.remove_name "not"
+      |> Attr.remove_name "accept_or_reject"
+    in
+    Exp.map_by_loc loc (fun e -> { e with pexp_attributes = change_attrs e })
+  | RejectSynthResult loc_str
+  | RejectSynthResultAndContinue loc_str ->
+    (* Synth handled by caller. *)
+    let loc = Serialize.loc_of_string loc_str in
+    let change_attrs e =
+      e.pexp_attributes
+      |> Attr.remove_name "accept_or_reject"
+      |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e)
+    in
+    Exp.map_by_loc loc (fun e -> { Exp.hole with pexp_attributes = change_attrs e })
   | Undo ->
     Undo_redo.undo path
   | Redo ->

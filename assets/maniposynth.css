@@ -660,6 +660,30 @@ table.subvalue-annotations td {
   pointer-events: none;
 }
 
+.accept-or-reject-exp {
+  border: solid red 2px;
+}
+.accept-or-reject-options {
+  display: inline-block;
+  vertical-align: top;
+  padding: 0 var(--padding);
+}
+.accept-or-reject-options button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--padding) calc(var(--padding) * 3);
+  cursor: pointer;
+}
+.match > .accept-or-reject-options {
+  padding-top: var(--padding);
+  display: grid;
+}
+.match > .accept-or-reject-options button {
+  text-align: center;
+}
+
+
 
 #tooltip {
   position: absolute;

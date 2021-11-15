@@ -32,5 +32,5 @@ function wait_and_check_for_changes(path) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  paths_to_watch.forEach(wait_and_check_for_changes);
+  paths_to_watch.forEach(check_for_changes);
 });

@@ -168,6 +168,7 @@ let handle_connection in_chan out_chan =
           Pretty_code.output_code parsed' path; (* This was overwriting synth results! :o *)
           Undo_redo.perhaps_log_revision path
         end;
+        if Action.should_synth_afterward action then Synth.try_async path;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
         respond_not_found out_chan

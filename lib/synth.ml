@@ -1007,13 +1007,16 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 
 
-let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed rejected_exps prog reqs file_name : fillings option =
   if hole_locs prog Loc_map.empty = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob < abort_lprob then (print_endline "aborting"; None) else
   let min_lprob = mult_lprobs max_lprob (lprob 0.05) in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
     e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
+  in
+  let rejected_exp_strs =
+    rejected_exps |> Loc_map.map (fun rejected_exps -> rejected_exps |>@ Exp.to_string)
   in
   Seq.concat
     [ e_guess (Loc_map.empty, lprob_1)
@@ -1035,6 +1038,20 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
     end;
     incr terms_tested_count;
+    let not_rejected =
+      fillings
+      |> Loc_map.for_all begin fun hole_loc filling_exp ->
+        let hole_rejected_exp_strs = Loc_map.all_at_loc hole_loc rejected_exp_strs in
+        if hole_rejected_exp_strs = [] then true else
+        let hole_exp_str = Exp.to_string filling_exp in
+        (* if String.includes "reverse tail" hole_exp_str then (print_endline hole_exp_str); *)
+        not (List.mem hole_exp_str hole_rejected_exp_strs)
+      end
+      (* fillings
+      |> List.bindings
+      |> List.for_all  *)
+    in
+
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
@@ -1044,7 +1061,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
     end else
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
-    reqs |> List.for_all (is_req_satisified_by fillings)
+    not_rejected && (reqs |> List.for_all (is_req_satisified_by fillings))
   end
   |> Seq.filter begin fun (fillings, _) ->
     (* One final typecheck...apparently x :: x isn't valid... *)
@@ -1062,7 +1079,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       if Unix.time () -. start_sec > timeout_secs then
         (print_endline "Synth timeout"; None)
       else
-        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed prog reqs file_name (* Keep trying, with lower prob threshold. *)
+        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed rejected_exps prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1093,7 +1110,7 @@ let remove_unnecessary_rec_flags prog =
       | vb_group -> vb_group
   end
 
-let results prog _trace assert_results file_name =
+let best_result prog _trace assert_results file_name =
   terms_tested_count := 0;
   let start_sec = Unix.time () in
   let reqs = assert_results |>@ req_of_assert_result in
@@ -1105,14 +1122,32 @@ let results prog _trace assert_results file_name =
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-  match fill_holes start_sec type_lookups.lookup_exp prog reqs file_name with
-  | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; []
-  | None -> print_endline "synth failed"; [prog]
+  let starting_hole_locs = hole_locs prog Loc_map.empty in
+  let rejected_exps = ref Loc_map.empty in
+  begin
+    prog
+    |> Exp.iter begin fun e ->
+      rejected_exps := Loc_map.add_all_to_loc e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes) !rejected_exps
+    end
+  end;
+  match fill_holes start_sec type_lookups.lookup_exp !rejected_exps prog reqs file_name with
+  | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
+  | None -> print_endline "synth failed"; None
   | Some fillings' ->
     print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
-    prog
-    |> apply_fillings fillings'
-    |> fun x -> [x]
+    (* Preserve original attrs on hole, and add "accept_or_reject" tag. *)
+    let fillings'' =
+      fillings'
+      |> Loc_map.mapi begin fun loc e' ->
+        if List.mem loc starting_hole_locs
+        then
+          let orig = Exp.find loc prog in
+          { e' with pexp_attributes = Attr.set_tag "accept_or_reject" orig.pexp_attributes }
+        else e'
+      end
+    in
+    Some (apply_fillings fillings'' prog)
+
 
 let try_async path =
   if Unix.fork () = 0 then () else (* Don't hold up the request. *)
@@ -1142,8 +1177,8 @@ let try_async path =
       Eval.with_gather_asserts begin fun () ->
         Interp.run_parsed ~fuel_per_top_level_binding:10_000 lookup_exp_typed parsed path
       end in
-    begin match results parsed trace assert_results path |>@ remove_unnecessary_rec_flags with
-    | result::_ ->
+    begin match best_result parsed trace assert_results path |>& remove_unnecessary_rec_flags with
+    | Some result ->
       Undo_redo.perhaps_initialize_undo_history path;
       if parsed <> result then begin
         Pretty_code.output_code result path; (* This was overwriting synth results! :o *)

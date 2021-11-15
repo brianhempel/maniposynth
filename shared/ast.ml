@@ -843,6 +843,74 @@ module VbGroups = struct
   end
 end
 
+(* Parsetree node attributes *)
+(* We use these for storing visualizers and canvas positions. *)
+module Attr = struct
+  type t = attribute
+
+  let name (Location.{ txt; _ }, _) = txt
+  let payload (_, payload) = payload
+  let exp_opt = function
+    | (_, PStr [{ pstr_desc = Pstr_eval (exp, _); _}]) -> Some exp
+    | _                                                -> None
+
+  (* let exp_of_payload = function
+    | PStr [{ pstr_desc = Pstr_eval (exp, _); _}] -> Some exp
+    | _ -> None *)
+
+  let findall target_name attrs =
+    attrs |>@? (name %> (=) target_name)
+
+  let findall_exp target_name attrs =
+    attrs
+    |>@& begin fun attr ->
+      if name attr = target_name
+      then exp_opt attr
+      else None
+    end
+
+  let find_exp target_name attrs =
+    List.hd_opt (findall_exp target_name attrs)
+
+  let has_tag target_name attrs =
+    findall target_name attrs <> []
+
+  let add_exp target_name exp attrs =
+    attrs @ [(Loc_.mk target_name, PStr [Ast_helper.Str.eval exp])]
+
+  let add_tag target_name attrs =
+    attrs @ [(Loc_.mk target_name, PStr [])]
+
+  (* Compares exps by their unparsed representation *)
+  let remove_exp target_name exp attrs =
+    let target_code = Exp.to_string exp in
+    attrs |>@? begin fun attr ->
+      name attr <> target_name || (exp_opt attr |>& Exp.to_string) <> Some target_code
+    end
+
+  let remove_name target_name attrs =
+    attrs |>@? (name %> (<>) target_name)
+
+  let set_exp target_name exp = remove_name target_name %> add_exp target_name exp
+  let set_tag target_name = remove_name target_name %> add_tag target_name
+end
+
+
+module Attrs = struct
+  let mapper f =
+    let map_attrs mapper attrs = f (dflt_mapper.attributes mapper attrs) in
+    { dflt_mapper with attributes = map_attrs }
+
+  let map f prog =
+    (mapper f).structure (mapper f) prog
+
+  let remove_all_deep_mapper = mapper (fun _ -> [])
+  let remove_all_deep_vb     = remove_all_deep_mapper.value_binding remove_all_deep_mapper
+  let remove_all_deep_exp    = remove_all_deep_mapper.expr          remove_all_deep_mapper
+  let remove_all_deep_pat    = remove_all_deep_mapper.pat           remove_all_deep_mapper
+end
+
+
 (* Structure Items ≡ Structure (i.e. a program) *)
 module StructItems = struct
   type t = structure
@@ -856,6 +924,8 @@ module StructItems = struct
   (* Variable names introduced or used. Excludes ctors. *)
   (* Includes endings of qualified names, e.g. "x" in Thing.x *)
   let deep_names prog =
+    (* Ignore names in synth rejection attrs. *)
+    let prog = Attrs.map (List.filter (Attr.name %> (<>) "not")) prog in
     let everything  = everything (Sis prog) in
     let pat_names   = everything.pats |>@& Pat.name_loced |>@ Loc_.txt in
     let ident_names = everything.exps |>@& Exp.ident_lid |>@ Longident.last in
@@ -866,6 +936,7 @@ module StructItems = struct
     let mapper = { dflt_mapper with structure = map_sis } in
     mapper.structure mapper struct_items
 end
+
 
 (* Structure Item (i.e. top-level clauses) *)
 module StructItem = struct
@@ -897,66 +968,6 @@ module StructItem = struct
   let concat_map             f prog = StructItems.map (fun si -> si |>@@ f) prog
   let concat_map_by pred     f prog = concat_map (fun si -> if pred si then f si else [si]) prog
   let concat_map_by_loc loc' f prog = concat_map_by (loc %> (=) loc') f prog
-end
-
-
-(* Parsetree node attributes *)
-(* We use these for storing visualizers and canvas positions. *)
-module Attr = struct
-  type t = attribute
-
-  let name (Location.{ txt; _ }, _) = txt
-  let payload (_, payload) = payload
-  let exp_opt = function
-    | (_, PStr [{ pstr_desc = Pstr_eval (exp, _); _}]) -> Some exp
-    | _                                                -> None
-
-  (* let exp_of_payload = function
-    | PStr [{ pstr_desc = Pstr_eval (exp, _); _}] -> Some exp
-    | _ -> None *)
-
-  let findall target_name attrs =
-    attrs |>@? (name %> (=) target_name)
-
-  let findall_exp target_name attrs =
-    attrs
-    |>@& begin fun attr ->
-      if name attr = target_name
-      then exp_opt attr
-      else None
-    end
-
-  let find_exp target_name attrs =
-    List.hd_opt (findall_exp target_name attrs)
-
-  let add_exp target_name exp attrs =
-    attrs @ [(Loc_.mk target_name, PStr [Ast_helper.Str.eval exp])]
-
-  (* Compares exps by their unparsed representation *)
-  let remove_exp target_name exp attrs =
-    let target_code = Exp.to_string exp in
-    attrs |>@? begin fun attr ->
-      name attr <> target_name || (exp_opt attr |>& Exp.to_string) <> Some target_code
-    end
-
-  let remove_name target_name attrs =
-    attrs |>@? (name %> (<>) target_name)
-
-  let set_exp target_name exp = remove_name target_name %> add_exp target_name exp
-end
-
-module Attrs = struct
-  let mapper f =
-    let map_attrs mapper attrs = f (dflt_mapper.attributes mapper attrs) in
-    { dflt_mapper with attributes = map_attrs }
-
-  let map f prog =
-    (mapper f).structure (mapper f) prog
-
-  let remove_all_deep_mapper = mapper (fun _ -> [])
-  let remove_all_deep_vb     = remove_all_deep_mapper.value_binding remove_all_deep_mapper
-  let remove_all_deep_exp    = remove_all_deep_mapper.expr          remove_all_deep_mapper
-  let remove_all_deep_pat    = remove_all_deep_mapper.pat           remove_all_deep_mapper
 end
 
 
