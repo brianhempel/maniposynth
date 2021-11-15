@@ -353,16 +353,19 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   | Redo ->
     Undo_redo.redo path
   | InsertCode (loc_str, code, xy_opt) ->
-    let loc = Serialize.loc_of_string loc_str in
-    let equality_lhs_rhs =
-      match Camlboot_interpreter.Eval.parse_assert (Exp.from_string code) with
-      | Some (lhs, rhs)             -> Some (Exp.to_string lhs, Exp.to_string rhs)
-      | _                           -> None
-      | exception Syntaxerr.Error _ -> None
-    in
-    begin match equality_lhs_rhs with
-    | Some (lhs, rhs) -> add_assert_before_loc loc lhs rhs xy_opt final_tenv
-    | None            -> insert_code loc code xy_opt final_tenv
+    begin fun prog ->
+      let loc = Serialize.loc_of_string loc_str in
+      let insert_at_top_level = prog |> List.exists (StructItem.loc %> (=) loc) in
+      let equality_lhs_rhs =
+        match Camlboot_interpreter.Eval.parse_assert (Exp.from_string code) with
+        | Some (lhs, rhs)             -> Some (Exp.to_string lhs, Exp.to_string rhs)
+        | _                           -> None
+        | exception Syntaxerr.Error _ -> None
+      in
+      begin match equality_lhs_rhs with
+      | Some (lhs, rhs) when insert_at_top_level -> add_assert_before_loc loc lhs rhs xy_opt final_tenv prog
+      | _                                        -> insert_code loc code xy_opt final_tenv prog
+      end
     end
   | Destruct (loc_str, destruct_code) ->
     let loc = Serialize.loc_of_string loc_str in

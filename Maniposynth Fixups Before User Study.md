@@ -169,17 +169,11 @@
 
 - [x] blue expected values should display in the right places
 
-- [ ] divergence produces junk frames: combine identical frames?
-
-- [ ] "new function" tool
-
-- [ ] "add arg" tool
-
 - [x] tool log output is getting noisy...something with asserts...??
 
 - [x] statistics for synth
 
-- [ ] synth: fails with "F-expr failure" on
+- [x] synth: fails with "F-expr failure" on
 
   ```ocaml
   let map list f =
@@ -225,15 +219,33 @@
 
 - [x] synth: single req on hole should only guess the constant in the req
 
+- [x] `x = y` only converts to assert at the top level, otherwise is a conditional
+
+- [ ] asserts should be editable in the frames table
+
+- [ ] click on unreachable base case should add assert that reaches that case
+
+- [ ] divergence produces junk frames: combine identical frames?
+
+- [ ] text edit in-place, instead of in inspector—and just highlight the clicked subexp
+
+- [ ] autocomplete constants for examples
+
 - [ ] synth: should trying using bindings that are after the holes!
+
+- [ ] autocomplete: clicking a value on screen should add to autocomplete
 
 - [ ] ~~synth: actually say in the interface if it timed out~~
 
 - [ ] synth: don't use `< <= > >=` at bool type (lol)
 
-- [ ] text edit in-place, instead of in inspector—and just highlight the clicked subexp
+- [ ] synth: let user decide kinds of terms are allowed
 
 - [ ] delete on green result values
+
+- [ ] "new function" tool
+
+- [ ] "add arg" tool
 
 - [x] add (||) and (&&) tools
 
@@ -243,17 +255,15 @@
 
 - [x] "add example" tool (for function)
 
-- [ ] autocomplete constants for examples
-
 - [ ] autocomplete should show exps and vals
 
 - [ ] undo remembers text edit steps
 
 - [ ] tools offscreen
 
-- [x] accept/reject button for each synth filling
-
 - [ ] way to distinguish "x = y" between adding an assert, an equality, or a let-binding (suddenly display a dropdown when " = " is typed?)
+
+- [x] accept/reject button for each synth filling
 
 - [ ] shouldn't be able to drag values from out of frame
 
