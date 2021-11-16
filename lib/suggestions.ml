@@ -15,6 +15,10 @@ let common_suggestions =
   ; "(??) @ (??)"
   ; "List.map (??) (??)"
   ; "List.filter (??) (??)"
+  ; "(??) < (??)"
+  ; "(??) <= (??)"
+  ; "(??) > (??)"
+  ; "(??) >= (??)"
   ]
 
 let common_suggestions_and_suffixes =
@@ -26,6 +30,10 @@ let common_suggestions_and_suffixes =
   ; "|| (??)"
   ; "+ (??)"
   ; "@ (??)"
+  ; "< (??)"
+  ; "<= (??)"
+  ; "> (??)"
+  ; ">= (??)"
   ]
 
 let ctors_types tenv =

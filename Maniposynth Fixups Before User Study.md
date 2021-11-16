@@ -275,7 +275,7 @@
 
 - [ ] "add arg" tool
 
-- [ ] add `< <= > >=` tools
+- [x] add `< <= > >=` tools
 
 - [x] add (||) and (&&) tools
 
