@@ -225,6 +225,10 @@
 
 - [x] first top-level `x=y` accidentally inserted as binding rather than assert
 
+- [x] synth: only accept expressions where all function vars are used
+
+- [x] synth: only accept expressions where all branches exercised
+
 - [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype)
 
 - [ ] type errors shouldn't stop all edits
@@ -270,6 +274,8 @@
 - [ ] "new function" tool
 
 - [ ] "add arg" tool
+
+- [ ] add `< <= > >=` tools
 
 - [x] add (||) and (&&) tools
 

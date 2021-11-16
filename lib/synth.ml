@@ -458,6 +458,33 @@ let nonconstant_names_at_loc target_loc prog =
     (* print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names; *)
     SSet.of_list names
 
+let unused_parameter_names_at_loc target_loc prog =
+  let dflt_iter = Ast.dflt_iter in
+  let names = ref [] in
+  (* Not using Ast.Exp.iter because we want to visit children _after_ mutating names. *)
+  let iter_exp (iter : Ast_iterator.iterator) exp =
+    let higher_names = !names in
+    if exp.pexp_loc = target_loc then raise (Found_names !names);
+    begin match exp.pexp_desc with
+    | Pexp_fun (_, arg_opt, pat, body) ->
+      arg_opt |>& iter.expr iter ||& ();
+      let used_names = (arg_opt |>& Scope.free_unqualified_names ||& []) @ Scope.free_unqualified_names body in
+      let ununsed_names = List.diff (Pat.names pat) used_names in
+      names := ununsed_names @ !names;
+      iter.expr iter body
+    | _ -> dflt_iter.expr iter exp;
+    end;
+    names := higher_names;
+  in
+  let iter = { dflt_iter with expr = iter_exp } in
+  try
+    iter.structure iter prog;
+    print_endline @@ "unused_parameter_names_at_loc: didn't find loc " ^ Loc.to_string target_loc;
+    []
+  with Found_names names ->
+    print_endline @@ "unused_parameter_names_at_loc: " ^ String.concat ", " names;
+    names
+
 type hole_synth_env =
     { tenv                               : Env.t
     ; hole_type                          : Types.type_expr
@@ -467,21 +494,43 @@ type hole_synth_env =
     ; check_if_constant                  : expression -> bool
     ; cant_be_constant                   : bool
     ; single_asserted_exp                : (expression * lprob) option
+    ; unused_parameter_names             : string list
     ; mutable nonconstant_idents_at_type : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable idents_at_type             : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable functions_producing_type   : (Types.type_expr * (expression  * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count, type unified with goal type *)) list
     ; mutable ctors_producing_type       : (Types.type_expr * (Longident.t * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count type unified with goal type *)) list
     }
-let is_req_satisified_by fillings (env, exp, expected) =
+let is_req_satisified_by trace_state fillings (env, exp, expected) =
   (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
   with _ -> Loc_map.bindings fillings |>@ snd |>@ (Formatter_to_stringifier.f (Printast.expression 0)) |> List.iter print_endline
   end; *)
   (* print_endline @@ string_of_req (env, exp, expected); *)
-  let evaled = eval fillings env exp in
+  let evaled = eval trace_state fillings env exp in
   (* print_endline @@ Formatter_to_stringifier.f pp_print_value evaled; *)
   Assert_comparison.values_equal_for_assert evaled expected
 
-
+let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs =
+  let fillings =
+    (* Freshen non-holes. *)
+    fillings
+    |> Loc_map.map @@ Exp.map_node begin fun exp ->
+      if Exp.is_hole exp
+      then exp
+      else { exp with pexp_loc = Loc.fresh () }
+    end
+  in
+  let trace_state = Trace.new_trace_state () in
+  reqs |> List.for_all (is_req_satisified_by trace_state fillings)
+  && begin
+    print_endline (Loc_map.to_string Exp.to_string fillings);
+    (* Ensure all expressions exercised during execution (we didn't insert junk branches etc.) *)
+    fillings
+    |> Loc_map.values
+    |>@@ Exp.flatten
+    |>@ Exp.loc
+    |>@ (fun loc -> print_endline @@ Loc.to_string loc; loc)
+    |> List.for_all (fun loc -> Trace.entries_for_loc loc trace_state.trace <> [])
+  end
 
 (* let names_in_env = env1.values |> SMap.bindings |>@& (fun (name, v) -> match v with (_, Value _) -> Some name | _ -> None) in *)
 (* prog should already have fillings applied to it *)
@@ -945,7 +994,8 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
               reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
             in
             (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
-            let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
+            let nonconstant_names      = nonconstant_names_at_loc hole_loc prog in
+            let unused_parameter_names = unused_parameter_names_at_loc hole_loc prog in
             let user_ctors =
               let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
               let user_ctor_descs =
@@ -959,18 +1009,19 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
             print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
             print_endline @@ "Nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", ");
             [ ( prog
-              , { tenv                       = hole_typed_node.exp_env
-                ; hole_type                  = hole_typed_node.exp_type
-                ; user_ctors                 = user_ctors
-                ; nonconstant_names          = nonconstant_names
-                ; local_idents               = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
-                ; check_if_constant          = is_constant nonconstant_names
-                ; cant_be_constant           = List.length unique_asserted_exps >= 2
-                ; single_asserted_exp        = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
-                ; nonconstant_idents_at_type = []
-                ; idents_at_type             = []
-                ; functions_producing_type   = []
-                ; ctors_producing_type       = []
+              , { tenv                          = hole_typed_node.exp_env
+                ; hole_type                     = hole_typed_node.exp_type
+                ; user_ctors                    = user_ctors
+                ; nonconstant_names             = nonconstant_names
+                ; local_idents                  = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+                ; check_if_constant             = is_constant nonconstant_names
+                ; cant_be_constant              = List.length unique_asserted_exps >= 2
+                ; single_asserted_exp           = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
+                ; unused_parameter_names        = unused_parameter_names
+                ; nonconstant_idents_at_type    = []
+                ; idents_at_type                = []
+                ; functions_producing_type      = []
+                ; ctors_producing_type          = []
                 }
               )
             ]
@@ -1072,7 +1123,8 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 
 let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed rejected_exps prog reqs file_name : fillings option =
-  if hole_locs prog Loc_map.empty = [] then (print_endline "no holes"; Some Loc_map.empty) else
+  let start_hole_locs = hole_locs prog Loc_map.empty in
+  if  start_hole_locs = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob < abort_lprob then (print_endline "aborting"; None) else
   let min_lprob = mult_lprobs max_lprob (lprob 0.05) in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
@@ -1081,6 +1133,11 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
   in
   let rejected_exp_strs =
     rejected_exps |> Loc_map.map (fun rejected_exps -> rejected_exps |>@ Exp.to_string)
+  in
+  let unused_param_names_at_holes =
+    start_hole_locs
+    |>@  (fun hole_loc    -> (hole_loc, unused_parameter_names_at_loc hole_loc prog))
+    |>@? (fun (_, unused) -> unused <> [])
   in
   Seq.concat
     [ e_guess (Loc_map.empty, lprob_1)
@@ -1116,7 +1173,16 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       |> List.bindings
       |> List.for_all  *)
     in
-
+    let all_params_used =
+      unused_param_names_at_holes
+      |> List.for_all begin fun (hole_loc, unused_parameter_names) ->
+        match Loc_map.find_opt hole_loc fillings with
+        | Some filling ->
+          let exp = apply_fillings_to_exp fillings filling in
+          List.diff unused_parameter_names (Scope.free_unqualified_names exp) = []
+        | None -> false
+      end
+    in
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
@@ -1126,7 +1192,8 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
     end else
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
-    not_rejected && (reqs |> List.for_all (is_req_satisified_by fillings))
+
+    all_params_used && not_rejected && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs
   end
   |> Seq.filter begin fun (fillings, _) ->
     (* One final typecheck...apparently x :: x isn't valid... *)
