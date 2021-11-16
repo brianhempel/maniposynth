@@ -102,7 +102,7 @@ let type_error_htmls stuff loc =
   end
 
 let html_of_pat ?(attrs = []) stuff pat =
-  let code = Pat.to_string @@ Pat.apply_mapper (Attrs.mapper (fun _ -> [])) pat in (* Don't show vis attrs. *)
+  let code = Pat.to_string @@ Attrs.remove_all_deep_pat pat in (* Don't show vis/pos attrs. *)
   let pat_type_opt = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> texp.Typedtree.pat_type) in
   let perhaps_type_attr = pat_type_opt |>& (fun pat_type -> [("data-type", Type.to_string pat_type)]) ||& [] in
   let perhaps_extraction_attr =
@@ -129,7 +129,7 @@ let string_of_arg_label =
 let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
 
 let exp_in_place_edit_attrs ?(infix = false) exp =
-  let code = Exp.to_string { exp with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
+  let code = Attrs.remove_all_deep_exp exp |> Exp.to_string in (* Don't show pos/vis attrs. *)
   let code' = if infix then uninfix code else code in   (* Remove parens around ops rendered infix. *)
   [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
   ; ("data-in-place-edit-code", code')
@@ -220,7 +220,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     | None -> [] in
   let perhaps_type_attr         = match value.type_opt   with Some typ              -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match exp_to_assert_on with Some exp_to_assert_on -> [("data-code-to-assert-on", Exp.to_string (exp_to_assert_on |> Attrs.remove_all_deep_exp))] | _ -> [] in
-  let extraction_code = extraction_exp_opt |>& Exp.to_string ||& "" in
+  let extraction_code = extraction_exp_opt |>& Attrs.remove_all_deep_exp |>& Exp.to_string ||& "" in
   let perhaps_edit_code_attrs =
     value.vtrace
     |> List.rev
@@ -301,7 +301,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
             end
         in
         if arg_count >= 1
-        then ("data-extraction-code", Exp.apply_with_hole_args extraction_exp arg_count |> Exp.to_string)
+        then ("data-extraction-code", Exp.apply_with_hole_args extraction_exp arg_count |> Attrs.remove_all_deep_exp |> Exp.to_string)
         else ("data-extraction-code", extraction_code)
       end
       |> Option.to_list
@@ -399,13 +399,13 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     value.vtrace
     |> List.rev
     |> List.findmap_opt begin function
-      | ((_, loc), Use)              -> Exp.find_opt loc stuff.prog |>& Exp.to_string
+      | ((_, loc), Use)              -> Exp.find_opt loc stuff.prog |>& Attrs.remove_all_deep_exp |>& Exp.to_string
       | ((_, loc), PatMatch (_, [])) -> Pat.find_opt loc stuff.prog |>& Pat.to_string
       | _                            -> None
     end
     ||&~ begin fun _ ->
       match value_ with
-      | Fun (arg_label, e_opt, pat, body, _) -> Exp.to_string (Exp.fun_ arg_label e_opt pat body)
+      | Fun (arg_label, e_opt, pat, body, _) -> Exp.to_string (Attrs.remove_all_deep_exp @@ Exp.fun_ arg_label e_opt pat body)
       | Function (_, _)                      -> "func"
       | _                                    -> failwith "impossible"
     end
@@ -615,8 +615,8 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let is_infix = fexp |> Exp.simple_name |>& Name.is_infix ||& false in
     (* When fexp is a variable, don't render an exp for the fexp, let the fexp represent the whole call *)
     begin match is_infix, labeled_args with
-    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ " " ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string fexp) else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ " " ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
-    | _                -> values_for_exp ^ (if Exp.is_ident fexp then Exp.to_string fexp ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
+    | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ " " ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string @@ Attrs.remove_all_deep_exp fexp) else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ " " ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
+    | _                -> values_for_exp ^ (if Exp.is_ident fexp then (Exp.to_string @@ Attrs.remove_all_deep_exp fexp) ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
     end
   | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> values_for_exp ^ if in_list then "]" else "[]"
   | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
