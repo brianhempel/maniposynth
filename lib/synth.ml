@@ -75,8 +75,8 @@ let eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame
     Some (Eval.eval_module_expr fillings prims env lookup_exp_typed trace_state frame_no mod_exp)
   end (fun () -> None)
 
-let eval fillings env exp =
-  eval_exp_fueled fillings Primitives.prims env (fun _ -> None) Trace.new_trace_state (-1) exp
+let eval trace_state fillings env exp =
+  eval_exp_fueled fillings Primitives.prims env (fun _ -> None) trace_state (-1) exp
 
 let rec try_cases fillings prims env lookup_exp_typed trace_state frame_no scrutinee_val cases =
   let open Eval in
@@ -151,7 +151,7 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
   if !fuel <= 0 then raise No_fuel;
   (* print_endline @@ "Pushing down " ^ string_of_req req; *)
   let recurse = push_down_req_ fillings lookup_exp_typed hit_a_function_f in
-  let prims, trace_state, frame_no = Primitives.prims, Trace.new_trace_state, -1 in
+  let prims, trace_state, frame_no = Primitives.prims, (Trace.new_trace_state ()), -1 in
   let try_cases = try_cases fillings prims env lookup_exp_typed trace_state frame_no in
   (* let perhaps_add_type_opt v =
     if v.type_opt = None then

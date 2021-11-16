@@ -164,7 +164,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
           let (fval, _) =
             Eval.with_gather_asserts begin fun () ->
               let exp_to_run = Exp.from_string @@ "try (" ^ Exp.to_string exp ^ ") with _ -> (??)" in
-              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) (Trace.new_trace_state ()) 0 exp_to_run
             end in
           let vis_assert_lhs = Exp.apply exp [(Nolabel, Assert_comparison.exp_of_value value)] in
           let matching_asserts =
@@ -181,7 +181,7 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
           let (result_value, _) =
             (* "with_gather_asserts" so failed asserts don't crash execution *)
             Eval.with_gather_asserts begin fun () ->
-              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) Trace.new_trace_state 0 exp_to_run
+              Eval.eval_expr_with_fuel_or_bomb 1000 Loc_map.empty Primitives.prims env (fun _ -> None) (Trace.new_trace_state ()) 0 exp_to_run
             end in
           let wrap html =
             if any_failures then

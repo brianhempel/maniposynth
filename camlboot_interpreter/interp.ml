@@ -105,7 +105,7 @@ let load_rec_units ?fuel_per_top_level_binding ?(fillings = Shared.Loc_map.empty
 (* LAZY LOAD STDLIB MODULES AS NEEDED? *)
 let stdlib_env () =
   let env = Runtime_base.initial_env in
-  let env = load_rec_units env (fun _ -> None) Trace.new_trace_state stdlib_units in
+  let env = load_rec_units env (fun _ -> None) (Trace.new_trace_state ()) stdlib_units in
   env
 
 module Compiler_files = struct
@@ -346,10 +346,10 @@ let native_compiler_units () =
   )
 
 let run_ocamlc () =
-  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) Trace.new_trace_state (bytecode_compiler_units ()))
+  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) (Trace.new_trace_state ()) (bytecode_compiler_units ()))
 
 let run_ocamlopt () =
-  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) Trace.new_trace_state (native_compiler_units ()))
+  ignore (load_rec_units (stdlib_env ()) (fun _ -> None) (Trace.new_trace_state ()) (native_compiler_units ()))
 
 
 let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
@@ -357,7 +357,7 @@ let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
   let anon_fun file = rev_files := file :: !rev_files in
   Arg.parse [] anon_fun "";
   let files = List.rev !rev_files in *)
-  let trace_state = Trace.new_trace_state in
+  let trace_state = Trace.new_trace_state () in
   let final_env =
     try
       files
@@ -370,7 +370,7 @@ let run_files ?fuel_per_top_level_binding lookup_exp_typed files =
   (trace_state.trace, final_env)
 
 let run_parsed ?fuel_per_top_level_binding lookup_exp_typed parsed file_name =
-  let trace_state = Trace.new_trace_state in
+  let trace_state = Trace.new_trace_state () in
   trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
   let frame_no = trace_state.frame_no in
   let fillings = Shared.Loc_map.empty in

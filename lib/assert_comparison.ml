@@ -229,8 +229,8 @@ let does_lhs_match candidate_env candidate_lhs Data.{ env; lhs_exp; _} =
     , Value fexp2
     when values_equal_for_assert fexp1 fexp2 ->
       let args_equal arg1 arg2 =
-        let val1 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims candidate_env (fun _ -> None) Trace.new_trace_state 0 arg1 in
-        let val2 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims env           (fun _ -> None) Trace.new_trace_state 0 arg2 in
+        let val1 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims candidate_env (fun _ -> None) (Trace.new_trace_state ()) 0 arg1 in
+        let val2 = Eval.eval_expr_with_fuel_or_bomb 20 Shared.Loc_map.empty Primitives.prims env           (fun _ -> None) (Trace.new_trace_state ()) 0 arg2 in
         (* if Exp.to_string arg1 = "succ" && Exp.to_string arg2 = "succ" then
           print_endline @@ string_of_bool (values_equal_for_assert val1 val2); *)
         values_equal_for_assert val1 val2

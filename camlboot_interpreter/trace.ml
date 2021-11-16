@@ -21,7 +21,7 @@ type trace_state =
 
 let empty = IMap.empty
 
-let new_trace_state =
+let new_trace_state () =
   { trace = empty
   ; frame_no = 0
   }
