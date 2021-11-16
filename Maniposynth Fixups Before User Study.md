@@ -221,7 +221,27 @@
 
 - [x] `x = y` only converts to assert at the top level, otherwise is a conditional
 
+- [x] synth exceptions...sometimes the added type annotations can't be converted back to type exprs???
+
+- [x] first top-level `x=y` accidentally inserted as binding rather than assert
+
+- [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype)
+
+- [ ] type errors shouldn't stop all edits
+
+- [ ] popup explaining syntax error
+
+- [ ] draw if-then-else on multiple lines?
+
+- [ ] synth: prims should be typed for synth
+
+- [ ] exp extract labels shouldn't show attrs
+
+- [ ] positioning: global update after movement? (so things never snap back?)
+
 - [ ] asserts should be editable in the frames table
+
+- [ ] better names for inserted calls...(from expression names??)
 
 - [ ] click on unreachable base case should add assert that reaches that case
 
@@ -234,6 +254,10 @@
 - [ ] synth: should trying using bindings that are after the holes!
 
 - [ ] autocomplete: clicking a value on screen should add to autocomplete
+
+- [ ] autocomplete: clicking a result option should not submit the textbox
+
+- [ ] type errors should not cover up expressions (happens when expression is multiple lines)
 
 - [ ] ~~synth: actually say in the interface if it timed out~~
 

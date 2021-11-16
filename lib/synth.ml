@@ -880,11 +880,21 @@ let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog req
   end
   |> List.dedup_by StructItems.to_string
 
-let count_type_var_annotations (prog, typed_prog) =
+let count_type_var_annotations prog =
   let n = ref 0 in
-  prog
+  let iter_core_type iterator core_type =
+    dflt_iter.typ iterator core_type;
+    match core_type.ptyp_desc with
+    | Ptyp_var _ -> incr n;
+    | _          -> ()
+  in
+  let iterator = { dflt_iter with typ = iter_core_type } in
+  iterator.structure iterator prog;
+  !n
+
+  (* prog
   |> Exp.iter begin function
-    | { pexp_desc = Pexp_constraint (_, core_type); _} -> n := !n + (core_type |> Type.from_core_type ~env:typed_prog.Typedtree.str_final_env |> Type.flatten |> List.count Type.is_var_type)
+    | { pexp_desc = Pexp_constraint (_, core_type); _} as e -> print_endline (Exp.to_string e); n := !n + (core_type |> Type.from_core_type ~env:typed_prog.Typedtree.str_final_env |> Type.flatten |> List.count Type.is_var_type)
     | _ -> ()
   end;
   prog
@@ -892,7 +902,7 @@ let count_type_var_annotations (prog, typed_prog) =
     | { ppat_desc = Ppat_constraint (_, core_type); _} -> n := !n + (core_type |> Type.from_core_type ~env:typed_prog.Typedtree.str_final_env |> Type.flatten |> List.count Type.is_var_type)
     | _ -> ()
   end;
-  !n
+  !n *)
 
 
 let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name : (fillings * lprob) Seq.t =
@@ -907,17 +917,19 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
         print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
         let (typed_prog, _, _) =
           try Typing.typedtree_sig_env_of_parsed prog file_name
-          with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-                      (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+          with _ ->
+            print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog;
+            ({ Typedtree.str_items = []; str_type = []; str_final_env = Typing.initial_env }, [], Env.empty)
         in
         (prog, typed_prog)
       end
     in
     (* Only keep progs with a minium number of type vars in the added annotations. *)
-    let min_type_var_annotations_count = progs' |>@ count_type_var_annotations |> List.fold_left min max_int in
+    let min_type_var_annotations_count = progs' |>@ fst %> count_type_var_annotations |> List.fold_left min max_int in
     progs'
-    |>@? (count_type_var_annotations %> (=) min_type_var_annotations_count)
+    |>@? (fst %> count_type_var_annotations %> (=) min_type_var_annotations_count)
   in
+  (* ignore @@ exit 0; *)
   print_endline @@ string_of_int (List.length prog_and_typed_progs) ^ " programs will be used";
   let reqs' = reqs |>@@ push_down_req fillings prog in
   let hole_locs_progs_and_synth_envs : (Location.t * (program * hole_synth_env) Seq.t) list =

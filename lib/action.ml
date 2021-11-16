@@ -355,7 +355,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   | InsertCode (loc_str, code, xy_opt) ->
     begin fun prog ->
       let loc = Serialize.loc_of_string loc_str in
-      let insert_at_top_level = prog |> List.exists (StructItem.loc %> (=) loc) in
+      let insert_at_top_level = prog = [] || prog |> List.exists (StructItem.loc %> (=) loc) in
       let equality_lhs_rhs =
         match Camlboot_interpreter.Eval.parse_assert (Exp.from_string code) with
         | Some (lhs, rhs)             -> Some (Exp.to_string lhs, Exp.to_string rhs)
