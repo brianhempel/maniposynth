@@ -132,6 +132,14 @@ let type_ctor env ctor_lid arg_val_opt =
     Some ctor_type
   | _ -> None
 
+let perhaps_add_type_opt lookup_exp_typed expr v =
+  (* Try to recover types for values introduced in library code *)
+  if v.type_opt = None then
+    match lookup_type_opt lookup_exp_typed expr.pexp_loc with
+    | Some typ when not (Shared.Ast.Type.is_var_type typ) -> add_type_opt (Some typ) v
+    | _                                                   -> v
+  else
+    v
 
 let rec apply fillings prims lookup_exp_typed trace_state (vf : value) args =
   (* All the pattern binds can raise BombExn *)
@@ -297,6 +305,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
     | None -> intro @@ new_vtrace @@ Hole (ref env, frame_no, expr)
     end
   | Pexp_ident id -> use @@
+     perhaps_add_type_opt lookup_exp_typed expr @@
      begin try match env_get_value_or_lvar env id with
       | Value ({ v_ = Hole (env_ref, frame_no, e); _ } as v) ->
         begin match Shared.Loc_map.find_opt e.pexp_loc fillings with
@@ -317,16 +326,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
   | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Function (cl, ref env)
   | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
   | Pexp_apply (f, l) -> ret @@
-    let perhaps_add_type_opt v =
-      (* Try to recover types for values introduced in library code *)
-      if v.type_opt = None then
-        match lookup_type_opt lookup_exp_typed expr.pexp_loc with
-        | Some typ when not (Shared.Ast.Type.is_var_type typ) -> add_type_opt (Some typ) v
-        | _                                                   -> v
-      else
-        v
-    in
-    perhaps_add_type_opt @@
+    perhaps_add_type_opt lookup_exp_typed expr @@
     (match eval_expr fillings prims env lookup_exp_typed trace_state frame_no f with
     | { v_ = Fexpr fexpr; _ } ->
       (* print_endline (Shared.Ast.Exp.to_string f);

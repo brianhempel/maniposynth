@@ -294,7 +294,11 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
           match value_ with
           | Fun (Asttypes.Nolabel, _, _, body, _) -> 1 + exp_arg_count body
           | Function (_, _)                       -> 1
-          | _                                     -> 0
+          | _                                     ->
+            begin match value.type_opt with
+            | Some typ -> Type.arrow_arg_count typ
+            | None     -> 0
+            end
         in
         if arg_count >= 1
         then ("data-extraction-code", Exp.apply_with_hole_args extraction_exp arg_count |> Exp.to_string)

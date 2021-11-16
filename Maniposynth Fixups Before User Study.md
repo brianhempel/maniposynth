@@ -231,7 +231,7 @@
 
 - [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype)
 
-- [ ] type errors shouldn't stop all edits
+- [ ] type errors shouldn't stop all edits...not sure how to do this
 
 - [x] popup explaining syntax error
 
