@@ -747,7 +747,7 @@ table.subvalue-annotations td {
   /* font-size: 40px; */
 }
 
-.syntax_errors {
+.fatal_errors {
   position: fixed;
   top: 10rem;
   left: 10%;
