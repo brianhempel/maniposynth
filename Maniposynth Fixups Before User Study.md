@@ -235,7 +235,7 @@
 
 - [x] popup explaining syntax error
 
-- [ ] draw if-then-else on multiple lines?
+- [x] draw if-then-else on multiple lines?
 
 - [ ] synth: prims should be typed for synth
 

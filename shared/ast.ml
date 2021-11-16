@@ -586,13 +586,14 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_ident { txt = Longident.Lident "??"; _ } -> true
     | _                                             -> false
-  let is_fun         = function { pexp_desc = Pexp_fun _; _ }      -> true | _ -> false
-  let is_function    = function { pexp_desc = Pexp_function _; _ } -> true | _ -> false
+  let is_fun         = function { pexp_desc = Pexp_fun        _; _ } -> true | _ -> false
+  let is_function    = function { pexp_desc = Pexp_function   _; _ } -> true | _ -> false
   let is_funlike exp = is_fun exp || is_function exp
-  let is_constant    = function { pexp_desc = Pexp_constant _; _ } -> true | _ -> false
-  let is_match       = function { pexp_desc = Pexp_match _; _ }    -> true | _ -> false
-  let is_ident       = function { pexp_desc = Pexp_ident _; _ }    -> true | _ -> false
-  let is_assert      = function { pexp_desc = Pexp_assert _; _ }   -> true | _ -> false
+  let is_constant    = function { pexp_desc = Pexp_constant   _; _ } -> true | _ -> false
+  let is_match       = function { pexp_desc = Pexp_match      _; _ } -> true | _ -> false
+  let is_ident       = function { pexp_desc = Pexp_ident      _; _ } -> true | _ -> false
+  let is_assert      = function { pexp_desc = Pexp_assert     _; _ } -> true | _ -> false
+  let is_ite         = function { pexp_desc = Pexp_ifthenelse _; _ } -> true | _ -> false
   let is_simple_name = simple_name %> (<>) None
 
   let freshen_locs exp =
