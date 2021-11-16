@@ -913,8 +913,23 @@ let drawing_tools tenv prog =
     ~attrs:[("class", "tools")]
     (common_phrases_menu @ prog_funcs_menu @ ctor_menus)
 
+let render_syntax_errors syntax_errors =
+  let cleanup str =
+    str
+    |> String.replace "\027[1m" ""
+    |> String.replace "\027[0m" ""
+    |> String.replace "\027[1;31m" ""
+  in
+  div ~attrs:[("class", "syntax_errors")] begin
+    syntax_errors
+    |>@ begin fun error ->
+      div ~attrs:[("class", "syntax_error")] [cleanup @@ Formatter_to_stringifier.f Location.report_exception error]
+    end
+  end
 
-let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups type_errors final_env final_tenv =
+
+
+let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups syntax_errors type_errors final_env final_tenv =
   let names_in_prog = StructItems.deep_names structure_items in
   let stuff =
     { trace          = trace
@@ -956,7 +971,8 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; p [strong ["Synthesis -"]; "Assert and let the computer write code."]
         ; p [strong ["Bimodal -"]; "Work in your normal editor whenever you want."]
         ]
-      ; div ~attrs:[("class", "top-matter")] @@
+      ] @ if syntax_errors <> [] then [render_syntax_errors syntax_errors] else
+      [ div ~attrs:[("class", "top-matter")] @@
         List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
         [hint "Top level - drag items from the menus above, or double-click below to write code"] @

@@ -52,34 +52,40 @@ let serve_asset out_chan url =
 
 let render_maniposynth out_chan url =
   let path = String.drop 1 url |> nativize_path in
-  let parsed = Camlboot_interpreter.Interp.parse path in
-  (* let parsed_with_comments = Parse_unparse.parse_file path in
-  let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
-  let callables = Read_execution_env.callables_of_file path in
-  let trace = Tracing.run_with_tracing path in
-  let html_str = View.html_str callables trace bindings_skels in *)
-  let (type_lookups, final_tenv, type_errors) =
+  let (parsed, trace, assert_results, type_lookups, syntax_errors, type_errors, file_final_env, final_tenv) =
     try
-      let (typed_struct, _, final_tenv, type_errors) = Typing.typedtree_sig_env_of_file_with_error_recovery path in
-      let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
-      (type_lookups, final_tenv, type_errors)
-    with Typecore.Error (loc, tenv, err) ->
-      (Typing.empty_lookups, Typing.initial_env, [(loc, tenv, err)])
-  in
-  let ((trace, final_env), assert_results) =
-    let open Camlboot_interpreter in
-    Eval.with_gather_asserts begin fun () ->
-      Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
-    end
-  in
-  let file_final_env =
-    let open Camlboot_interpreter in
-    (* open the module, basically *)
-    (Envir.env_get_module_data final_env (Shared.Ast.Longident.lident (Data.module_name_of_unit_path path))).mod_internal_env
+      let parsed = Camlboot_interpreter.Interp.parse path in
+      (* let parsed_with_comments = Parse_unparse.parse_file path in
+      let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
+      let callables = Read_execution_env.callables_of_file path in
+      let trace = Tracing.run_with_tracing path in
+      let html_str = View.html_str callables trace bindings_skels in *)
+      let (type_lookups, final_tenv, type_errors) =
+        try
+          let (typed_struct, _, final_tenv, type_errors) = Typing.typedtree_sig_env_of_file_with_error_recovery path in
+          let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
+          (type_lookups, final_tenv, type_errors)
+        with Typecore.Error (loc, tenv, err) ->
+          (Typing.empty_lookups, Typing.initial_env, [(loc, tenv, err)])
+      in
+      let ((trace, final_env), assert_results) =
+        let open Camlboot_interpreter in
+        Eval.with_gather_asserts begin fun () ->
+          Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
+        end
+      in
+      let file_final_env =
+        let open Camlboot_interpreter in
+        (* open the module, basically *)
+        (Envir.env_get_module_data final_env (Shared.Ast.Longident.lident (Data.module_name_of_unit_path path))).mod_internal_env
+      in
+      (parsed, trace, assert_results, type_lookups, [], type_errors, file_final_env, final_tenv)
+    with error ->
+      ([], Camlboot_interpreter.Trace.empty, [], Typing.empty_lookups, [error], [], Camlboot_interpreter.Envir.empty_env, Env.empty)
   in
   (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)
-  let html_str = View.html_str parsed trace assert_results type_lookups type_errors file_final_env final_tenv in
+  let html_str = View.html_str parsed trace assert_results type_lookups syntax_errors type_errors file_final_env final_tenv in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

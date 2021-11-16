@@ -741,3 +741,16 @@ table.subvalue-annotations td {
   /* z-index: -1; */
   /* font-size: 40px; */
 }
+
+.syntax_errors {
+  position: fixed;
+  top: 10rem;
+  left: 10%;
+  width: 80%;
+  text-align: center;
+  padding: 2rem;
+  font-size: 2rem;
+  border: 3px solid red;
+  background-color: #fcc;
+  border-radius: 3rem;
+}

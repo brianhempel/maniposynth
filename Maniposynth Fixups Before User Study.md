@@ -233,7 +233,7 @@
 
 - [ ] type errors shouldn't stop all edits
 
-- [ ] popup explaining syntax error
+- [x] popup explaining syntax error
 
 - [ ] draw if-then-else on multiple lines?
 
