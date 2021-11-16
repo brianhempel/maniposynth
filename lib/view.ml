@@ -136,7 +136,7 @@ let exp_in_place_edit_attrs ?(infix = false) exp =
   ]
 
 let exp_gunk ?(infix = false) stuff exp =
-  let code = Exp.to_string { exp with pexp_attributes = [] } in (* Don't show pos/vis attrs. *)
+  let code = Attrs.remove_all_deep_exp exp |> Exp.to_string in (* Don't show pos/vis attrs. *)
   let code' = if infix then uninfix code else code in (* Remove parens around ops rendered infix. *)
   let perhaps_type_attr = stuff.type_lookups.lookup_exp exp.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
   let attrs =

@@ -237,9 +237,9 @@
 
 - [x] draw if-then-else on multiple lines?
 
-- [ ] synth: prims should be typed for synth
+- [x] synth: prims should be typed for synth
 
-- [ ] exp extract labels shouldn't show attrs
+- [x] exp extract labels shouldn't show attrs
 
 - [ ] positioning: global update after movement? (so things never snap back?)
 
