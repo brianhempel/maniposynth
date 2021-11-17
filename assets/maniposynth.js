@@ -822,7 +822,11 @@ function valuesForAutocomplete(elem) {
       // Args
       values = values.concat(Array.from(ancestor.querySelectorAll(":scope > table > tbody > .fun-param .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
       // Rets
-      values = values.concat(Array.from(ancestor.querySelectorAll(":scope > .returns .return .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
+      // values = values.concat(Array.from(ancestor.querySelectorAll(":scope > .returns .return .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
+    }
+    if (ancestor.classList.contains("returns")) {
+      // Function internal vbs or nested vbs
+      values = values.concat(Array.from(ancestor.closest(".tv").querySelectorAll(":scope > .vbs > .box > .tv > .values > .root-value-holder:not(.not-in-active-frame) .value[data-extraction-code]")));
     }
     if (ancestor == frameNoElem) {
       break;
@@ -1880,7 +1884,7 @@ function deleteElem(elem) {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
-    const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected');
+    const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected,.value[data-in-place-edit-loc].selected');
     if (elem) {
       deleteElem(elem);
       event.stopImmediatePropagation();

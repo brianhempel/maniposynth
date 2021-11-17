@@ -253,6 +253,8 @@
 
 - [ ] positioning: global update after movement? (so things never snap back?)
 
+- [ ] root value still needs more clickable area. I think that's a large part of why it feels like the tool isn't about value manipulation...too hard to dodge the children with the mouse
+
 - [ ] asserts should be editable in the frames table
 
 - [ ] better names for inserted calls...(from expression names??)
@@ -287,7 +289,7 @@
 
 - [ ] match scrutinee should be green so that it feels more clickable
 
-- [ ] delete on green result values
+- [x] delete on green result values
 
 - [ ] rich text paste into textbox shouldn't cause mad trouble (I think nbsps are happening)
 
@@ -304,6 +306,8 @@
 - [x] render primitives
 
 - [x] "add example" tool (for function)
+
+- [x] autocomplete in rets should allow autocomplete to TVs in function body
 
 - [ ] autocomplete should show exps and vals
 
@@ -391,7 +395,7 @@
 
 - [ ] add submit button for all textboxes (with hotkey noted)? participants don't have a problem with this
 
-- [ ] autocomplete to vised values?
+- [ ] autocomplete to vised values? nooo too many...or maybe root vised values only
 
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 
