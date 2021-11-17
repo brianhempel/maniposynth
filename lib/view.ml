@@ -967,15 +967,19 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
         ; span ~attrs:[("class","undo tool")] ["Undo (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
         ; span ~attrs:[("class","redo tool")] ["Redo  (⇧" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]
         ] @ [drawing_tools final_tenv structure_items]
-      ; div ~attrs:([("id", "mission-statement")] @ if structure_items <> [] then [("class","there-is-code-now")] else []) @@
-        [ img ~attrs:[("src", "/assets/maniposynth.svg")]
-        ; p ["Exploring the frontiers of visual interactive programming—can cutting-edge features meld into a delightful and productive coding environment?"]
-        ; p [strong ["Live -"]; "Instant feedback of runtime values."]
-        ; p [strong ["Non-linear -"]; "Gather the parts you need, assemble later."]
-        ; p [strong ["Synthesis -"]; "Assert and let the computer write code."]
-        ; p [strong ["Bimodal -"]; "Work in your normal editor whenever you want."]
+      ]
+      @ begin if structure_items <> [] then [] else
+        [ div ~attrs:([("id", "mission-statement")] @ if structure_items <> [] then [("class","there-is-code-now")] else []) @@
+          [ img ~attrs:[("src", "/assets/maniposynth.svg")]
+          ; p ["Exploring the frontiers of visual interactive programming—can cutting-edge features meld into a delightful and productive coding environment?"]
+          ; p [strong ["Live -"]; "Instant feedback of runtime values."]
+          ; p [strong ["Non-linear -"]; "Gather the parts you need, assemble later."]
+          ; p [strong ["Synthesis -"]; "Assert and let the computer write code."]
+          ; p [strong ["Bimodal -"]; "Work in your normal editor whenever you want."]
+          ]
         ]
-      ] @ if fatal_errors <> [] then [render_fatal_errors fatal_errors] else
+      end
+      @ if fatal_errors <> [] then [render_fatal_errors fatal_errors] else
       [ div ~attrs:[("class", "top-matter")] @@
         List.map html_of_top_matter_structure_item structure_items
       ; div ~attrs:[("class", "top-level vbs"); loc_attr top_level_vbs_loc] @@
