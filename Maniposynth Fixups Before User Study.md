@@ -241,6 +241,8 @@
 
 - [x] exp extract labels shouldn't show attrs
 
+- [x] remove `[@not ]` attrs when a hole is manually filled
+
 - [ ] positioning: global update after movement? (so things never snap back?)
 
 - [ ] asserts should be editable in the frames table

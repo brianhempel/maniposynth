@@ -888,6 +888,14 @@ let fixup_matches final_tenv prog =
   |> remove_simple_rename_bindings
   (* |> log *)
 
+let remove_rejection_attrs_no_longer_on_holes prog =
+  prog
+  |> Exp.map begin fun e ->
+    if Exp.is_hole e || Attr.has_tag "accept_or_reject" e.pexp_attributes
+    then e
+    else { e with pexp_attributes = Attr.remove_name "not" e.pexp_attributes }
+  end
+
 (* Need final tenv to know what constructors exist *)
 let fixup_ defined_names final_tenv prog =
   prog
@@ -895,6 +903,7 @@ let fixup_ defined_names final_tenv prog =
   |> move_type_decls_to_top
   |> rearrange_struct_items defined_names
   |> add_missing_bindings_struct_items defined_names
+  |> remove_rejection_attrs_no_longer_on_holes
 
 let fixup final_tenv prog =
   let defined_names = SSet.elements Name.pervasives_names in
