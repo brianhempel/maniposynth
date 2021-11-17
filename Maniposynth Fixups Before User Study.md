@@ -229,9 +229,17 @@
 
 - [x] synth: only accept expressions where all branches exercised
 
-- [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype)
+- [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype) this caused trouble with P1's insert_into_sorted_list helper (synth should have been able to fill the then and else clause)
 
 - [ ] type errors shouldn't stop all edits...not sure how to do this
+
+- [ ] type errors should not cover up the inspector
+
+- [ ] more little labels instead of just colors: blue "Expected: " black "Got:" green "Assert satisfied:"
+
+- [ ] ITE lines need more vertical space between them
+
+- [ ] synthesis runs before the button pressed
 
 - [x] popup explaining syntax error
 
@@ -267,11 +275,21 @@
 
 - [ ] ~~synth: actually say in the interface if it timed out~~
 
+- [ ] blue expected values should display as trees
+
+- [ ] asserts should display prettified, editable trees
+
+- [ ] selected exps (etc?) need a slightly different color background, not just a blue glow.
+
 - [ ] synth: don't use `< <= > >=` at bool type (lol)
 
 - [ ] synth: let user decide kinds of terms are allowed
 
+- [ ] match scrutinee should be green so that it feels more clickable
+
 - [ ] delete on green result values
+
+- [ ] rich text paste into textbox shouldn't cause mad trouble (I think nbsps are happening)
 
 - [ ] "new function" tool
 

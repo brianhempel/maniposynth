@@ -522,13 +522,13 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs
   let trace_state = Trace.new_trace_state () in
   reqs |> List.for_all (is_req_satisified_by trace_state fillings)
   && begin
-    print_endline (Loc_map.to_string Exp.to_string fillings);
+    (* print_endline (Loc_map.to_string Exp.to_string fillings); *)
     (* Ensure all expressions exercised during execution (we didn't insert junk branches etc.) *)
     fillings
     |> Loc_map.values
     |>@@ Exp.flatten
     |>@ Exp.loc
-    |>@ (fun loc -> print_endline @@ Loc.to_string loc; loc)
+    (* |>@ (fun loc -> print_endline @@ Loc.to_string loc; loc) *)
     |> List.for_all (fun loc -> Trace.entries_for_loc loc trace_state.trace <> [])
   end
 
