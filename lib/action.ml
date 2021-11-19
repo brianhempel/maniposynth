@@ -4,13 +4,10 @@
 *)
 
 open Parsetree
-(* open Camlboot_interpreter.Data *)
 open Shared.Ast
 open Shared.Util
 
 type t =
-(*   | DropValueIntoVbs of string * string (* vbs loc str, vtrace str *)
-  | DropValueIntoExp             of string * string (* loc str, vtrace str *) *)
   | AddVis                       of string * string (* loc str, vis str *)
   | RemoveVis                    of string * string (* loc str, vis str *)
   | ReplaceLoc                   of string * string (* loc str, code str *)
@@ -36,8 +33,6 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
     | _        -> failwith @@ "bad number in action json " ^ Yojson.Safe.to_string action_yojson
   in
   match action_yojson with
-  (* | `List [`String "DropValueIntoVbs"; `String vbs_loc_str; `String vtrace_str]      -> DropValueIntoVbs (vbs_loc_str, vtrace_str)
-  | `List [`String "DropValueIntoExp"; `String loc_str; `String vtrace_str]          -> DropValueIntoExp (loc_str, vtrace_str) *)
   | `List [`String "AddVis"; `String loc_str; `String vis_str]                       -> AddVis (loc_str, vis_str)
   | `List [`String "RemoveVis"; `String loc_str; `String vis_str]                    -> RemoveVis (loc_str, vis_str)
   | `List [`String "ReplaceLoc"; `String loc_str; `String code]                      -> ReplaceLoc (loc_str, code)
@@ -108,38 +103,6 @@ let remove_vblike vb_loc old =
 (* Silent if not found *)
 let delete_vblike vb_loc old =
   remove_vblike_opt vb_loc old |>& snd ||& old
-
-(* let drop_value_into_vbs loc (vtrace : vtrace) old =
-  let usable_pats = Bindings.pats_in_scope_at loc old |>@? Pat.is_name in
-  vtrace
-  |> List.findmap_opt begin fun ((_, val_loc), _) ->
-    (* print_endline (Loc.to_string val_loc); *)
-    usable_pats
-    |> List.find_opt (Pat.loc %> (=) val_loc)
-    |>&& Pat.name |>& begin fun name ->
-      let vb' = Vb.mk (Pat.var (Name.gen old)) (Exp.var name) in
-      old
-      |> Exp.map_by_loc loc (Ast_helper.Exp.let_ Asttypes.Nonrecursive [vb'])
-      |> StructItem.concat_map_by_loc loc (fun si -> [Ast_helper.Str.value Asttypes.Nonrecursive [vb']; si])
-      |> Bindings.fixup
-    end
-  end
-  ||& old *)
-
-(* let drop_value_into_exp loc (vtrace : vtrace) old =
-  let usable_pats = Bindings.pats_in_scope_at loc old |>@? Pat.is_name in
-  vtrace
-  |> List.findmap_opt begin fun ((_, val_loc), _) ->
-    (* print_endline (Loc.to_string val_loc); *)
-    usable_pats
-    |> List.find_opt (Pat.loc %> (=) val_loc)
-    |>&& Pat.name |>& begin fun name ->
-      old
-      |> Exp.replace loc (Exp.var name)
-      |> Bindings.fixup
-    end
-  end
-  ||& old *)
 
 let add_vis_to_loc loc vis_str final_tenv old =
   old
@@ -295,14 +258,6 @@ let should_synth_afterward = function
   | _ -> false
 
 let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
-  (* | DropValueIntoVbs (loc_str, vtrace_str) ->
-    let loc = Serialize.loc_of_string loc_str in
-    let vtrace = Serialize.vtrace_of_string vtrace_str in
-    drop_value_into_vbs loc vtrace
-  | DropValueIntoExp (loc_str, vtrace_str) ->
-    let loc = Serialize.loc_of_string loc_str in
-    let vtrace = Serialize.vtrace_of_string vtrace_str in
-    drop_value_into_exp loc vtrace *)
   | AddVis (loc_str, vis_str) ->
     let loc = Serialize.loc_of_string loc_str in
     add_vis_to_loc loc vis_str final_tenv
