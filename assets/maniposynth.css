@@ -463,14 +463,14 @@ table.subvalue-annotations td {
   display: none;
 }
 .tv.not-in-active-frame {
-  opacity: 0.4;
+  opacity: 0.5;
 }
 .fun-returns .not-in-active-frame,
 .fun-returns .ellipses,
 .fun-param .not-in-active-frame,
 .fun-param .ellipses {
   display: inline-block;
-  opacity: 0.14;
+  opacity: 0.3;
 }
 
 .draggable-hovered,
