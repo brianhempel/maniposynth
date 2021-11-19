@@ -839,12 +839,13 @@ and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression 
 and terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > max_single_term_lprob then [] else
   let terms1 =
+    let cant_be_constant = cant_be_constant || if_constant_must_be <> None in
     List.concat
-    [ ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
-    ; apps_at_type                     hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
-    ; ites_at_type   ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
-    ; idents_at_type ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
-    ]
+      [ ctors_at_type  ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ctor_lprob)  |>@ Tup3.map_thd (mult_lprobs ctor_lprob)
+      ; apps_at_type                     hole_synth_env typ (div_lprobs min_lprob app_lprob)   |>@ Tup3.map_thd (mult_lprobs app_lprob)
+      ; ites_at_type   ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ite_lprob)   |>@ Tup3.map_thd (mult_lprobs ite_lprob)
+      ; idents_at_type ~cant_be_constant hole_synth_env typ (div_lprobs min_lprob ident_lprob) |>@ Tup3.map_thd (mult_lprobs ident_lprob)
+      ]
   in
   let terms2 =
     if cant_be_constant then [] else
