@@ -1123,7 +1123,7 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 
 
-let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed rejected_exps prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name : fillings option =
   let start_hole_locs = hole_locs prog Loc_map.empty in
   if  start_hole_locs = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob < abort_lprob then (print_endline "aborting"; None) else
@@ -1131,9 +1131,6 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
     e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
-  in
-  let rejected_exp_strs =
-    rejected_exps |> Loc_map.map (fun rejected_exps -> rejected_exps |>@ Exp.to_string)
   in
   let unused_param_names_at_holes =
     start_hole_locs
@@ -1163,12 +1160,12 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
     let not_rejected =
       fillings
       |> Loc_map.for_all begin fun hole_loc filling_exp ->
-        let hole_rejected_exp_strs = Loc_map.all_at_loc hole_loc rejected_exp_strs in
-        if hole_rejected_exp_strs = [] then true else
+        let hole_rejected_hashes = Loc_map.all_at_loc hole_loc rejected_exp_hashes in
+        if hole_rejected_hashes = [] then true else
         let hole_exp_str = Exp.to_string (apply_fillings_to_exp fillings filling_exp) in
         (* print_endline hole_exp_str; *)
         (* if String.includes "[3;2;1]" hole_exp_str then (); *)
-        not (List.mem hole_exp_str hole_rejected_exp_strs)
+        not (List.mem (Hashtbl.hash hole_exp_str) hole_rejected_hashes)
       end
       (* fillings
       |> List.bindings
@@ -1212,7 +1209,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = 
       if Unix.time () -. start_sec > timeout_secs then
         (print_endline "Synth timeout"; None)
       else
-        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed rejected_exps prog reqs file_name (* Keep trying, with lower prob threshold. *)
+        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1256,14 +1253,14 @@ let best_result prog _trace assert_results file_name =
   in
   let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
   let starting_hole_locs = hole_locs prog Loc_map.empty in
-  let rejected_exps = ref Loc_map.empty in
+  let rejected_exp_hashes = ref Loc_map.empty in
   begin
     prog
     |> Exp.iter begin fun e ->
-      rejected_exps := Loc_map.add_all_to_loc e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes) !rejected_exps
+      rejected_exp_hashes := Loc_map.add_all_to_loc e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int) !rejected_exp_hashes
     end
   end;
-  match fill_holes start_sec type_lookups.lookup_exp !rejected_exps prog reqs file_name with
+  match fill_holes start_sec type_lookups.lookup_exp !rejected_exp_hashes prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
   | None -> print_endline "synth failed"; None
   | Some fillings' ->

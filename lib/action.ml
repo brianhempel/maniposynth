@@ -300,7 +300,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     let change_attrs e =
       e.pexp_attributes
       |> Attr.remove_name "accept_or_reject"
-      |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e)
+      |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e |> Exp.to_string |> Hashtbl.hash |> Exp.int_lit)
     in
     Exp.map_by_loc loc (fun e -> { Exp.hole with pexp_attributes = change_attrs e })
   | Undo ->
