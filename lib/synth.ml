@@ -1122,12 +1122,13 @@ let refine prog (fillings, lprob) reqs file_name next =
   |> Seq.concat
 
 
+let abort_lprob = log(min_float) (* If using 64bit floats directly (rather than lprobs), enter denormalized IEEE numbers after this (which is close to rounding off to zero). We never get close to this. *)
 
-let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) ?(abort_lprob = -10000.0) start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name : fillings option =
   let start_hole_locs = hole_locs prog Loc_map.empty in
   if  start_hole_locs = [] then (print_endline "no holes"; Some Loc_map.empty) else
-  if max_lprob < abort_lprob then (print_endline "aborting"; None) else
-  let min_lprob = mult_lprobs max_lprob (lprob 0.05) in
+  if max_lprob <= abort_lprob then (print_endline "aborting"; None) else
+  let min_lprob = max (mult_lprobs max_lprob (lprob 0.05)) abort_lprob in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
     e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
