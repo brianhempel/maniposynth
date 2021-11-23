@@ -4,7 +4,7 @@ open Shared.Util
 let port = 1111
 
 let respond ?(content_type = "text/html") ?(status_str = "200 OK") out_chan content_str =
-  if not @@ String.equal status_str "200 OK" then print_endline status_str;
+  if not @@ List.mem status_str ["200 OK"; "404 Not Found"] then print_endline status_str;
   output_string out_chan ("HTTP/1.1 " ^ status_str ^ "\r\n");
   output_string out_chan "Connection: close\r\n";
   output_string out_chan ("Content-Type: " ^ content_type ^ "\r\n");
@@ -15,8 +15,10 @@ let respond ?(content_type = "text/html") ?(status_str = "200 OK") out_chan cont
 let respond_bad_request out_chan =
   respond ~status_str:"400 Bad Request" out_chan "<html><head><title>Bad request.</title></head><body>Bad request.</body></html>"
 
-let respond_not_found out_chan =
-  respond ~status_str:"404 Not Found" out_chan "<html><head><title>Not found.</title></head><body>Not found.</body></html>"
+let respond_not_found request_str out_chan =
+  let status_str = "404 Not Found" in
+  if not (String.includes "/assets/still_synthesizing.html" request_str) then print_endline @@ status_str ^ " " ^ request_str;
+  respond ~status_str out_chan "<html><head><title>Not found.</title></head><body>Not found.</body></html>"
 
 (* More here: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types *)
 let file_extension_content_types =
@@ -39,7 +41,7 @@ let content_type_opt_of_path path =
   |> List.find_opt (fun (extn, _) -> String.ends_with extn path)
   |>& snd
 
-let serve_asset out_chan url =
+let serve_asset request_str out_chan url =
   try
     let path1 = nativize_path @@ "./" ^ url in (* Relative to location server started *)
     let path2 = Filename.concat executable_dir (nativize_path url) in (* Relative to server executable *)
@@ -48,7 +50,7 @@ let serve_asset out_chan url =
     match content_type_opt_of_path url with
     | Some content_type -> respond ~content_type out_chan content_str
     | None -> respond ~content_type:"application/yolo" out_chan content_str
-  with Sys_error _ -> respond_not_found out_chan
+  with Sys_error _ -> respond_not_found request_str out_chan
 
 let render_maniposynth out_chan url =
   let path = String.drop 1 url |> nativize_path in
@@ -144,13 +146,13 @@ let handle_connection in_chan out_chan =
       let path = uri |> Uri.path |> Uri.pct_decode in
       (* print_endline (Uri.to_string uri); *)
       if String.starts_with "/assets/" path then
-        serve_asset out_chan path
+        serve_asset request_str out_chan path
       else if String.ends_with ".ml/search" path then
         render_suggestions out_chan uri
       else if String.ends_with ".ml" path then
         render_maniposynth out_chan url
       else
-        respond_not_found out_chan
+        respond_not_found request_str out_chan
   | "PATCH"::url::_ ->
       if String.ends_with ".ml" url then begin
         (* print_endline "hi"; *)
@@ -177,11 +179,11 @@ let handle_connection in_chan out_chan =
         if Action.should_synth_afterward action then Synth.try_async path;
         respond ~content_type:"text/plain" out_chan "Done."
       end else
-        respond_not_found out_chan
+        respond_not_found request_str out_chan
   | _ ->
       print_string "UNHANDLED REQUEST: ";
       print_endline request_str;
-      respond_not_found out_chan
+      respond_not_found request_str out_chan
   );
   flush out_chan;
   close_in in_chan (* This apparently closes both channels. *)

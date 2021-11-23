@@ -55,8 +55,8 @@ let head ?(attrs = []) inners = tag "head" ~attrs inners
 
 let title ?(attrs = []) str = tag "title" ~attrs [str]
 let meta attrs = lone_tag "meta" ~attrs ()
-let stylesheet href =
-  lone_tag "link" ~attrs:[("rel", "stylesheet"); ("href", href)] ()
+let link attrs = lone_tag "link" ~attrs ()
+let stylesheet href = link [("rel", "stylesheet"); ("href", href)]
 
 let script ?src ?(attrs = []) str =
   match src with
@@ -950,6 +950,7 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
     [ head
       [ title "Maniposynth"
       ; meta [("charset", "UTF-8")]
+      ; link [("rel","icon");("type","image/png");("href","/assets/m.png")]
       ; stylesheet "/assets/maniposynth.css"
       ; script ~src:"/assets/maniposynth.js" ""
       ; script ~src:"/assets/reload_on_file_changes.js" ""
