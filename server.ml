@@ -52,6 +52,8 @@ let serve_asset request_str out_chan url =
     | None -> respond ~content_type:"application/yolo" out_chan content_str
   with Sys_error _ -> respond_not_found request_str out_chan
 
+let split_on_multiple_lines = Str.regexp "[ \n\t]*\n"
+
 let render_maniposynth out_chan url =
   let path = String.drop 1 url |> nativize_path in
   let (parsed, trace, assert_results, type_lookups, fatal_errors, type_errors, file_final_env, final_tenv) =
@@ -87,7 +89,8 @@ let render_maniposynth out_chan url =
   in
   (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)
-  let html_str = View.html_str parsed trace assert_results type_lookups fatal_errors type_errors file_final_env final_tenv in
+  let lines_of_code_count = Str.split split_on_multiple_lines (string_of_file path) |> List.length in
+  let html_str = View.html_str parsed lines_of_code_count trace assert_results type_lookups fatal_errors type_errors file_final_env final_tenv in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)

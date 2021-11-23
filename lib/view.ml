@@ -557,7 +557,7 @@ type parens_context = NoParens | NormalArg | NextToInfixOp
 
 let accept_or_reject_options_html exp =
   span ~attrs:[("class","accept-or-reject-options")]
-    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc)] ["✅ Accept"]
+    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size", string_of_int (Synth.exp_size (Attrs.remove_all_deep_exp exp)))] ["✅ Accept"]
     ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject"]
     ; button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"]
     ]
@@ -933,7 +933,7 @@ let render_fatal_errors fatal_errors =
 
 
 
-let html_str (structure_items : structure) (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups fatal_errors type_errors final_env final_tenv =
+let html_str (structure_items : structure) lines_of_code_count (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups fatal_errors type_errors final_env final_tenv =
   let names_in_prog = StructItems.deep_names structure_items in
   let stuff =
     { trace          = trace
@@ -944,6 +944,19 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
     ; names_in_prog  = names_in_prog
     ; final_env      = final_env
     }
+  in
+  let prog_no_attrs = Attrs.remove_all_deep structure_items in
+  (* print_endline @@ StructItems.to_string prog_no_attrs; *)
+  let ast_size      = Synth.program_size prog_no_attrs in (* # of pat nodes plus # of exp nodes *)
+  let asserts_count = Exp.count Exp.is_assert prog_no_attrs in
+  let asserts_size =
+    let asserts_size = ref 0 in
+    prog_no_attrs
+    |> Vb.iter begin fun vb ->
+      if Exp.is_assert vb.pvb_expr then
+        asserts_size := !asserts_size + (Synth.pat_size vb.pvb_pat + Synth.exp_size vb.pvb_expr)
+    end;
+    !asserts_size
   in
   let top_level_vbs_loc = structure_items |> List.last_opt |>& StructItem.loc ||& Location.none in
   html
@@ -1017,5 +1030,12 @@ let html_str (structure_items : structure) (trace : Trace.t) (assert_results : D
       ; button ~attrs:[("id", "synth-button")] ["Synth (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Y)"]
       ; div ~attrs:[("id", "tooltip")] []
       ; button ~attrs:[("id", "destruct-button")] ["Destruct"]
+      ; div ~attrs:[("id", "interaction-stats")]
+        [ button  ~attrs:[("id", "reset-interaction-stats")] ["Reset"]
+        ; table
+          [ tr [td ["LOC"]; td ["AST Size"]; td ["Asserts Count"]; td ["Asserts Size"]]
+          ; tr [td [string_of_int lines_of_code_count (* Including annotations, excluding blank lines. *)]; td [string_of_int ast_size]; td [string_of_int asserts_count]; td [string_of_int asserts_size]]
+          ]
+        ]
       ]
     ]

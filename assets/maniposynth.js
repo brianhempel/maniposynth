@@ -115,18 +115,21 @@ function newAssert(locToAssertBefore, codeToAssertOn, expectedCode, pos) {
 }
 
 function doSynth() {
+  logSynthAttempts();
   doAction([
     "DoSynth"
   ], false);
 }
 
 function undo() {
+  logUndo();
   doAction([
     "Undo"
   ]);
 }
 
 function redo() {
+  logRedo();
   doAction([
     "Redo"
   ]);
@@ -202,48 +205,7 @@ function rejectSynthResultAndContinue(loc) {
 }
 
 
-// function addCodeToScopeBindings(newCode, scopeIdStr) {
-//   doAction([
-//     "AddCodeToScopeBindings",
-//     newCode,
-//     scopeIdStr
-//   ]);
-// }
-
-// function replaceCodeAtExpr(newCode, exprIdStr) {
-//   doAction([
-//     "ReplaceCodeAtExpr",
-//     newCode,
-//     exprIdStr
-//   ]);
-// }
-
-// function deleteExpr(exprIdStr) {
-//   doAction([
-//     "DeleteExpr",
-//     exprIdStr
-//   ]);
-// }
-
-// function destructAndReplaceCodeAtExpr(destructPathStr, exprIdStr) {
-//   doAction([
-//     "DestructAndReplaceCodeAtExpr",
-//     destructPathStr,
-//     exprIdStr
-//   ]);
-// }
-
-// function setExample(funcStr, arg1Str, arg2Str, arg3Str) {
-//   doAction([
-//     "SetExample",
-//     funcStr,
-//     arg1Str,
-//     arg2Str,
-//     arg3Str
-//   ]);
-// }
-
-//////////////// Drag and Drop of (Sub)Values /////////////////////////////////
+//////////////// Drag and Drop /////////////////////////////////
 
 function draggableHover(event) {
   event.currentTarget.classList.add("draggable-hovered");
@@ -259,6 +221,11 @@ function dragstart(event) {
   let node = event.currentTarget;
   // if (node.dataset.vtrace) { event.dataTransfer.setData("application/vtrace", node.dataset.vtrace); }
   if (node.dataset.extractionCode) { event.dataTransfer.setData("application/extractionCode", node.dataset.extractionCode); }
+  if (node.classList.contains("scrutinee")) { event.dataTransfer.setData("application/dragSourceType", "exp"); }
+  if (node.classList.contains("value"))     { event.dataTransfer.setData("application/dragSourceType", "value"); }
+  if (node.classList.contains("pat"))       { event.dataTransfer.setData("application/dragSourceType", "pat"); }
+  if (node.classList.contains("exp"))       { event.dataTransfer.setData("application/dragSourceType", "exp"); }
+  if (node.classList.contains("tool"))      { event.dataTransfer.setData("application/dragSourceType", "tool"); }
   event.dataTransfer.setData("application/toolKey", getMainToolElem(node)?.dataset?.toolKey);
   // if (node.dataset.newCode)         { event.dataTransfer.setData("application/new-code", node.dataset.newCode); }
   // if (node.dataset.destructPathStr) { event.dataTransfer.setData("application/destruct-path-str", node.dataset.destructPathStr); }
@@ -314,9 +281,31 @@ function drop(event) {
   const toolKey = event.dataTransfer.getData("application/toolKey");
   const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
+    console.log(mainToolElem)
+    if (event.dataTransfer.getData("application/dragSourceType") == "tool")       { logToolbarExpToNewVb(); }
+    else if (event.dataTransfer.getData("application/dragSourceType") == "exp")   { logDragExpToNewVb(); }
+    else if (event.dataTransfer.getData("application/dragSourceType") == "pat")   { logDragPatToNewVb(); }
+    else if (event.dataTransfer.getData("application/dragSourceType") == "value") { logDragValueToNewVb(); }
+    else { console.error(event.dataTransfer.getData("application/dragSourceType")) }
     setMainTool(droppedExtractionCode, mainToolElem);
     insertCode(dropTarget.dataset.loc, droppedExtractionCode, compensateForMovedElems(dropTarget, mouseRelativeToElem(dropTarget, event)));
   } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
+    if (dropTarget.classList.contains("exp")) {
+      if (event.dataTransfer.getData("application/dragSourceType") == "tool")       { logDragToolbarExpToExp(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "exp")   { logDragExpToExp(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "pat")   { logDragPatToExp(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "value") { logDragValueToExp(); }
+      else { console.error(event.dataTransfer.getData("application/dragSourceType")) }
+    } else if (dropTarget.classList.contains("value")) {
+      // Dragging to a displayed constant value (at its introduction exp).
+      if (event.dataTransfer.getData("application/dragSourceType") == "tool")       { logDragToolbarExpToValue(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "exp")   { logDragExpToValue(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "pat")   { logDragPatToValue(); }
+      else if (event.dataTransfer.getData("application/dragSourceType") == "value") { logDragValueToValue(); }
+      else { console.error(event.dataTransfer.getData("application/dragSourceType")) }
+    } else {
+      console.error(dropTarget);
+    }
     setMainTool(droppedExtractionCode, mainToolElem);
     replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
   } else {
@@ -486,11 +475,13 @@ function containingLoc(elem) {
   return elem.closest("[data-loc]").dataset.loc;
 }
 
+// Only used for assert textbox rn
 function textboxKeydownHandler(event) {
   let textbox = event.currentTarget;
   if (event.key === "Enter" && textbox.value) {
     textbox.submit();
   } else if (event.key === "Esc" || event.key === "Escape") {
+    logTextEditAbort();
     textbox.value = textbox.originalValue || "";
     textbox.blur();
     delete textbox.targetElem;
@@ -514,6 +505,7 @@ function onVisualize(code) {
   // }
   const vis = code;
   const loc = containingLoc(selectedElem);
+  logTypeOutCodeInNewVis();
   addVis(loc, vis);
 }
 
@@ -558,6 +550,11 @@ window.addEventListener('DOMContentLoaded', () => {
     const code = assertTextbox.value;
     const elem = assertTextbox.targetElem;
     if (elem && code !== assertTextbox.originalValue) {
+      if (elem.closest(".derived-vis-value")) {
+        logAddAssertOnVis();
+      } else {
+        logAddAssertViaInspector();
+      }
       makeAssert(elem, elem.dataset.codeToAssertOn, code)
     }
   };
@@ -631,6 +628,7 @@ function updateInspector() {
   inspector.querySelectorAll(".autocomplete-options").forEach(autocompleteDiv => autocompleteDiv.remove()); decolorizeSubvalues();
 
   function onTextEditAbort(event, textboxDiv) {
+    logTextEditAbort();
     textboxDiv.innerText = textboxDiv.originalValue;
     textboxDiv.blur();
     event.stopImmediatePropagation();
@@ -648,8 +646,10 @@ function updateInspector() {
       if (checkbox.checked) {
         // well, there was a time when we needed this
         // now this isn't even shown if the vis isn't active
+        logTurnVisOnViaCheckbox();
         addVis(loc, vis);
       } else {
+        logRemoveVisViaCheckbox()
         removeVis(loc, vis);
       }
     });
@@ -704,14 +704,22 @@ function updateInspector() {
       nodeTextbox.innerText         = nodeCode;
       // nodeTextbox.originalValue     = nodeCode;
       // nodeTextbox.targetElem        = elem;
+      const logEdit = function () {
+        if (elem.classList.contains("value"))                 { logTypeOutCodeInValue(); }
+        else if (elem.classList.contains("pat"))              { logTypeOutCodeInPat(); }
+        else if (elem.classList.contains("exp"))              { logTypeOutCodeInExp(); }
+        else if (elem.classList.contains("scrutinee"))        { logTypeOutCodeInExp(); }
+        else if (elem.querySelector(":scope > .expectation")) { logTypeOutCodeInExp(); }
+        else { console.error(elem); }
+      };
       if (!rootNodeElem || rootNodeElem === elem) {
         hide(textEditRootStuff);
       } else {
         show(textEditRootStuff);
-        attachAutocomplete(rootNodeTextbox, rootNodeElem, code => replaceLoc(rootNodeElem.dataset.inPlaceEditLoc, code), onTextEditAbort);
+        attachAutocomplete(rootNodeTextbox, rootNodeElem, code => { logEdit(); replaceLoc(rootNodeElem.dataset.inPlaceEditLoc, code) }, onTextEditAbort);
       }
       show(textEditPane);
-      attachAutocomplete(nodeTextbox,     elem,         code => replaceLoc(elem.dataset.inPlaceEditLoc, code),         onTextEditAbort);
+      attachAutocomplete(nodeTextbox, elem, code => { logEdit(); replaceLoc(elem.dataset.inPlaceEditLoc, code) }, onTextEditAbort);
     } else {
       hide(textEditPane);
     }
@@ -790,6 +798,7 @@ function isShown(elem) {
 
 function abortTextEdit(textbox) {
   // if (textbox.originalElem) { show(textbox.originalElem) };
+  logTextEditAbort();
   textbox.autocompleteDiv?.remove(); decolorizeSubvalues();
   textbox.remove();
   updateInspector();
@@ -867,48 +876,6 @@ function decolorizeSubvalues(elem) {
 function transientTextboxes() {
   return document.querySelectorAll(".transient-textbox");
 }
-
-// function beginEditCallback(editType) {
-//   return function (event) {
-//     event.stopImmediatePropagation();
-//     const originalElem = event.currentTarget;
-//     // const parent = originalElem.parentElement;
-//     console.log(originalElem);
-//     const input = document.createElement("input");
-//     input.type = "text";
-//     input.value = originalElem.dataset.inPlaceEditCode || originalElem.innerText;
-//     input.classList.add("transient-textbox");
-//     input.originalElem = originalElem;
-//     // originalElem.appendChild(input);
-//     originalElem.insertAdjacentElement("afterend", input);
-//     hide(originalElem);
-//     // input.focus();
-//     updateInspector();
-//     input.select();
-
-//     input.addEventListener('keydown', event => {
-//       // console.log(event.key);
-//       if (event.key === "Enter") {
-//         if (editType === "in-place") {
-//           if (input.value.length > 0) {
-//             replaceLoc(originalElem.dataset.inPlaceEditLoc, input.value);
-//           } else {
-//             deleteLoc(originalElem.dataset.inPlaceEditLoc);
-//           }
-//         } else if (editType === "new assert") {
-//           if (input.value.length > 0) {
-//             newAssert(containingLoc(originalElem), originalElem.dataset.codeToAssertOn, input.value);
-//           }
-//         } else {
-//           console.warn("Unknown edit type " + editType)
-//         }
-//       } else if (event.key === "Esc" || event.key === "Escape") {
-//         abortTextEdit(input);
-//       }
-//       event.stopImmediatePropagation();
-//     });
-//   }
-// }
 
 // Convert autocompleted values to code
 function textboxDivToCode(textboxDiv) {
@@ -1083,10 +1050,15 @@ function updateAutocomplete(textboxDiv, suggestions) {
     let option = optionFromSuggestion(suggestion);
     option.tabIndex = 0; /* Make element focusable, even though below we override tab */
     function chooseOption(event) {
+      logSelectAutocompleteOption();
       option.remove()
       autocompleteDiv.innerHTML = "";
       textboxDiv.innerHTML = "";
-      for (const child of Array.from(option.childNodes)) { /* If we don't convert to array, for some reason the whitespace nodes are skipped. */
+      const optionChildNodes = Array.from(option.childNodes); /* If we don't convert to array, for some reason the whitespace nodes are skipped. */
+      if (optionChildNodes[optionChildNodes.length - 1].dataset?.extractionCode) {
+        logAutocompleteToValue();
+      }
+      for (const child of optionChildNodes) {
         textboxDiv.appendChild(child);
       }
       // label.appendChild(document.createTextNode("Visualize"));
@@ -1122,7 +1094,7 @@ function updateAutocomplete(textboxDiv, suggestions) {
         textboxDiv.focus()
         event.stopImmediatePropagation();
         event.preventDefault();
-      } else if (event.key === "Backspace" || event.key === "Escape") {
+      } else if (event.key === "Backspace" || event.key === "Delete") {
         textboxDiv.focus()
         event.stopImmediatePropagation();
         // event.preventDefault(); /* By default the event will actually delete in the textbox. Which we want. */
@@ -1167,7 +1139,14 @@ function beginNewCodeEdit(vbsHolder) {
     textboxDiv.style.top  = `${pos.y}px`;
     vbsHolder.appendChild(textboxDiv);
     const insertPos = compensateForMovedElems(vbsHolder, pos);
-    attachAutocomplete(textboxDiv, vbsHolder, code => insertCode(vbsHolder.dataset.loc, code, insertPos), _ => abortTextEdit(textboxDiv));
+    const log = function (code) {
+      if (vbsHolder.classList.contains("top-level") && code.includes(" = ")) {
+        logAddAssertTopLevel();
+      } else {
+        logTypeOutCodeInNewVb();
+      }
+    };
+    attachAutocomplete(textboxDiv, vbsHolder, code => { log(code); insertCode(vbsHolder.dataset.loc, code, insertPos) }, _ => abortTextEdit(textboxDiv));
     textboxDiv.focus();
   }
 }
@@ -1221,13 +1200,18 @@ function checkIfStillSynthesizing() {
       }
       window.setTimeout(checkIfStillSynthesizing, 500);
     } else {
-      synthDone = true
+      if (!synthDone) {
+        // If synth successful, page reloader will reload the page before this fires.
+        window.setTimeout(logSynthTimeouts, 2000);
+      }
+      synthDone = true;
     }
   });
   request.send();
 }
 
 function gratuitousLamdas() {
+  let lastLambdaTime = new Date()
   const particleLife  = 5  * 1000;
   // const generatorLife = 15 * 1000;
   // const generatorStart = new Date();
@@ -1235,6 +1219,9 @@ function gratuitousLamdas() {
   window.setTimeout(checkIfStillSynthesizing, 500);
 
   function makeLambda() {
+    const t = new Date ();
+    logSynthMs(t - lastLambdaTime);
+    lastLambdaTime = t;
     // if (new Date() - generatorStart > generatorLife) { synthTimeout = true; return; }
     const particleStart = new Date();
     const particle = document.createElement("div");
@@ -1277,13 +1264,13 @@ function gratuitousLamdas() {
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-accept-loc]').forEach(elem => {
-    elem.addEventListener("click", event => { acceptSynthResult(elem.dataset.acceptLoc); event.stopImmediatePropagation() });
+    elem.addEventListener("click", event => { logHolesAccepted(); logAcceptedAstSize(parseInt(elem.dataset.astSize)); acceptSynthResult(elem.dataset.acceptLoc); event.stopImmediatePropagation() });
   });
   document.querySelectorAll('[data-reject-loc]').forEach(elem => {
-    elem.addEventListener("click", event => { rejectSynthResult(elem.dataset.rejectLoc); event.stopImmediatePropagation() });
+    elem.addEventListener("click", event => { logHolesRejected(); rejectSynthResult(elem.dataset.rejectLoc); event.stopImmediatePropagation() });
   });
   document.querySelectorAll('[data-reject-and-continue-loc]').forEach(elem => {
-    elem.addEventListener("click", event => {rejectSynthResultAndContinue(elem.dataset.rejectAndContinueLoc); event.stopImmediatePropagation() });
+    elem.addEventListener("click", event => { logHolesRejected(); logSynthAttempts(); rejectSynthResultAndContinue(elem.dataset.rejectAndContinueLoc); event.stopImmediatePropagation() });
   });
 });
 
@@ -1422,6 +1409,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // console.log(selected);
       // console.log(vbsHolderForInsert(selected));
       setMainTool(code, getMainToolElem(elem));
+      logToolbarExpToNewVb();
       insertCode(vbsHolderForInsert(selected).dataset.loc, code);
     });
   });
@@ -1547,12 +1535,14 @@ window.addEventListener('DOMContentLoaded', () => {
         if ((dx !== 0 || dy !== 0) && !dropTarget) {
           const x = dx + stuffMoving.startOffsetX;
           const y = dy + stuffMoving.startOffsetY;
+          logReposition();
           setPos(elem.dataset.loc, compensateForMovedElems(elem.closest(".vbs"), { x : x, y : y }));
           atEndOfDragSoPreventClickSelect = true;
         } else if (dropTarget) {
           const dropTargetOffsetFromMouse = topLeftOffsetFromMouse(dropTarget, event);
           const x = stuffMoving.offsetFromMouse.dx - dropTargetOffsetFromMouse.dx;
           const y = stuffMoving.offsetFromMouse.dy - dropTargetOffsetFromMouse.dy;
+          logMoveVbScope();
           moveVb(dropTarget.dataset.loc, elem.dataset.loc, compensateForMovedElems(dropTarget, { x : x, y : y }));
           atEndOfDragSoPreventClickSelect = true;
         } else {
@@ -1721,6 +1711,7 @@ window.addEventListener('DOMContentLoaded', () => {
   })
   document.querySelectorAll(".is-rec input[type=checkbox]").forEach(elem => {
     elem.addEventListener("change", event => {
+      logToggleRecFlag();
       setRecFlag(elem.dataset.loc, elem.checked);
       event.stopImmediatePropagation();
     });
@@ -1740,29 +1731,6 @@ function selfAndParents(elem) {
   }
   return out;
 }
-
-// // .exp .vb and .pat are littered around the HTML
-// // Messy because Maniposynth's canvas is deliberately not 1-to-1 with the code.
-// function isInPatternPosition(elem) {
-//   for (const el of selfAndParents(elem)) {
-//     if (el.classList.contains("pat")) {
-//       return true;
-//     } else if (el.classList.contains("vb")) {
-//       return false;
-//     } else if (el.classList.contains("exp")) {
-//       return false;
-//     }
-//   }
-//   return false;
-// }
-
-// function containingVb(elem) {
-//   return elem.closest(".vb");
-// }
-
-// function childVbsHolder(elem) {
-
-// }
 
 
 /////////////////// Frame Number Handling ///////////////////
@@ -1800,9 +1768,10 @@ function savedFrameNo(frameRootElem) {
   return frameNos(frameRootElem)[frameIndex];
 }
 
-function setFrameNo(frameRootElem, frameNo, skip_relayout) {
+function setFrameNo(frameRootElem, frameNo, shouldLog, skip_relayout) {
   if (autocompleteOpen) { return; } // Don't change frame numbers when an autocomplete is open
   if (frameRootElem.dataset.activeFrameNo === frameNo) { return; } // avoid relayout cost
+  if (shouldLog) { logChangeFrameNo(); }
   frameRootElem.dataset.activeFrameNo = frameNo;
   saveFrameNo(frameRootElem);
   for (child of frameRootElem.children) { updateActiveValues(child, frameNo) }
@@ -1813,7 +1782,7 @@ function initFrameNos() {
   document.querySelectorAll(".fun").forEach(frameNoElem => {
     const priorFrameNo = savedFrameNo(frameNoElem);
     const frameNo = priorFrameNo || frameNoElem.querySelector("[data-frame-no]")?.dataset?.frameNo;
-    if (frameNo) { setFrameNo(frameNoElem, frameNo, true); }
+    if (frameNo) { setFrameNo(frameNoElem, frameNo, false, true); }
   });
   relayout();
 }
@@ -1850,7 +1819,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll("[data-frame-no]").forEach(elem => {
     elem.addEventListener("click", event => {
       const frameNoElem = findFrameNoElem(elem);
-      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo); updateTooltip(event); event.stopImmediatePropagation() }
+      if (frameNoElem) { setFrameNo(frameNoElem, elem.dataset.frameNo, true); updateTooltip(event); event.stopImmediatePropagation() }
     });
   });
 
@@ -1862,7 +1831,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (visibleValues.length == 0 && tvValues.length > 0) {
         let valueToShow = tvValues[0];
         const frameNoElem = findFrameNoElem(valueToShow);
-        if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo); updateTooltip(event); event.stopImmediatePropagation() }
+        if (frameNoElem) { setFrameNo(frameNoElem, valueToShow.dataset.frameNo, true); updateTooltip(event); event.stopImmediatePropagation() }
       }
     });
   });
@@ -1874,19 +1843,17 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /////////////////// Deletion ///////////////////
 
-function isDeletable(elem) {
-  return (elem.classList.contains("vb") || elem.classList.contains("exp")) && (elem.dataset.loc || elem.dataset.inPlaceEditLoc);
-}
-
-function deleteElem(elem) {
-  deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
-}
-
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
     const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected,.value[data-in-place-edit-loc].selected');
     if (elem) {
-      deleteElem(elem);
+      if      (elem.classList.contains("vb") && elem.querySelector(":scope > .assert")) { logDeleteAssert() }
+      else if (elem.classList.contains("vb"))                                           { logDeleteVb() }
+      else if (elem.classList.contains("exp"))                                          { logDeleteExp() }
+      else if (elem.classList.contains("value"))                                        { logDeleteExp() }
+      else if (elem.classList.contains("scrutinee"))                                    { logDeleteMatch() }
+      else { console.error(elem) }
+      deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
       event.stopImmediatePropagation();
     }
   }
@@ -1932,6 +1899,7 @@ window.addEventListener('DOMContentLoaded', () => {
           const fname =
             textbox.closest(".vb").querySelector(":scope > .pat").innerText;
 
+          logAddAssertViaIOGrid();
           makeAssert(textbox, `${fname} ${argCodes.join(" ")}`, expectedRetCode);
 
           event.stopImmediatePropagation(); /* does this even do anything? */
@@ -2071,6 +2039,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const valueElem = destructButton.parentElement;
     destructButton.remove(); // Prevent double-submit :P
     const vbsHolder = vbsHolderForInsert(valueElem);
+    logDestructButton();
     if (vbsHolder.classList.contains("top-level")) {
       // Actually insert a binding at the top level.
       insertCode(vbsHolder.dataset.loc, valueElem.dataset.destructionCode, vectorAdd(compensateForMovedElems(vbsHolder, mouseRelativeToElem(vbsHolder, event), {x: 0, y: 70})));
@@ -2123,4 +2092,151 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+
+/////////////////// Interaction stats ///////////////////
+
+interactionStats = {}
+
+function resetInteractionStats() {
+  interactionStats = {
+    undo                     : 0,
+    redo                     : 0,
+    textEditAbort            : 0, // not included in typeOutCode counts, is included in selectAutcompleteOption, autocompleteToValue, does not include aborts in new IO grid asserts
+    typeOutCodeInNewVb       : 0, // excludes addAssertTopLevel
+    typeOutCodeInExp         : 0,
+    typeOutCodeInPat         : 0, // usually a rename
+    typeOutCodeInValue       : 0,
+    typeOutCodeInNewVis      : 0,
+    turnVisOnViaCheckbox     : 0,
+    removeVisViaCheckbox     : 0,
+    selectAutocompleteOption : 0,
+    autocompleteToValue      : 0, // subset of selectAutocompleteOption
+    toolbarExpToNewVb        : 0, // Drag or click
+    dragToolbarExpToExp      : 0,
+    dragToolbarExpToValue    : 0,
+    dragExpToNewVb           : 0,
+    dragExpToExp             : 0,
+    dragExpToValue           : 0,
+    dragValueToNewVb         : 0,
+    dragValueToExp           : 0,
+    dragValueToValue         : 0,
+    dragPatToNewVb           : 0,
+    dragPatToExp             : 0,
+    dragPatToValue           : 0,
+    reposition               : 0,
+    moveVbScope              : 0,
+    deleteVb                 : 0, // not including asserts
+    deleteAssert             : 0,
+    deleteExp                : 0,
+    deleteMatch              : 0,
+    addAssertViaIOGrid       : 0,
+    addAssertOnVis           : 0, // technically is via the inspector, but not included in addAssertViaInspector count
+    addAssertViaInspector    : 0,
+    addAssertTopLevel        : 0,
+    synthAttempts            : 0,
+    synthTimeouts            : 0, // timeout or no exp (should always be timeout if you don't click synth with no holes)
+    synthMs                  : 0,
+    holesAccepted            : 0,
+    acceptedAstSize          : 0,
+    holesRejected            : 0,
+    changeFrameNo            : 0,
+    toggleRecFlag            : 0, // manually
+    destructButton           : 0,
+    firstInteractionMs       : null,
+    lastInteractionMs        : null
+  }
+  saveInteractionStats();
+}
+
+function logUndo()                     { interactionStats.undo                     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logRedo()                     { interactionStats.redo                     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTextEditAbort()            { interactionStats.textEditAbort            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutCodeInNewVb()       { interactionStats.typeOutCodeInNewVb       += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutCodeInExp()         { interactionStats.typeOutCodeInExp         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutCodeInPat()         { interactionStats.typeOutCodeInPat         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutCodeInValue()       { interactionStats.typeOutCodeInValue       += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutCodeInNewVis()      { interactionStats.typeOutCodeInNewVis      += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTurnVisOnViaCheckbox()     { interactionStats.turnVisOnViaCheckbox     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logRemoveVisViaCheckbox()     { interactionStats.removeVisViaCheckbox     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logSelectAutocompleteOption() { interactionStats.selectAutocompleteOption += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logAutocompleteToValue()      { interactionStats.autocompleteToValue      += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logToolbarExpToNewVb()        { interactionStats.toolbarExpToNewVb        += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragToolbarExpToExp()      { interactionStats.dragToolbarExpToExp      += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragToolbarExpToValue()    { interactionStats.dragToolbarExpToValue    += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragExpToNewVb()           { interactionStats.dragExpToNewVb           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragExpToExp()             { interactionStats.dragExpToExp             += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragExpToValue()           { interactionStats.dragExpToValue           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragValueToNewVb()         { interactionStats.dragValueToNewVb         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragValueToExp()           { interactionStats.dragValueToExp           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragValueToValue()         { interactionStats.dragValueToValue         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragPatToNewVb()           { interactionStats.dragPatToNewVb           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragPatToExp()             { interactionStats.dragPatToExp             += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDragPatToValue()           { interactionStats.dragPatToValue           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logReposition()               { interactionStats.reposition               += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logMoveVbScope()              { interactionStats.moveVbScope              += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDeleteVb()                 { interactionStats.deleteVb                 += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDeleteAssert()             { interactionStats.deleteAssert             += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDeleteExp()                { interactionStats.deleteExp                += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDeleteMatch()              { interactionStats.deleteMatch              += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logAddAssertViaIOGrid()       { interactionStats.addAssertViaIOGrid       += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logAddAssertOnVis()           { interactionStats.addAssertOnVis           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logAddAssertViaInspector()    { interactionStats.addAssertViaInspector    += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logAddAssertTopLevel()        { interactionStats.addAssertTopLevel        += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logSynthAttempts()            { interactionStats.synthAttempts            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logSynthTimeouts()            { interactionStats.synthTimeouts            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logHolesAccepted()            { interactionStats.holesAccepted            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logHolesRejected()            { interactionStats.holesRejected            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logChangeFrameNo()            { interactionStats.changeFrameNo            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logToggleRecFlag()            { interactionStats.toggleRecFlag            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logDestructButton()           { interactionStats.destructButton           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+
+function logSynthMs(ms)           { interactionStats.synthMs         += ms;   saveInteractionStats() }
+function logAcceptedAstSize(size) { interactionStats.acceptedAstSize += size; saveInteractionStats() }
+
+function outputInteractionStats() {
+  console.log(JSON.stringify(interactionStats));
+  const statsHeaderTr = document.querySelector("#interaction-stats table tr:first-child");
+  const statsDataTr   = document.querySelector("#interaction-stats table tr:last-child");
+  for (const key in interactionStats) {
+    let cellI = Array.from(statsHeaderTr.children).findIndex( td => td.innerText == key );
+    // console.log(cellI);
+    if (cellI == -1) {
+      const headerTd = document.createElement("td");
+      headerTd.innerText = key;
+      statsHeaderTr.appendChild(headerTd);
+      statsDataTr.appendChild(document.createElement("td"));
+      cellI = Array.from(statsHeaderTr.children).findIndex( td => td.innerText == key );
+    }
+    const dataCell = Array.from(statsDataTr.children)[cellI];
+    dataCell.innerText = interactionStats[key];
+  }
+}
+
+function saveInteractionStats() {
+  window.sessionStorage.setItem("interactionStats", JSON.stringify(interactionStats));
+  window.sessionStorage.setItem("statsAreForHref", window.location.href);
+  outputInteractionStats();
+}
+
+function loadInteractionStats() {
+  if (window.sessionStorage.getItem("interactionStats") && window.sessionStorage.getItem("statsAreForHref") == window.location.href) {
+    interactionStats = JSON.parse(window.sessionStorage.getItem("interactionStats"));
+  } else {
+    resetInteractionStats();
+  }
+}
+
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadInteractionStats();
+  outputInteractionStats();
+
+  document.getElementById("reset-interaction-stats").addEventListener("click", resetInteractionStats);
+});
+
+// window.sessionStorage.setItem("selectablesCount", JSON.stringify(selectables.length));
+// }
+
+// function restoreSelection() {
+//   const selectedIndices          = JSON.parse(window.sessionStorage.getItem("selectedIndices") || "[]");
 

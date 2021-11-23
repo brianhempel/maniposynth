@@ -378,7 +378,9 @@ let push_down_req fillings _prog ?(lookup_exp_typed = fun _ -> None) ?(hit_a_fun
       )
   with _ -> [req]
 
-let exp_size exp =
+
+(* Size is # pat nodes plus # exp nodes *)
+let ast_size apply_iterator_to_node =
   let size = ref 0 in
   let iter_exp iter exp =
     incr size;
@@ -397,8 +399,12 @@ let exp_size exp =
     | _ -> ()
   in
   let iter = { dflt_iter with expr = iter_exp; pat = iter_pat } in
-  iter.expr iter exp;
+  apply_iterator_to_node iter;
   !size
+
+let exp_size exp      = ast_size (fun iterator -> iterator.expr iterator exp)
+let pat_size pat      = ast_size (fun iterator -> iterator.pat iterator pat)
+let program_size prog = ast_size (fun iterator -> iterator.structure iterator prog)
 
 exception Found_names of string list
 

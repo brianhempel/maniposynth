@@ -759,3 +759,18 @@ table.subvalue-annotations td {
   background-color: #fcc;
   border-radius: 3rem;
 }
+
+#interaction-stats {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  background-color: white;
+}
+#interaction-stats table {
+  display: inline-block;
+}
+#interaction-stats td {
+  padding: 1px;
+  font-size: 7px;
+  border: solid 1px lightgray;
+}

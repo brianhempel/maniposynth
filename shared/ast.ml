@@ -495,6 +495,11 @@ module Common
     Node.default_iterator iter_once node;
     List.rev !children (* Return the children left-to-right. *)
 
+  let count pred prog =
+    let n = ref 0 in
+    prog |> iter (fun node -> if pred node then incr n);
+    !n
+
   let freshen_locs node =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
     apply_mapper mapper node
@@ -909,6 +914,7 @@ module Attrs = struct
     (mapper f).structure (mapper f) prog
 
   let remove_all_deep_mapper = mapper (fun _ -> [])
+  let remove_all_deep        = remove_all_deep_mapper.structure     remove_all_deep_mapper
   let remove_all_deep_vb     = remove_all_deep_mapper.value_binding remove_all_deep_mapper
   let remove_all_deep_exp    = remove_all_deep_mapper.expr          remove_all_deep_mapper
   let remove_all_deep_pat    = remove_all_deep_mapper.pat           remove_all_deep_mapper
