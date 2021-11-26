@@ -1032,6 +1032,7 @@ let html_str (structure_items : structure) lines_of_code_count (trace : Trace.t)
       ; button ~attrs:[("id", "destruct-button")] ["Destruct"]
       ; div ~attrs:[("id", "interaction-stats")]
         [ button  ~attrs:[("id", "reset-interaction-stats")] ["Reset"]
+        ; button  ~attrs:[("id", "copy-interaction-stats")] ["Copy"]
         ; table
           [ tr [td ["LOC"]; td ["AST Size"]; td ["Asserts Count"]; td ["Asserts Size"]]
           ; tr [td [string_of_int lines_of_code_count (* Including annotations, excluding blank lines. *)]; td [string_of_int ast_size]; td [string_of_int asserts_count]; td [string_of_int asserts_size]]

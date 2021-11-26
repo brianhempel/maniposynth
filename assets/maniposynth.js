@@ -1140,7 +1140,9 @@ function beginNewCodeEdit(vbsHolder) {
     vbsHolder.appendChild(textboxDiv);
     const insertPos = compensateForMovedElems(vbsHolder, pos);
     const log = function (code) {
-      if (vbsHolder.classList.contains("top-level") && code.includes(" = ")) {
+      if (vbsHolder.classList.contains("top-level") && code.startsWith("type ")) {
+        logTypeOutNewType();
+      } else if (vbsHolder.classList.contains("top-level") && code.includes(" = ")) {
         logAddAssertTopLevel();
       } else {
         logTypeOutCodeInNewVb();
@@ -2102,6 +2104,7 @@ function resetInteractionStats() {
     undo                     : 0,
     redo                     : 0,
     textEditAbort            : 0, // not included in typeOutCode counts, is included in selectAutcompleteOption, autocompleteToValue, does not include aborts in new IO grid asserts
+    typeOutNewType           : 0,
     typeOutCodeInNewVb       : 0, // excludes addAssertTopLevel
     typeOutCodeInExp         : 0,
     typeOutCodeInPat         : 0, // usually a rename
@@ -2151,6 +2154,7 @@ function resetInteractionStats() {
 function logUndo()                     { interactionStats.undo                     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
 function logRedo()                     { interactionStats.redo                     += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
 function logTextEditAbort()            { interactionStats.textEditAbort            += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
+function logTypeOutNewType()           { interactionStats.typeOutNewType           += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
 function logTypeOutCodeInNewVb()       { interactionStats.typeOutCodeInNewVb       += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
 function logTypeOutCodeInExp()         { interactionStats.typeOutCodeInExp         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
 function logTypeOutCodeInPat()         { interactionStats.typeOutCodeInPat         += 1; interactionStats.firstInteractionMs = interactionStats.firstInteractionMs || new Date() - 0; interactionStats.lastInteractionMs = new Date() - 0; saveInteractionStats() }
@@ -2226,12 +2230,20 @@ function loadInteractionStats() {
   }
 }
 
+function copyInteractionStats() {
+  const statsDataTr = document.querySelector("#interaction-stats table tr:last-child");
+  const rowStr = Array.from(statsDataTr.children).map(td => td.innerText.trim()).join("\t") + "\n\t";  // Apple Numbers needs the newline and tab to decide I'm pasting multiple cells and not just a single cell
+
+  console.log(rowStr);
+  navigator.clipboard.writeText(rowStr);
+}
+
 
 window.addEventListener('DOMContentLoaded', () => {
   loadInteractionStats();
   outputInteractionStats();
-
   document.getElementById("reset-interaction-stats").addEventListener("click", resetInteractionStats);
+  document.getElementById("copy-interaction-stats").addEventListener("click", copyInteractionStats);
 });
 
 // window.sessionStorage.setItem("selectablesCount", JSON.stringify(selectables.length));
