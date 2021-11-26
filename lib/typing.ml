@@ -97,23 +97,23 @@ let type_lookups_of_typed_structure typed_struct : lookups =
   let module Iter = TypedtreeIter.MakeIterator(struct
     include TypedtreeIter.DefaultIteratorArgument
     let enter_expression exp =
-      exp_locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !exp_locmap
+      exp_locmap := Loc_map.add_to_key exp.Typedtree.exp_loc exp !exp_locmap
     let enter_pattern pat =
-      pat_locmap := Loc_map.add_to_loc pat.Typedtree.pat_loc pat !pat_locmap
+      pat_locmap := Loc_map.add_to_key pat.Typedtree.pat_loc pat !pat_locmap
   end) in
   Iter.iter_structure typed_struct;
   let exp_locmap = !exp_locmap in
   let pat_locmap = !pat_locmap in
   { lookup_exp =
       begin fun loc ->
-        match Loc_map.all_at_loc loc exp_locmap with
+        match Loc_map.all_at_key loc exp_locmap with
         | []       -> None
         | [tt_exp] -> Some tt_exp
         | _        -> print_endline @@ "multiple exp typedtree nodes at loc " ^ Loc.to_string loc; None
       end
   ; lookup_pat =
       begin fun loc ->
-        match Loc_map.all_at_loc loc pat_locmap with
+        match Loc_map.all_at_key loc pat_locmap with
         | []       -> None
         | [tt_pat] -> Some tt_pat
         | _        -> print_endline @@ "multiple pat typedtree nodes at loc " ^ Loc.to_string loc; None
@@ -139,7 +139,7 @@ let exp_typed_lookup_of_parsed_with_error_recovery parsed file_name =
   let module Iter = TypedtreeIter.MakeIterator(struct
     include TypedtreeIter.DefaultIteratorArgument
     let enter_expression exp =
-      locmap := Loc_map.add_to_loc exp.Typedtree.exp_loc exp !locmap
+      locmap := Loc_map.add_to_key exp.Typedtree.exp_loc exp !locmap
   end) in
   Iter.iter_expression typed_exp;
   !locmap *)

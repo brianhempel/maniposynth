@@ -7,6 +7,11 @@ module MapPlus (Key : sig type t val compare : t -> t -> int val to_string : t -
   let values map = bindings map |> List.map snd
   let remove_all keys = List.fold_right remove keys
 
+  (* Functions for when you have a list of items per loc. *)
+  let all_at_key     key   map = match find_opt key map with None -> [] | Some values -> values
+  let add_to_key     key v map = add key (v :: all_at_key key map) map
+  let add_all_to_key key v map = add key (v @ all_at_key key map) map
+
   let to_string val_to_string smap =
     bindings smap
     |> List.map (fun (k, v) -> Key.to_string k ^ " => " ^ val_to_string v)

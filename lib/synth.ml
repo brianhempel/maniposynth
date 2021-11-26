@@ -1167,7 +1167,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
     let not_rejected =
       fillings
       |> Loc_map.for_all begin fun hole_loc filling_exp ->
-        let hole_rejected_hashes = Loc_map.all_at_loc hole_loc rejected_exp_hashes in
+        let hole_rejected_hashes = Loc_map.all_at_key hole_loc rejected_exp_hashes in
         if hole_rejected_hashes = [] then true else
         let hole_exp_str = Exp.to_string (apply_fillings_to_exp fillings filling_exp) in
         (* print_endline hole_exp_str; *)
@@ -1264,7 +1264,7 @@ let best_result prog _trace assert_results file_name =
   begin
     prog
     |> Exp.iter begin fun e ->
-      rejected_exp_hashes := Loc_map.add_all_to_loc e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int) !rejected_exp_hashes
+      rejected_exp_hashes := Loc_map.add_all_to_key e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int) !rejected_exp_hashes
     end
   end;
   match fill_holes start_sec type_lookups.lookup_exp !rejected_exp_hashes prog reqs file_name with
