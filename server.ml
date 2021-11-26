@@ -137,7 +137,7 @@ let render_suggestions out_chan uri =
 
 
 let handle_connection in_chan out_chan =
-  (* let start_sec = Unix.gettimeofday () in *)
+  let start_sec = Unix.gettimeofday () in
   let rec read_header_lines chan : (string * string) list =
     let line = input_line chan in
     if String.length (String.trim line) = 0 then
@@ -183,7 +183,10 @@ let handle_connection in_chan out_chan =
         let path = String.drop 1 url in
         let parsed = Camlboot_interpreter.Interp.parse path in
         let (_, _, final_tenv, _type_errors) = Typing.typedtree_sig_env_of_parsed_with_error_recovery parsed path in
-        let parsed' = Action.f path final_tenv action parsed in
+        let parsed' =
+          Shared.Util.time "perform action" @@ fun () ->
+          Action.f path final_tenv action parsed
+        in
         (* Pprintast.structure Format.std_formatter parsed'; *)
         Undo_redo.perhaps_initialize_undo_history path;
         if parsed <> parsed' then begin
@@ -191,7 +194,8 @@ let handle_connection in_chan out_chan =
           Undo_redo.perhaps_log_revision path
         end;
         if Action.should_synth_afterward action then Synth.try_async path;
-        respond ~content_type:"text/plain" out_chan "Done."
+        respond ~content_type:"text/plain" out_chan "Done.";
+        if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
       end else
         respond_not_found request_str out_chan
   | _ ->

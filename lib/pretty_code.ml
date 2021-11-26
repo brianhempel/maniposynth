@@ -1,5 +1,10 @@
 open Shared.Util
 
+let hole_lit_regexp = Str.regexp "([ \t\n]*\\?\\?[ \t\n]*)"
+
+(* "( ?? )" -> "(??)" *)
+let tighten_holes code =  Str.global_replace hole_lit_regexp "(??)" code
+
 (* Output formatted code. *)
 let output_code parsed path =
   let old_parsed = Camlboot_interpreter.Interp.parse path in
@@ -11,10 +16,10 @@ let output_code parsed path =
     let temp_path = String.replace ".ml" "-tmp.ml" path in
     ignore @@ Unix.system @@ "cp " ^ path ^ " " ^ old_path; (* Save previous version as path-old.ml for diff. *)
     write_file code temp_path;
+    (* Shared.Util.time "ocamlformat" (fun () -> ignore @@ Unix.system @@ "ocamlformat --inplace --enable-outside-detected-project '" ^ temp_path ^ "'"); *)
     ignore @@ Unix.system @@ "ocamlformat --inplace --enable-outside-detected-project '" ^ temp_path ^ "'";
     (* Turn ( ?? ) into (??) *)
-    ignore @@ Unix.system @@ "ruby -e \"File.write(ARGV[0], File.read(ARGV[0]).gsub(/\\(\\s*\\?\\?\\s*\\)/m, '(??)'))\" '" ^ temp_path ^ "'";
-    let formatted = string_of_file temp_path in
+    let formatted = string_of_file temp_path |> tighten_holes in
     ignore @@ Unix.system @@ "rm " ^ temp_path;
     write_file formatted path
     (* Ensure diff view open *)
