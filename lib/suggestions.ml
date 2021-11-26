@@ -76,35 +76,42 @@ let initial_var_names =
   print_endline (String.concat " " (initial_var_names |> SSet.elements)) *)
 
 (* Right now, possible visualizers are of type 'a -> 'b where 'a unifies with the type given. *)
-let possible_function_names_on_type typ type_env =
-  let f name path value_desc out =
-    if should_ignore value_desc.Types.val_type name then out else
-    (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *) (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
-    match Type.flatten_arrows value_desc.Types.val_type with
-    | [arg_type; _] ->
-      begin try
-        if Type.does_unify typ arg_type && not (List.mem (Path.name path) exclude_from_suggestions)
-        then String.drop_prefix "Stdlib." (Path.name path) :: out
-        else out
-      with _exn ->
-        out
-        (* Parse.expression fails to parse certain operators like Stdlib.~- *)
-        (* begin match Location.error_of_exn exn with
-        | Some (`Ok err) -> print_endline (Path.name path); Location.report_error Format.std_formatter err; out
-        | _              -> out
-        end *)
+(* This was slowest part of view rendering, eating about 2/3 of the rendering time. *)
+let possible_function_names_on_type ?(cache = ref []) typ type_env =
+  match !cache |> List.find_opt (fun (typ', type_env', _) -> type_env == type_env' && Type.equal_ignoring_id_and_scope typ typ') with
+  | Some (_, _, names) -> names
+  | None ->
+    let f name path value_desc out =
+      if should_ignore value_desc.Types.val_type name then out else
+      (* print_endline @@ name ^ "\t" ^ Path.name path ^ " : " ^ Type.to_string value_desc.Types.val_type; *) (* e.g. string_of_float Stdlib.string_of_float : float -> string *)
+      match Type.flatten_arrows value_desc.Types.val_type with
+      | [arg_type; _] ->
+        begin try
+          if Type.does_unify typ arg_type && not (List.mem (Path.name path) exclude_from_suggestions)
+          then String.drop_prefix "Stdlib." (Path.name path) :: out
+          else out
+        with _exn ->
+          out
+          (* Parse.expression fails to parse certain operators like Stdlib.~- *)
+          (* begin match Location.error_of_exn exn with
+          | Some (`Ok err) -> print_endline (Path.name path); Location.report_error Format.std_formatter err; out
+          | _              -> out
+          end *)
+        end
+      | _ -> out
+    in
+    (* Put names in this file first. *)
+    let names_in_this_file, other_names =
+      modules_to_search
+      |>@@ (fun module_lid_opt -> Env.fold_values f module_lid_opt type_env [])
+      |> List.partition begin fun name ->
+        not @@ SSet.mem name initial_var_names
       end
-    | _ -> out
-  in
-  (* Put names in this file first. *)
-  let names_in_this_file, other_names =
-    modules_to_search
-    |>@@ (fun module_lid_opt -> Env.fold_values f module_lid_opt type_env [])
-    |> List.partition begin fun name ->
-      not @@ SSet.mem name initial_var_names
-    end
-  in
-  names_in_this_file @ other_names
+    in
+    let names = names_in_this_file @ other_names in
+    cache := (typ, type_env, names) :: !cache;
+    names
+
 
 let rec flatten_value (value : Data.value) =
   let open Camlboot_interpreter.Data in

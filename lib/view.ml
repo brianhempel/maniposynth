@@ -18,23 +18,25 @@ let html_escape str =
   end
 
 type stuff =
-  { trace          : Trace.t
-  ; prog           : program
-  ; assert_results : Data.assert_result list
-  ; type_lookups   : Typing.lookups
-  ; names_in_prog  : string list
-  ; type_errors    : (Location.t * Env.t * Typecore.error) list
-  ; final_env      : Data.env
+  { trace                                 : Trace.t
+  ; prog                                  : program
+  ; assert_results                        : Data.assert_result list
+  ; type_lookups                          : Typing.lookups
+  ; names_in_prog                         : string list
+  ; type_errors                           : (Location.t * Env.t * Typecore.error) list
+  ; final_env                             : Data.env
+  ; possible_function_names_on_type_cache : (Types.type_expr * Env.t * string list) list ref
   }
 
 let empty_stuff =
-  { trace          = Trace.empty
-  ; prog           = []
-  ; assert_results = []
-  ; type_lookups   = Typing.empty_lookups
-  ; names_in_prog  = []
-  ; type_errors    = []
-  ; final_env      = Envir.empty_env
+  { trace                                 = Trace.empty
+  ; prog                                  = []
+  ; assert_results                        = []
+  ; type_lookups                          = Typing.empty_lookups
+  ; names_in_prog                         = []
+  ; type_errors                           = []
+  ; final_env                             = Envir.empty_env
+  ; possible_function_names_on_type_cache = ref []
   }
 
 let sprintf = Printf.sprintf
@@ -216,7 +218,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
     match value.type_opt with
-    | Some val_typ -> Suggestions.possible_function_names_on_type val_typ type_env
+    | Some val_typ -> Suggestions.possible_function_names_on_type ~cache:stuff.possible_function_names_on_type_cache val_typ type_env
     | None -> [] in
   let perhaps_type_attr         = match value.type_opt   with Some typ              -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match exp_to_assert_on with Some exp_to_assert_on -> [("data-code-to-assert-on", Exp.to_string (exp_to_assert_on |> Attrs.remove_all_deep_exp))] | _ -> [] in
@@ -936,13 +938,14 @@ let render_fatal_errors fatal_errors =
 let html_str (structure_items : structure) lines_of_code_count (trace : Trace.t) (assert_results : Data.assert_result list) type_lookups fatal_errors type_errors final_env final_tenv =
   let names_in_prog = StructItems.deep_names structure_items in
   let stuff =
-    { trace          = trace
-    ; prog           = structure_items
-    ; assert_results = assert_results
-    ; type_lookups   = type_lookups
-    ; type_errors    = type_errors
-    ; names_in_prog  = names_in_prog
-    ; final_env      = final_env
+    { trace                                 = trace
+    ; prog                                  = structure_items
+    ; assert_results                        = assert_results
+    ; type_lookups                          = type_lookups
+    ; type_errors                           = type_errors
+    ; names_in_prog                         = names_in_prog
+    ; final_env                             = final_env
+    ; possible_function_names_on_type_cache = ref []
     }
   in
   let prog_no_attrs = Attrs.remove_all_deep structure_items in
