@@ -58,13 +58,17 @@ let render_maniposynth out_chan url =
   let path = String.drop 1 url |> nativize_path in
   let (parsed, trace, assert_results, type_lookups, fatal_errors, type_errors, file_final_env, final_tenv) =
     try
-      let parsed = Camlboot_interpreter.Interp.parse path in
+      let parsed =
+        (* Shared.Util.time "parse" @@ fun () -> *)
+        Camlboot_interpreter.Interp.parse path
+      in
       (* let parsed_with_comments = Parse_unparse.parse_file path in
       let bindings_skels = Skeleton.bindings_skels_of_parsed_with_comments parsed_with_comments in
       let callables = Read_execution_env.callables_of_file path in
       let trace = Tracing.run_with_tracing path in
       let html_str = View.html_str callables trace bindings_skels in *)
       let (type_lookups, final_tenv, type_errors) =
+        (* Shared.Util.time "typecheck" @@ fun () -> *)
         try
           let (typed_struct, _, final_tenv, type_errors) = Typing.typedtree_sig_env_of_file_with_error_recovery path in
           let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
@@ -73,6 +77,7 @@ let render_maniposynth out_chan url =
           (Typing.empty_lookups, Typing.initial_env, [(loc, tenv, err)])
       in
       let ((trace, final_env), assert_results) =
+        (* Shared.Util.time "eval" @@ fun () -> *)
         let open Camlboot_interpreter in
         Eval.with_gather_asserts begin fun () ->
           Interp.run_files ~fuel_per_top_level_binding:1000 type_lookups.lookup_exp [path]
@@ -90,7 +95,10 @@ let render_maniposynth out_chan url =
   (* print_endline (SMap.keys final_env.values |> String.concat " "); *)
   (* print_endline @@ string_of_int (List.length assert_results); *)
   let lines_of_code_count = Str.split split_on_multiple_lines (string_of_file path) |> List.length in
-  let html_str = View.html_str parsed lines_of_code_count trace assert_results type_lookups fatal_errors type_errors file_final_env final_tenv in
+  let html_str =
+    (* Shared.Util.time "render view" @@ fun () -> *)
+    View.html_str parsed lines_of_code_count trace assert_results type_lookups fatal_errors type_errors file_final_env final_tenv
+  in
   (* Utils.save_file (path ^ ".html") html_str; *)
   (* List.iter (print_string % Skeleton.show) skeletons; *)
   (* print_string @@ Parse_unparse.unparse path parsed_with_comments; *)
@@ -129,6 +137,7 @@ let render_suggestions out_chan uri =
 
 
 let handle_connection in_chan out_chan =
+  (* let start_sec = Unix.gettimeofday () in *)
   let rec read_header_lines chan : (string * string) list =
     let line = input_line chan in
     if String.length (String.trim line) = 0 then
@@ -152,12 +161,14 @@ let handle_connection in_chan out_chan =
         serve_asset request_str out_chan path
       else if String.ends_with ".ml/search" path then
         render_suggestions out_chan uri
-      else if String.ends_with ".ml" path then
+      else if String.ends_with ".ml" path then begin
+        (* sample_this_process "http_GET_profile.txt"; *)
         render_maniposynth out_chan url
-      else
+      end else
         respond_not_found request_str out_chan
   | "PATCH"::url::_ ->
       if String.ends_with ".ml" url then begin
+        (* sample_this_process "http_PATCH_profile.txt"; *)
         (* print_endline "hi"; *)
         (* let content_str = In_channel.input_all in_chan in *)
         let content_str =
@@ -188,6 +199,7 @@ let handle_connection in_chan out_chan =
       print_endline request_str;
       respond_not_found request_str out_chan
   );
+  (* if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms"; *)
   flush out_chan;
   close_in in_chan (* This apparently closes both channels. *)
 

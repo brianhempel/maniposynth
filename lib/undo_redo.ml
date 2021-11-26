@@ -54,7 +54,7 @@ let perhaps_log_revision path =
   if code_on_disk <> undo_code then begin
     (* "asdf/jkl.ml" -> "asdf/jkl-92834902734234.ml" *)
     (* Just needs to be a unique name because we use file creation time to sort. *)
-    let path_with_blerg = path |> String.replace ".ml" ("-" ^ string_of_int (int_of_float (Unix.time ())) ^ ".ml") in (* Unix.time () only give us 1 sec accuracy. Oh well. *)
+    let path_with_blerg = path |> String.replace ".ml" ("-" ^ string_of_float (Unix.gettimeofday ()) ^ ".ml") in
     write_file code_on_disk (history_path path_with_blerg);
     (* Remove redo history by removing "future/asdf/jkl-*.ml" *)
     ignore @@ Unix.system @@ "rm " ^ ( future_path path |> String.replace ".ml" "") ^ "-*.ml"

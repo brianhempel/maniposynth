@@ -1213,7 +1213,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
       let candidates = fillings_lprob :: List.of_seq rest in
       candidates |> List.sort_by snd |> List.last_opt |>& fst
     | Seq.Nil ->
-      if Unix.time () -. start_sec > timeout_secs then
+      if Unix.gettimeofday () -. start_sec > timeout_secs then
         (print_endline "Synth timeout"; None)
       else
         fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name (* Keep trying, with lower prob threshold. *)
@@ -1249,7 +1249,7 @@ let remove_unnecessary_rec_flags prog =
 
 let best_result prog _trace assert_results file_name =
   terms_tested_count := 0;
-  let start_sec = Unix.time () in
+  let start_sec = Unix.gettimeofday () in
   let reqs = assert_results |>@ req_of_assert_result in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
@@ -1271,7 +1271,7 @@ let best_result prog _trace assert_results file_name =
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
   | None -> print_endline "synth failed"; None
   | Some fillings' ->
-    print_endline @@ "synth success. " ^ string_of_float (Unix.time () -. start_sec) ^ "s";
+    print_endline @@ "synth success. " ^ string_of_float (Unix.gettimeofday () -. start_sec) ^ "s";
     (* Preserve original attrs on hole, and add "accept_or_reject" tag. *)
     let fillings'' =
       fillings'
@@ -1296,12 +1296,7 @@ let try_async path =
   (* match Unix.fork () with *)
   (* | 0 -> *)
     (* Uncomment the following if you want performance profiling *)
-    (* begin
-      let pid = Unix.getpid () in
-      print_endline (string_of_int pid);
-      let _ = Unix.create_process "sample" [|"sample"; string_of_int pid; "-mayDie"; "-file"; "synth_profile.txt"|] Unix.stdin Unix.stdout Unix.stderr in
-      ()
-    end *)
+    (* sample_this_process "synth_profile.txt"; *)
     let parsed = Interp.parse path in
     let parsed = make_bindings_with_holes_recursive parsed in
     (* let parsed_with_comments = Parse_unparse.parse_file path in

@@ -222,8 +222,10 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     | None -> [] in
   let perhaps_type_attr         = match value.type_opt   with Some typ              -> [("data-type", Type.to_string typ)]  | _ -> [] in
   let perhaps_code_to_assert_on = match exp_to_assert_on with Some exp_to_assert_on -> [("data-code-to-assert-on", Exp.to_string (exp_to_assert_on |> Attrs.remove_all_deep_exp))] | _ -> [] in
+  (* let extraction_exp_opt = None in *)
   let extraction_code = extraction_exp_opt |>& Attrs.remove_all_deep_exp |>& Exp.to_string ||& "" in
   let perhaps_edit_code_attrs =
+    (* if true then [] else *)
     value.vtrace
     |> List.rev
     |> List.findmap_opt begin function
@@ -233,6 +235,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     |>& exp_in_place_edit_attrs ||& []
   in
   let extracted_subvalue_pats =
+    (* if true then [] else *)
     let rec is_descendent candidate_vtrace ancestor_vtrace =
       candidate_vtrace == ancestor_vtrace ||
       match candidate_vtrace with
@@ -253,6 +256,8 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     |> String.concat ""
   in
   let ctor_destruction_pat_and_ctor_arg_pat_opt =
+    (* if true then None else *)
+    (* This is a promising place for optimization. *)
     match (value_, extraction_exp_opt) with
     | Constructor (ctor_name, _, _), Some extraction_exp ->
       let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
@@ -267,6 +272,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
       None
   in
   let matching_asserts =
+    (* if true then [] else *)
     (* [] *)
     (* Envir.env_get_value_or_lvar *)
     exp_to_assert_on |>& begin fun exp_to_assert_on ->

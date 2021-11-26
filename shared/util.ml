@@ -436,3 +436,18 @@ let write_file contents path =
   let out_chan = open_out path in
   output_string out_chan contents;
   close_out out_chan
+
+
+(* Performance profiling. *)
+
+let time message f =
+  let start_sec = Unix.gettimeofday () in
+  let result = f () in
+  print_endline @@ message ^ "\t" ^ string_of_float (1000.0 *. (Unix.gettimeofday () -. start_sec));
+  result
+
+let sample_this_process output_path =
+  let pid = Unix.getpid () in
+  (* print_endline (string_of_int pid); *)
+  let _ = Unix.create_process "sample" [|"sample"; string_of_int pid; "-mayDie"; "-file"; output_path|] Unix.stdin Unix.stdout Unix.stderr in
+  ()
