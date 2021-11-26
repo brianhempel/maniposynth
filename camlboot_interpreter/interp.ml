@@ -103,10 +103,15 @@ let load_rec_units ?fuel_per_top_level_binding ?(fillings = Shared.Loc_map.empty
 
 (* THIS IS WHAT TAKES FOREVER WHEN THE INTERPRETER INTERPRETS ITSELF *)
 (* LAZY LOAD STDLIB MODULES AS NEEDED? *)
+let stdlib_env_cache = ref None
 let stdlib_env () =
-  let env = Runtime_base.initial_env in
-  let env = load_rec_units env (fun _ -> None) (Trace.new_trace_state ()) stdlib_units in
-  env
+  match !stdlib_env_cache with
+  | Some env -> env
+  | None ->
+    let env = Runtime_base.initial_env in
+    let env = load_rec_units env (fun _ -> None) (Trace.new_trace_state ()) stdlib_units in
+    stdlib_env_cache := Some env;
+    env
 
 module Compiler_files = struct
   let utils = List.map (Filename.concat "utils") [

@@ -206,6 +206,8 @@ let handle_connection in_chan out_chan =
 let main () =
   let open Unix in
   let sockaddr = ADDR_INET (Unix.inet_addr_any, port) in
+  (* Prime the stdlib_env cache before forking. *)
+  ignore @@ Camlboot_interpreter.Interp.stdlib_env ();
   print_endline ("Listening for connections on http://localhost:" ^ string_of_int port ^ "/");
   establish_server handle_connection sockaddr
 ;;
