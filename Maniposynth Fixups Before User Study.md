@@ -229,6 +229,12 @@
 
 - [x] synth: only accept expressions where all branches exercised
 
+- [ ] match in ITE conditional position should float to outside
+
+- [ ] inserting nested patterns in one go (via autocomplete) produced duplicate names (nat_max)
+
+- [ ] did actually need to see some of the elided example cases (shuffles)
+
 - [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype) this caused trouble with P1's insert_into_sorted_list helper (synth should have been able to fill the then and else clause)
 
 - [ ] type errors shouldn't stop all edits...not sure how to do this
@@ -252,6 +258,10 @@
 - [x] remove `[@not ]` attrs when a hole is manually filled
 
 - [ ] positioning: global update after movement? (so things never snap back?)
+
+- [ ] tree exp constants should be prettified
+
+- [ ] list exp constants should be large, then we can hide results for constants
 
 - [ ] root value still needs more clickable area. I think that's a large part of why it feels like the tool isn't about value manipulation...too hard to dodge the children with the mouse
 
