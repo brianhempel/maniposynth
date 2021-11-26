@@ -1298,7 +1298,7 @@ function gratuitousFire(elem) {
       particle.classList.add("fire-particle");
       particle.style.color = `rgb(${Math.floor(256*Math.random())},${Math.floor(256*Math.random())},${Math.floor(256*Math.random())})`;
       // particle.innerText = "🔥";
-      particle.style.backgroundImage = "url('assets/fire-particle.png')"
+      particle.style.backgroundImage = "url('/assets/fire-particle.png')"
       particle.style.backgroundSize = "contain";
       particle.style.width  = "30px";
       particle.style.height = "30px";
@@ -1323,7 +1323,7 @@ function gratuitousFire(elem) {
         const t = new Date();
         const age = t - particleStart
         if (age > particleLife) { particle.remove(); return; }
-        if (age > smokeAfter && particle.style.backgroundImage !== "url('assets/smoke-particle.png')") { particle.style.backgroundImage = "url('assets/smoke-particle.png')"; }
+        if (age > smokeAfter && particle.style.backgroundImage !== "url('/assets/smoke-particle.png')") { particle.style.backgroundImage = "url('/assets/smoke-particle.png')"; }
         particle.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${scale})`
         particle.style.opacity   = opacity;
         const dt = (t - lastTime) * 0.001;
