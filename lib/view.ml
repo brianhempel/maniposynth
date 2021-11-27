@@ -213,10 +213,12 @@ let rec apply_visualizers (prog : program) assert_results visualizers env type_e
   span ~attrs:[("class", "derived-vis-values")] result_htmls
 
 and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false) ~single_line_only (stuff : stuff) frame_no visualizers env type_env locs_editable_in_value (extraction_exp_opt : expression option) ({ v_ = value_; _} as value : Data.value) =
+  (* if true then "" else *)
   let recurse ?(in_list = false) = html_of_value ~single_line_only ~in_list stuff frame_no visualizers env type_env locs_editable_in_value in
   let open Data in
   let active_vises = visualizers |>@ Vis.to_string in
   let possible_vises =
+    (* if true then [] else *)
     match value.type_opt with
     | Some val_typ -> Suggestions.possible_function_names_on_type ~cache:stuff.possible_function_names_on_type_cache val_typ type_env
     | None -> [] in
@@ -608,6 +610,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
       (type_error_htmls @ [if needs_parens then "(" ^ inner ^ ")" else inner] @ perhaps_accept_or_reject_html)
   in
   let values_for_exp =
+    (* if true then "" else *)
     if show_result && not (Exp.is_hole exp) && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
   in
   wrap @@
@@ -728,6 +731,7 @@ and ret_exps stuff exp =
 
 (* Actually renders all values, but only one is displayed at a time (via Javascript). *)
 and render_tv stuff pat_opt (exp_opt : expression option) =
+  (* if true then "" else *)
   match exp_opt with
   | Some ({ pexp_desc = Pexp_fun (_, _, first_arg_pat, _); _ } as exp) ->
     let rec get_param_rows_and_body exp =
@@ -761,7 +765,7 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
       let ret_locs = ret_exps stuff body |>@ Exp.loc in
       let ret_entries = entries_for_locs stuff ret_locs in
       let type_env = stuff.type_lookups.Typing.lookup_pat first_arg_pat.ppat_loc |>& (fun tpat -> tpat.Typedtree.pat_env) ||& Env.empty in
-      let arg_entry_opts = (* List of kist of entries... [arg1_entries, arg2_entries, arg3_entries] *)
+      let arg_entry_opts = (* List of list of entries... [arg1_entries, arg2_entries, arg3_entries] *)
         (* Need to construct thing to assert on. *)
         arg_pat_locs |>@ begin fun pat_loc ->
           let arg_entries = entries_for_loc stuff pat_loc in
@@ -800,7 +804,7 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
         [ td ~attrs:[("class", "returns-label")] ["Return"]
         ] @ tds @ [td ~attrs:[("class", "new-expectation-return")] [textbox []]]
     in
-    (* Technically, a function is value and one can argue the above code should be in html_of_values_for_exp *)
+    (* Technically, a function is a value and one can argue the above code should be in html_of_values_for_exp *)
     (* Don't remember why I double wrapped this. But when I do, hovering over a top level value causes other top level functions to gray out because there's no child element that has the same frameNo as the top level. So let's try not double wrapping and see what happens... *)
     (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
@@ -854,21 +858,8 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
 
 let html_of_top_matter_structure_item (item : structure_item) =
   match item.pstr_desc with
-  | Pstr_eval (_exp, _)   -> failwith "can't handle Pstr_eval" (* JS wants all top-level DOM nodes to be vbs, for now at least *)
-  | Pstr_value (_, _)     -> ""
-  | Pstr_primitive _      -> failwith "can't handle Pstr_primitive"
-  | Pstr_type (_, _)      -> div ~attrs:[("class", "type-def");("data-in-place-edit-loc", Serialize.string_of_loc item.pstr_loc)] [StructItem.to_string item]
-  | Pstr_typext _         -> failwith "can't handle Pstr_typext"
-  | Pstr_exception _      -> failwith "can't handle Pstr_exception"
-  | Pstr_module _         -> failwith "can't handle Pstr_module"
-  | Pstr_recmodule _      -> failwith "can't handle Pstr_recmodule"
-  | Pstr_modtype _        -> failwith "can't handle Pstr_modtype"
-  | Pstr_open _           -> failwith "can't handle Pstr_open"
-  | Pstr_class _          -> failwith "can't handle Pstr_class"
-  | Pstr_class_type _     -> failwith "can't handle Pstr_class_type"
-  | Pstr_include _        -> failwith "can't handle Pstr_include"
-  | Pstr_attribute _      -> failwith "can't handle Pstr_attribute"
-  | Pstr_extension (_, _) -> failwith "can't handle Pstr_extension"
+  | Pstr_type (_, _) -> div ~attrs:[("class", "type-def");("data-in-place-edit-loc", Serialize.string_of_loc item.pstr_loc)] [StructItem.to_string item]
+  | _                -> ""
 
 let html_of_vb_structure_item stuff (item : structure_item) =
   match item.pstr_desc with
@@ -891,6 +882,8 @@ let html_of_vb_structure_item stuff (item : structure_item) =
 
 let inital_env_ctor_types = Suggestions.ctors_types Typing.initial_env
 let drawing_tools tenv prog =
+  (* ~10ms *)
+  (* if true then "" else *)
   let ctors_types = Suggestions.ctors_types tenv in
   let tool_and_menu tool_key codes =
     if codes = [] then [] else

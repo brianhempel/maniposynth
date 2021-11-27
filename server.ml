@@ -195,7 +195,7 @@ let handle_connection in_chan out_chan =
         end;
         if Action.should_synth_afterward action then Synth.try_async path;
         respond ~content_type:"text/plain" out_chan "Done.";
-        if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
+        (* if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms"; *)
       end else
         respond_not_found request_str out_chan
   | _ ->
@@ -203,7 +203,7 @@ let handle_connection in_chan out_chan =
       print_endline request_str;
       respond_not_found request_str out_chan
   );
-  (* if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms"; *)
+  if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
   flush out_chan;
   close_in in_chan (* This apparently closes both channels. *)
 
