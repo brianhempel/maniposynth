@@ -1,4 +1,4 @@
-# Maniposynth Fixups Before User Study
+# Maniposynth Fixups
 
 - [x] make sure it can be installed on mac/windows/linux
 
@@ -229,11 +229,13 @@
 
 - [x] synth: only accept expressions where all branches exercised
 
+- [ ] by default, position pat TVs in the order they appear in code
+
 - [ ] match in ITE conditional position should float to outside
 
 - [ ] inserting nested patterns in one go (via autocomplete) produced duplicate names (nat_max)
 
-- [ ] did actually need to see some of the elided example cases (shuffles)
+- [ ] did actually need to see some of the elided example cases (shuffles, bstd_valid)
 
 - [ ] sometimes can't choose a specific type under which to synth because function is already used elsewhere at an incompatible type (i think we *can* do subtyping via unification: if one type doesn't change under unification then it was a subtype) this caused trouble with P1's insert_into_sorted_list helper (synth should have been able to fill the then and else clause)
 
@@ -246,6 +248,34 @@
 - [ ] ITE lines need more vertical space between them
 
 - [ ] synthesis runs before the button pressed
+
+- [ ] nested pat matches: drag-to-extract does wrong thing here, but dragging the existing pat names works:
+
+  ```ocaml
+  type 'a btree = Node of 'a btree * 'a * 'a btree | Empty
+  
+  let ex_tree =
+    Node (Node (Empty, 0, Node (Empty, 0, Empty)), 0, Empty)
+    [@@pos 820, 121]
+  
+  let rec btree_same_shape tree1 tree2 =
+    let btree_same2 = btree_same_shape (??) (??) [@@pos 477, 22] in
+    match tree1 with
+    | Node (l1, _, r1) -> (
+        match tree2 with
+        | Node (l2, _, r2) ->
+            let btree_same = btree_same_shape l1 l2 [@@pos 108, 0] in
+            (??)
+        | Empty -> (??) )
+    | Empty -> (??)
+    [@@pos 541, 396]
+  
+  let () =
+    assert (btree_same_shape ex_tree (Node (Empty, 0, Empty)) = false)
+    [@@pos 1927, 173]
+  ```
+
+  
 
 - [x] popup explaining syntax error
 
@@ -409,18 +439,4 @@
 
 - [ ] "done" button appears when func has no holes, to hide the function canvas/rets?
 
-
-
-
-
-## study
-
-- [x] build tool
-- [x] email zoom link
-- [x] record consent
-- [x] stop recording
-- [ ] setup payment https://finserv.uchicago.edu/sites/finserv.uchicago.edu/files/uploads/Form%20W-9%20%28Rev.%20October%202018%29.pdf
-- [x] email w9
-- [ ] email tool & vim/emacs directions
-- [ ] record
 
