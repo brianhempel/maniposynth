@@ -668,7 +668,7 @@ and ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression *
   | None ->
     let ctors_producing_type =
       begin
-        (stdlib_ctors              |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)) @
+        (pervasives_ctors          |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)) @
         (hole_synth_env.user_ctors |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob))
       end
       |>@& begin fun (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) ->

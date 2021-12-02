@@ -658,12 +658,14 @@ let move_up_duplicated_bindings prog =
     match exp.pexp_desc with
     | Pexp_match (scrutinee, ((_::_) as cases)) ->
       let rec loop extracted_letexps letexps_to_ignore cases' =
+        (* Find a letexp we haven't inspected yet. *)
         let extraction_candidate =
           find_nondep_letexps (List.hd cases')
           |> List.find_opt (fun letexp -> not (letexp_is_in_list letexp letexps_to_ignore))
         in
         begin match extraction_candidate with
         | Some letexp ->
+          (* If the letexp exists in all other branches AND is nondep in all other branches, then we can move it out. *)
           if (cases' |> List.for_all (fun case -> letexp_is_in_list letexp (find_nondep_letexps case))) then
             let cases' = cases' |>@ Case.map_rhs (remove_letexp letexp) in
             loop (letexp::extracted_letexps) letexps_to_ignore cases'
@@ -870,6 +872,7 @@ let add_missing_cases final_tenv prog =
   end
 
 let fixup_matches final_tenv prog =
+  (* Uncomment the log lines to see how all this works *)
   (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
   prog
   (* |> log *)
@@ -885,7 +888,7 @@ let fixup_matches final_tenv prog =
   (* |> log *)
   |> add_missing_cases final_tenv
   (* |> log *)
-  |> remove_simple_rename_bindings
+  |> remove_simple_rename_bindings (* We affect the "Destruct" button by inserting "let x = match y with ... -> z" to trigger the above mechanics, which preserves the match an ultimately simplifies the binding to "let x = z". Remove that binding. *)
   (* |> log *)
 
 let remove_rejection_attrs_no_longer_on_holes prog =

@@ -127,7 +127,7 @@ let names_to_skip            = SSet.union_all [unimplemented_prim_names; dont_bo
 
 
 
-let stdlib_ctors : (Longident.t * Types.constructor_description * lprob) list =
+let pervasives_ctors : (Longident.t * Types.constructor_description * lprob) list =
   let ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
   begin fun lid_and_counts ->
     lid_and_counts |>@& begin fun (lid_str, count) ->
