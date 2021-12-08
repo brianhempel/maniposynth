@@ -1,0 +1,10 @@
+/_build/
+/simple.*
+/ocaml-4.07.1*
+artifact*
+/future/
+/history/
+*-old.ml
+synth_stats_model/corpus
+synth_stats_model/annotated
+*_profile.txt
