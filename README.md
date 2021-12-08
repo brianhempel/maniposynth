@@ -31,7 +31,7 @@ For scratchwork, make a  `scratch.ml` at the top level, uncomment the scratch bi
 $ make scratch
 ```
 
-You *must* up your editor with the OCaml language server. Its type hints, instant errors, and tooltip docs probably doubled my productivity. Also I didn't bother with writing many type annotations because the language server for VS Code shows the function types. Note that type `int` is often displayed as `frame_no`. Ah, type synonyms.
+You *must* set up your editor with the OCaml language server. Its type hints, instant errors, and tooltip docs probably doubled my productivity. Also I didn't bother with writing many type annotations because the language server for VS Code shows the function types. Note that type `int` is often displayed as `frame_no`. Ah, type synonyms.
 
 ## Artifact for User Study
 
