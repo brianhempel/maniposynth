@@ -26,7 +26,7 @@ artifact:
 	cp ocaml-4.07.1/stdlib/*.cmi artifact/
 	cp ARTIFACT_README.md artifact/
 	cp -r expert_eval_manual artifact/examples
-	rm artifact/examples/*-old.ml
+	rm artifact/examples/*-old.ml;
 	zip artifact -r artifact
 
 # build_and_run: ./_build/default/interpreter.exe
