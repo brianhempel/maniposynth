@@ -17,7 +17,8 @@ profile:
 # 	dune build --auto-promote synth_stats_model.exe
 # 	./_build/default/synth_stats_model.exe
 
-# Artifact for distributing to study participants.
+# Artifact for distributing to study participants, AEC, etc.
+.PHONY: artifact
 artifact:
 	rm -r artifact.zip; rm -rf artifact; mkdir artifact; cp ./_build/default/server.exe artifact/maniposynth
 	cp -r assets artifact/assets
@@ -25,6 +26,8 @@ artifact:
 	mkdir -p artifact/ocaml-4.07.1/stdlib; cp -r ocaml-4.07.1/stdlib/*.ml artifact/ocaml-4.07.1/stdlib/
 	cp ocaml-4.07.1/stdlib/*.cmi artifact/
 	cp ARTIFACT_README.md artifact/
+	mkdir -p artifact/.vscode
+	cp .vscode/settings.json artifact/.vscode/settings.json
 	cp -r expert_eval_manual artifact/examples
 	rm artifact/examples/*-old.ml; zip artifact -r artifact
 
