@@ -33,9 +33,14 @@ $ make scratch
 
 You *must* set up your editor with the OCaml language server. Its type hints, instant errors, and tooltip docs probably doubled my productivity. Also I didn't bother with writing many type annotations because the language server for VS Code shows the function types. Note that type `int` is often displayed as `frame_no`. Ah, type synonyms.
 
+For VS Code: Make sure you've run `opam install ocaml-lsp-server`, and in VS Code install the `OCaml Platform` extension by OCaml Labs.
+
 ## Artifact for User Study
 
 ```
 $ make artifact.zip
 ```
 
+## User Code
+
+To dim AST attribute annotations to make user code more readable, in VS Code install the Highlight extension (fabiospampinato.vscode-highlight). In this repo, the config file in `.vscode/settings.json` contains the regex and styling for annotations. You may have to edit the styling if you use a dark theme (I use a light theme).

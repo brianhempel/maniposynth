@@ -24,7 +24,7 @@ VS Code will automatically refresh when code is changed on disk. For Vim and Ema
 
 Thanks to [eli on Super User](https://superuser.com/a/1286322) for this solution. Run this in Vim:
 
-``` 
+```
 :set autoread | au CursorHold * checktime | call feedkeys("lh")
 ```
 
@@ -51,3 +51,8 @@ For Emacs, enable `global-auto-revert-mode`:
 3. Type `global-auto-revert-mode`
 4. Move the cursor to `[ Toggle ]` and hit Enter
 5. Move to `[ Apply and Save ]` and hit Enter
+
+
+## Dimming AST Annotations
+
+To dim AST attribute annotations to make user code more readable, in VS Code install the Highlight extension (fabiospampinato.vscode-highlight). This artifact includes a `.vscode/settings.json` that contains the regex and styling for annotations. It should "just work" if you open this folder in VS code (e.g. via `code artifact`). You may have to edit the styling in `.vscode/settings.json` if you use a dark theme.

@@ -20,6 +20,7 @@ profile:
 # Artifact for distributing to study participants, AEC, etc.
 .PHONY: artifact
 artifact:
+	make ./_build/default/server.exe
 	rm -r artifact.zip; rm -rf artifact; mkdir artifact; cp ./_build/default/server.exe artifact/maniposynth
 	cp -r assets artifact/assets
 	rm -r artifact/assets/*.amdn; # don't need rich image files
