@@ -8,7 +8,7 @@ Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
 
 ## Download
 
-You can grab a VM or a prebuilt binary (that includes supporting files). The Ubuntu VM includes the prebuilt binary and VS Code. The advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special highlighting rule to dim AST annotations. The disadvantage of the VM is that it's a 1000x bigger download than the binaries. I also find graphical interaction in VirtualBox to be rather clunky, even with hardware acceleration on. The VS Code configuration is entirely optional, Maniposynth works with any text editor that will refresh when the file changes on disk (see below for how to enable this in Vim/Emacs if you prefer those editors).
+You can grab a VM or a prebuilt binary. The Ubuntu VM includes the prebuilt binary and VS Code. The advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special highlighting rule to dim AST annotations. The disadvantage of the VM is that it's a 1000x bigger download than the binaries. I also find graphical interaction in [VirtualBox](https://www.virtualbox.org/) to be rather clunky, even with hardware acceleration on. And the VS Code configuration is entirely optional, Maniposynth works with any text editor that will refresh when the file changes on disk (see below for how to enable this in Vim/Emacs if you prefer those editors).
 
 **Pre-built binaries** (~5MB, effectively what we gave to user study participants):
 
@@ -17,7 +17,7 @@ You can grab a VM or a prebuilt binary (that includes supporting files). The Ubu
 
 **VM Image (with VS Code configured**)
 
-- Download OVA VM Image (7GB). You shouldn't need it, but the username/password is maniposynth/maniposynth.
+- [Download OVA VM Image (~6.5GB)](https://maniposynth.s3.us-east-2.amazonaws.com/ManiposynthArtifact.ova). You shouldn't need it, but the username/password is maniposynth/maniposynth.
 
 **Build from source (if the above fail)**
 
@@ -33,7 +33,7 @@ For the pre-built binaries, enter the `artifact` folder and start the server:
 $ ./maniposynth
 ```
 
-Then open Chrome and navigate to a relative file path, e.g. [http://localhost:1111/examples/length.ml](http://localhost:1111/examples/length.ml). You can also create a new file (in your editor) and type that file path in the URL, e.g. [http://localhost:1111/scratch.ml](http://localhost:1111/scratch.ml).
+Then open Chrome and navigate to a file path relative to the server, e.g. [http://localhost:1111/examples/length.ml](http://localhost:1111/examples/length.ml). You can also create a new file (in your editor) and type that file path in the URL, e.g. [http://localhost:1111/scratch.ml](http://localhost:1111/scratch.ml).
 
 Open up the same file in your editor, side by side, for the full bimodal experience.
 
@@ -78,13 +78,13 @@ For Emacs, enable `global-auto-revert-mode`:
 
 ## Dimming AST Annotations (Optional)
 
-To dim AST attribute annotations to make code more readable, in VS Code install the Highlight extension (fabiospampinato.vscode-highlight). This artifact includes a `.vscode/settings.json` that contains the regex and styling for annotations. It should "just work" if you open the artifact folder in VS code (e.g. via `code artifact`). You may have to edit the styling in `.vscode/settings.json` if you use a dark theme.
+To dim AST attribute annotations to make code more readable, in VS Code install the Highlight extension (fabiospampinato.vscode-highlight). This artifact includes a `.vscode/settings.json` that contains the regex and styling for annotations. It should "just work" if you open the artifact folder in VS code (e.g. via `code artifact`). You may have to edit the styling in `.vscode/settings.json` if you use a dark theme. (The VM is already configured with the Highlight extension.)
 
 ## Evaluating
 
 We claim (a) that our artifact works as described in the Overview example in Section 2 of [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-preprint.pdf), and (b) that our artifact works not just on the overview example.
 
-To verify these claims, (a) we ask the artifact reviewers to follow the walkthrough in the Overview, including the variations at the end of the overview, and (b) we ask the reviewers to try one example of their own choosing, either of their own design or from Table 1.
+To verify these claims, (a) we ask the artifact reviewers to follow the walkthrough in the paper Overview, including the variations, and (b) we ask the reviewers to try one example of their own choosing, either of their own design or from Table 1.
 
 ### Initial variation (Sec 2.1)
 
@@ -142,7 +142,7 @@ This section claims that Undo works, and delete works on expressions and on let-
 
 ### Asserts (Sec 2.3)
 
-- [ ] Clear the file in your text editor and save. (The browser should refresh to a blank canvas, if not, hit reload.)
+- [ ] Clear the file in your text editor and save. (The browser should refresh to a blank canvas—if not, hit reload.)
 - [ ] Double-click on top-level canvas and write `length [0; 0; 0] = 3`
 - [ ] Notice that an assert is created (in addition to a skeleton for `length`).
 - [ ] In the function IO grid, press the "+" button, and add an assert that given the input `[]` the output should be `0`. Hit enter.
@@ -160,7 +160,7 @@ This section claims that Undo works, and delete works on expressions and on let-
 
 ### Subvisualizations, with asserts (Sec 2.3)
 
-- [ ] Clear the file in your text editor and save. (The browser should refresh to a blank canvas, if not, hit reload.)
+- [ ] Clear the file in your text editor and save. (The browser should refresh to a blank canvas— if not, hit reload.)
 - [ ] Double-click and write `[0; 0; 0]`.
 - [ ] Click on the literal output value (the opening `[` of the bold value below `int_list = [0; 0; 0]`)
 - [ ] In the textbox next to the "Visualize" button, write `length` and press "Visualize"
@@ -174,7 +174,7 @@ This section claims that Undo works, and delete works on expressions and on let-
 
 ### Try your own example
 
-Pick a simple function of your choice and try to implement it—the easier exercises in Table 1 can be an inspiration. Final code for each example in Table 1 is included in the `artifact/examples` folder, if that is helpful. It is okay to perform text edits in your editor if you get stuck—this *is* a bimodal environment, after all! Hints:
+Pick a *simple* function of your choice and try to implement it—the easier exercises in Table 1 can be an inspiration. Final code for each example in Table 1 is included in the `artifact/examples` folder, if that is helpful. It is okay to perform text edits in your editor if you get stuck—this *is* a bimodal environment after all! Hints:
 
 - Reminder: the expected way to create a new function is always to provide an example call, before the function exists.
 
@@ -186,11 +186,11 @@ Pick a simple function of your choice and try to implement it—the easier exerc
   type 'a btree = Node of 'a btree * 'a * 'a btree | Empty
   ```
 
-- If you are using such a custom type, remember that the toolbar at the top will contain example values (hover your cursor over the ▾ arrow) that you can drag onto your canvas or into a subexpression.
+- If you are using such a custom type, remember that the toolbar at the top will contain example values that you can drag onto your canvas or into a subexpression (hover your cursor over the down arrow ▾).
 
 - The synthesizer is unlikely to guess an if-then-else expression correctly. Drag the `if (??) then (??) else (??)` skeleton from the  first toolbar menu into your code and at least fill in the conditional.
 
-- More inspiration: the following single asserts will synthesize the correct function with no extra information. One trick is using uncommon constants that the synthesizer will not guess as constant literals (e.g. `17`):
+- More inspiration: the following single asserts will synthesize the correct function with no extra information. One trick is using uncommon constants so that the synthesizer will not guess constant literals (e.g. `17`):
 
   ```ocaml
   fold ( + ) [ 1; 2; 3 ] 11 = 17
@@ -198,9 +198,9 @@ Pick a simple function of your choice and try to implement it—the easier exerc
   list_sum [ 10; 20; 30 ] = 60
   ```
 
-  To verify the function is correct, it's helpful to rename the arguments (double-click the pink names).
-
   (Copy-paste may not work, you may have to retype the above.)
+
+  To verify the function is correct, it's helpful to rename the arguments (double-click the pink names).
 
 ## Bugs to know
 
@@ -222,4 +222,4 @@ Pick a simple function of your choice and try to implement it—the easier exerc
 
   Delete the `length2` binding, or fill in the recursive call manually, and synthesis will succeed.
 
-Have fun!
+*Have fun!*
