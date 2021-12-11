@@ -27,7 +27,7 @@ You can grab a VM or a prebuilt binary. The Ubuntu VM includes the prebuilt bina
 
 If you dowloaded the VM, there's an "Open Maniposynth" shortcut on the desktop that will start the Maniposynth server, open the `artifact` folder in VS Code, and open Maniposynth in Chromium on a `scratch.ml` file.
 
-For the pre-built binaries, enter the `artifact` folder and start the server:
+For the pre-built binaries, enter the `artifact` folder and start the server. (On Mac, to trust the executable, you will have to right-click the executable and select "Open". After that first time, you can start it from the command line as normal.)
 
 ```
 $ ./maniposynth
