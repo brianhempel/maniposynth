@@ -101,7 +101,6 @@ Start with a blank file. (Delete everything in your text editor and save.)
 - [ ] Drag `length (??)` from the toolbar at the top of the window into the subcanvas inside length (the whitespace below "Bindings inside function").
 - [ ] Notice the new let-binding `length2 = length (??)`.
 - [ ] Notice the `length` function is now recursive (`let rec length list = ...`).
-- [ ] Notice that `length2` returns Bomb 💣 because it is currently an infinite loop (`length` calls itself with hole value, forever).
 - [ ] Hover the cursor over the opening `[` on the input list in the IO grid, press `Destruct`.
 - [ ] Notice the new `match` case split in the code, with two branches.
 - [ ] Notice the pink `hd` and `tail` name subscripts on the input list  `[0; 0; 0]` in the IO grid.
@@ -167,10 +166,10 @@ This section claims that Undo works, and delete works on expressions and on let-
 - [ ] Notice the `?` subvisualization superscripts on the `[0; 0; 0]` value. (A length skeleton is also created.)
 - [ ] Double-click the first `?` superscript, write 3 and hit Enter.
 - [ ] Notice an assert is added, and a blue expected value `3` appears in the superscript.
-- [ ] Similarly assert that the tail length should be `2` (rhe tail length is the third `?`.)
+- [ ] Similarly assert that the tail length should be `2` (the tail length is the third `?`.)
 - [ ] Press Synth to produce the correct function, accept the result.
-- [ ] Notice the superscripts on the `0` values have disappeared (they are no longer type-compatible with `length`.)
-- [ ] Notice the first superscripts are rendered in green, indicated satisfied asserts.
+- [ ] Notice the superscripts on the `0` integer values have disappeared (they are no longer type-compatible with `length`.)
+- [ ] Notice the first two superscripts are rendered in green, indicated satisfied asserts.
 
 ### Try your own example
 
