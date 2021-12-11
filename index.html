@@ -1972,8 +1972,7 @@
     <div class='typora-export-content'>
         <div id='write' class=''>
             <h1><img src="assets/maniposynth.svg" referrerpolicy="no-referrer" alt="The Magnificent Maniposynth"></h1>
-            <p><img src="assets/teaser.png"
-                    referrerpolicy="no-referrer" alt="teaser"></p>
+            <p><img src="assets/teaser.png" referrerpolicy="no-referrer" alt="teaser"></p>
             <p><span>Visual non-linear editing, live programming, and synthesis for (some of) OCaml.</span></p>
             <div class='md-toc' mdtype='toc'>
                 <p class="md-toc-content" role="list"><span role="listitem" class="md-toc-item md-toc-h1"
@@ -2047,7 +2046,9 @@
                     will start the Maniposynth server, open the </span><code>artifact</code><span> folder in VS Code,
                     and open Maniposynth in Chromium on a </span><code>scratch.ml</code><span> file.</span></p>
             <p><span>For the pre-built binaries, enter the </span><code>artifact</code><span> folder and start the
-                    server:</span></p>
+                    server. (On Mac, to trust the executable, you will have to right-click the executable and select
+                    &quot;Open&quot;. After that first time, you can start it from the command line as normal.)</span>
+            </p>
             <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
                 lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">$ ./maniposynth</span></pre>
         </div>
@@ -2454,14 +2455,10 @@
             <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
                 lang="ocaml"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="ocaml"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">fold</span> ( <span class="cm-operator">+</span> ) [ <span class="cm-number">1</span>; <span class="cm-number">2</span>; <span class="cm-number">3</span> ] <span class="cm-number">11</span> <span class="cm-operator">=</span> <span class="cm-number">17</span></span></pre>
             </div>
-            <div class="" style="position: relative;">
-                <pre class=" CodeMirror-line "
-                    role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">map</span> <span class="cm-keyword">succ</span> [ <span class="cm-number">1</span>; <span class="cm-number">2</span>; <span class="cm-number">3</span> ] <span class="cm-operator">=</span> [ <span class="cm-number">2</span>; <span class="cm-number">3</span>; <span class="cm-number">4</span> ]</span></pre>
-            </div>
-            <div class="" style="position: relative;">
-                <pre class=" CodeMirror-line "
-                    role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">list_sum</span> [ <span class="cm-number">10</span>; <span class="cm-number">20</span>; <span class="cm-number">30</span> ] <span class="cm-operator">=</span> <span class="cm-number">60</span></span></pre>
-            </div>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">map</span> <span class="cm-keyword">succ</span> [ <span class="cm-number">1</span>; <span class="cm-number">2</span>; <span class="cm-number">3</span> ] <span class="cm-operator">=</span> [ <span class="cm-number">2</span>; <span class="cm-number">3</span>; <span class="cm-number">4</span> ]</span></pre>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">list_sum</span> [ <span class="cm-number">10</span>; <span class="cm-number">20</span>; <span class="cm-number">30</span> ] <span class="cm-operator">=</span> <span class="cm-number">60</span></span></pre>
             </div>
             </div>
             </div>
