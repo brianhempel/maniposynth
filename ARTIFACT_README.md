@@ -1,6 +1,6 @@
 # ![The Magnificent Maniposynth](assets/maniposynth.svg)
 
-![teaser](/Users/brian/Documents/phd/output_directed_ide/maniposynth/assets/teaser.png)
+![teaser](assets/teaser.png)
 
 Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
 
