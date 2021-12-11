@@ -8,7 +8,7 @@ Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
 
 ## Download
 
-You can grab a VM or a prebuilt binary. The Ubuntu VM includes the prebuilt binary and VS Code. The advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special highlighting rule to dim AST annotations. The disadvantage of the VM is that it's a 1000x bigger download than the binaries. I also find graphical interaction in [VirtualBox](https://www.virtualbox.org/) to be rather clunky, even with hardware acceleration on. And the VS Code configuration is entirely optional, Maniposynth works with any text editor that will refresh when the file changes on disk (see below for how to enable this in Vim/Emacs if you prefer those editors).
+You can grab the VM or a prebuilt binary. The Ubuntu VM includes the prebuilt binary and VS Code. The advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special highlighting rule to dim AST annotations. The disadvantage of the VM is that it's a 1000x bigger download than the binaries. I also find graphical interaction in [VirtualBox](https://www.virtualbox.org/) to be rather clunky, even with hardware acceleration on. And the VS Code configuration is entirely optional, Maniposynth works with any text editor that will refresh when the file changes on disk (see below for how to enable this in Vim/Emacs if you prefer those editors).
 
 **Pre-built binaries** (~5MB, effectively what we gave to user study participants):
 
@@ -17,7 +17,7 @@ You can grab a VM or a prebuilt binary. The Ubuntu VM includes the prebuilt bina
 
 **VM Image (with VS Code configured**)
 
-- [Download OVA VM Image (~6.5GB)](https://maniposynth.s3.us-east-2.amazonaws.com/ManiposynthArtifact.ova). You shouldn't need it, but the username/password is maniposynth/maniposynth.
+- [Download OVA VM Image (~6.5GB)](https://maniposynth.s3.us-east-2.amazonaws.com/ManiposynthArtifact.ova). For some reason, S3 changes the extension to .ovf; change it back to .ova before opening. And you shouldn't need it, but the VM username/password is maniposynth/maniposynth.
 
 **Build from source (if the above fail)**
 
