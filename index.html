@@ -1972,17 +1972,84 @@
     <div class='typora-export-content'>
         <div id='write' class=''>
             <h1><img src="assets/maniposynth.svg" referrerpolicy="no-referrer" alt="The Magnificent Maniposynth"></h1>
+            <p><img src="/Users/brian/Documents/phd/output_directed_ide/maniposynth/assets/teaser.png"
+                    referrerpolicy="no-referrer" alt="teaser"></p>
             <p><span>Visual non-linear editing, live programming, and synthesis for (some of) OCaml.</span></p>
-            <p><span>Download the prebuilt artifact, then follow the directions below.</span></p>
+            <div class='md-toc' mdtype='toc'>
+                <p class="md-toc-content" role="list"><span role="listitem" class="md-toc-item md-toc-h1"
+                        data-ref="n0"><a class="md-toc-inner" style="cursor: pointer;" href="#"></a></span><span
+                        role="listitem" class="md-toc-item md-toc-h2" data-ref="n5"><a class="md-toc-inner"
+                            style="cursor: pointer;" href="#download">Download</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h2" data-ref="n21"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#quickstart">Quickstart</a></span><span role="listitem" class="md-toc-item md-toc-h2"
+                        data-ref="n28"><a class="md-toc-inner" style="cursor: pointer;" href="#live-refresh">Live
+                            Refresh</a></span><span role="listitem" class="md-toc-item md-toc-h3" data-ref="n30"><a
+                            class="md-toc-inner" style="cursor: pointer;" href="#vim">Vim</a></span><span
+                        role="listitem" class="md-toc-item md-toc-h3" data-ref="n38"><a class="md-toc-inner"
+                            style="cursor: pointer;" href="#emacs">Emacs</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h2" data-ref="n52"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#dimming-ast-annotations-optional">Dimming AST Annotations (Optional)</a></span><span
+                        role="listitem" class="md-toc-item md-toc-h2" data-ref="n54"><a class="md-toc-inner"
+                            style="cursor: pointer;" href="#evaluating">Evaluating</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h3" data-ref="n57"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#initial-variation-sec-21">Initial variation (Sec 2.1)</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h3" data-ref="n116"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#undo-and-delete-sec-22">Undo and delete (Sec 2.2)</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h3" data-ref="n127"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#drag-to-extract-sec-23">Drag-to-extract (Sec 2.3)</a></span><span role="listitem"
+                        class="md-toc-item md-toc-h3" data-ref="n135"><a class="md-toc-inner" style="cursor: pointer;"
+                            href="#autocomplete-to-extract-sec-23">Autocomplete-to-extract (Sec 2.3)</a></span><span
+                        role="listitem" class="md-toc-item md-toc-h3" data-ref="n143"><a class="md-toc-inner"
+                            style="cursor: pointer;" href="#asserts-sec-23">Asserts (Sec 2.3)</a></span><span
+                        role="listitem" class="md-toc-item md-toc-h3" data-ref="n157"><a class="md-toc-inner"
+                            style="cursor: pointer;" href="#program-synthesis-sec-23">Program Synthesis (Sec
+                            2.3)</a></span><span role="listitem" class="md-toc-item md-toc-h3" data-ref="n171"><a
+                            class="md-toc-inner" style="cursor: pointer;"
+                            href="#subvisualizations-with-asserts-sec-23">Subvisualizations, with asserts (Sec
+                            2.3)</a></span><span role="listitem" class="md-toc-item md-toc-h3" data-ref="n195"><a
+                            class="md-toc-inner" style="cursor: pointer;" href="#try-your-own-example">Try your own
+                            example</a></span><span role="listitem" class="md-toc-item md-toc-h2" data-ref="n212"><a
+                            class="md-toc-inner" style="cursor: pointer;" href="#bugs-to-know">Bugs to know</a></span>
+                </p>
+            </div>
+            <h2 id='download'><span>Download</span></h2>
+            <p><span>You can grab a VM or a prebuilt binary. The Ubuntu VM includes the prebuilt binary and VS Code. The
+                    advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special
+                    highlighting rule to dim AST annotations. The disadvantage of the VM is that it&#39;s a 1000x bigger
+                    download than the binaries. I also find graphical interaction in </span><a
+                    href='https://www.virtualbox.org/'><span>VirtualBox</span></a><span> to be rather clunky, even with
+                    hardware acceleration on. And the VS Code configuration is entirely optional, Maniposynth works with
+                    any text editor that will refresh when the file changes on disk (see below for how to enable this in
+                    Vim/Emacs if you prefer those editors).</span></p>
+            <p><strong><span>Pre-built binaries</span></strong><span> (~5MB, effectively what we gave to user study
+                    participants):</span></p>
             <ul>
-                <li><span><a href="assets/maniposynth-artifact-mac.zip">Download MacOS Artifact</a></span></li>
-                <li><span><a href="assets/maniposynth-artifact-linux.zip">Download Linux x86_64 Artifact</a></span></li>
+                <li><a href='http://maniposynth.org/assets/maniposynth-artifact-mac.zip'><span>Download MacOS
+                            Artifact</span></a></li>
+                <li><a href='http://maniposynth.org/assets/maniposynth-artifact-linux.zip'><span>Download Linux x86_64
+                            Artifact</span></a></li>
             </ul>
-            <p><span>If the above fail, it should be easy to build from <a href="assets/maniposynth-source.zip">source</a> (see the README.md).</span></p>
+            <p><strong><span>VM Image (with VS Code configured</span></strong><span>)</span></p>
+            <ul>
+                <li><a href='https://maniposynth.s3.us-east-2.amazonaws.com/ManiposynthArtifact.ova'><span>Download OVA
+                            VM Image (~6.5GB)</span></a><span>. You shouldn&#39;t need it, but the username/password is
+                        maniposynth/maniposynth.</span></li>
+            </ul>
+            <p><strong><span>Build from source (if the above fail)</span></strong></p>
+            <ul>
+                <li><a href='http://maniposynth.org/assets/maniposynth-source.zip'><span>Download
+                            Source</span></a><span> (It should be easy to build. </span><a
+                        href='https://opam.ocaml.org/doc/Install.html'><span>Install opam</span></a><span> and then see
+                        the README.md in the source.)</span></li>
+            </ul>
             <h2 id='quickstart'><span>Quickstart</span></h2>
-            <p><span>Start the server:</span></p>
+            <p><span>If you dowloaded the VM, there&#39;s an &quot;Open Maniposynth&quot; shortcut on the desktop that
+                    will start the Maniposynth server, open the </span><code>artifact</code><span> folder in VS Code,
+                    and open Maniposynth in Chromium on a </span><code>scratch.ml</code><span> file.</span></p>
+            <p><span>For the pre-built binaries, enter the </span><code>artifact</code><span> folder and start the
+                    server:</span></p>
             <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
-                lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.666666984558105px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">$ ./maniposynth</span></pre>
+                lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">$ ./maniposynth</span></pre>
         </div>
     </div>
     </div>
@@ -1990,25 +2057,26 @@
     </div>
     </div>
     <div
-        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 23px;">
+        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 22px;">
     </div>
-    <div class="CodeMirror-gutters" style="display: none; height: 23px;"></div>
+    <div class="CodeMirror-gutters" style="display: none; height: 22px;"></div>
     </div>
     </div>
     </pre>
-    <p><span>Then open your browser and navigate to a relative file path, e.g. </span><a
+    <p><span>Then open Chrome and navigate to a file path relative to the server, e.g. </span><a
             href='http://localhost:1111/examples/length.ml'><span>http://localhost:1111/examples/length.ml</span></a><span>.
-            You can also create a new file (in your editor) and type that file path in the URL.</span></p>
+            You can also create a new file (in your editor) and type that file path in the URL, e.g. </span><a
+            href='http://localhost:1111/scratch.ml'><span>http://localhost:1111/scratch.ml</span></a><span>.</span></p>
     <p><span>Open up the same file in your editor, side by side, for the full bimodal experience.</span></p>
     <p><span>If you have </span><code>ocamlformat</code><span> installed and in your </span><code>$PATH</code><span>,
-            generated code will have better formatting.</span></p>
-    <h2 id='live-refresh'><span>Live refresh</span></h2>
+            generated code will have better formatting, but this is not required.</span></p>
+    <h2 id='live-refresh'><span>Live Refresh</span></h2>
     <p><span>VS Code will automatically refresh when code is changed on disk. For Vim and Emacs, see below:</span></p>
     <h3 id='vim'><span>Vim</span></h3>
     <p><span>Thanks to </span><a href='https://superuser.com/a/1286322'><span>eli on Super User</span></a><span> for
             this solution. Run this in Vim:</span></p>
     <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
-        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.666666984558105px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><span><span>​</span>x</span></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set autoread | au CursorHold * checktime | call feedkeys("lh")</span></pre>
+        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set autoread | au CursorHold * checktime | call feedkeys("lh")</span></pre>
     </div>
     </div>
     </div>
@@ -2016,9 +2084,9 @@
     </div>
     </div>
     <div
-        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 23px;">
+        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 22px;">
     </div>
-    <div class="CodeMirror-gutters" style="display: none; height: 23px;"></div>
+    <div class="CodeMirror-gutters" style="display: none; height: 22px;"></div>
     </div>
     </div>
     </pre>
@@ -2027,70 +2095,439 @@
             disk, then moves the cursor again with “lh” to retrigger and loop.)</span></p>
     <p><span>To poll every half second instead of every 4 seconds:</span></p>
     <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
-        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.666666984558105px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre>
+        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set updatetime=500</span></pre>
     </div>
-    <div class="CodeMirror-measure"></div>
-    <div style="position: relative; z-index: 1;"></div>
-    <div class="CodeMirror-code" role="presentation">
-        <div class="CodeMirror-activeline" style="position: relative;">
-            <div class="CodeMirror-activeline-background CodeMirror-linebackground"></div>
-            <div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div>
-            <pre class=" CodeMirror-line "
-                role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set updatetime=500</span></pre>
-        </div>
     </div>
     </div>
     </div>
     </div>
     </div>
     <div
-        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 23px;">
+        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 22px;">
     </div>
-    <div class="CodeMirror-gutters" style="display: none; height: 23px;"></div>
+    <div class="CodeMirror-gutters" style="display: none; height: 22px;"></div>
     </div>
     </div>
     </pre>
     <p><span>If you get annoying bells, </span><a href='https://unix.stackexchange.com/a/5313'><span>turn Vim’s bell
                 off</span></a><span>:</span></p>
     <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
-        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.666666984558105px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre>
+        lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set visualbell t_vb=</span></pre>
     </div>
-    <div class="CodeMirror-measure"></div>
-    <div style="position: relative; z-index: 1;"></div>
-    <div class="CodeMirror-code" role="presentation">
-        <div class="CodeMirror-activeline" style="position: relative;">
-            <div class="CodeMirror-activeline-background CodeMirror-linebackground"></div>
-            <div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div>
-            <pre class=" CodeMirror-line "
-                role="presentation"><span role="presentation" style="padding-right: 0.1px;">:set visualbell t_vb=</span></pre>
-        </div>
     </div>
     </div>
     </div>
     </div>
     </div>
     <div
-        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 23px;">
+        style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 22px;">
     </div>
-    <div class="CodeMirror-gutters" style="display: none; height: 23px;"></div>
+    <div class="CodeMirror-gutters" style="display: none; height: 22px;"></div>
     </div>
     </div>
     </pre>
     <h3 id='emacs'><span>Emacs</span></h3>
     <p><span>For Emacs, enable </span><code>global-auto-revert-mode</code><span>:</span></p>
-    <ol>
+    <ol start=''>
         <li><span>Hit F10 to go to the top menu</span></li>
         <li><span>Options &gt; Customize Emacs &gt; Specific Option</span></li>
         <li><span>Type </span><code>global-auto-revert-mode</code></li>
         <li><span>Move the cursor to </span><code>[ Toggle ]</code><span> and hit Enter</span></li>
         <li><span>Move to </span><code>[ Apply and Save ]</code><span> and hit Enter</span></li>
     </ol>
-    <h2 id='dimming-ast-annotations'><span>Dimming AST Annotations</span></h2>
+    <h2 id='dimming-ast-annotations-optional'><span>Dimming AST Annotations (Optional)</span></h2>
     <p><span>To dim AST attribute annotations to make code more readable, in VS Code install the Highlight extension
             (fabiospampinato.vscode-highlight). This artifact includes a </span><code>.vscode/settings.json</code><span>
-            that contains the regex and styling for annotations. It should &quot;just work&quot; if you open this folder
-            in VS code (e.g. via </span><code>code artifact</code><span>). You may have to edit the styling in
-        </span><code>.vscode/settings.json</code><span> if you use a dark theme.</span></p>
+            that contains the regex and styling for annotations. It should &quot;just work&quot; if you open the
+            artifact folder in VS code (e.g. via </span><code>code artifact</code><span>). You may have to edit the
+            styling in </span><code>.vscode/settings.json</code><span> if you use a dark theme. (The VM is already
+            configured with the Highlight extension.)</span></p>
+    <h2 id='evaluating'><span>Evaluating</span></h2>
+    <p><span>We claim (a) that our artifact works as described in the Overview example in Section 2 of </span><a
+            href='http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-preprint.pdf'><span>the
+                paper</span></a><span>, and (b) that our artifact works not just on the overview example.</span></p>
+    <p><span>To verify these claims, (a) we ask the artifact reviewers to follow the walkthrough in the paper Overview,
+            including the variations, and (b) we ask the reviewers to try one example of their own choosing, either of
+            their own design or from Table 1.</span></p>
+    <h3 id='initial-variation-sec-21'><span>Initial variation (Sec 2.1)</span></h3>
+    <p><span>Start with a blank file. (Delete everything in your text editor and save.)</span></p>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click on top-level canvas to add code.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Type </span><code>[</code><span>, then autocomplete to </span><code>[0; 0; 0]</code><span> and hit
+                    Enter to select the autocomplete option, then Enter again to submit.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the new let-binding </span><code>int_list = [0; 0; 0]</code><span> on the canvas and in the
+                    code. This box is a tangible value (TV).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Try repositioning the TV: hover the cursor near the edge of the box (a gray border should appear)
+                    and then drag the TV to a new position.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Verify the TV moves, and a </span><code>[@pos ...]</code><span> attribute appears in the
+                    code.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click on the white canvas to add code, write </span><code>length int_list</code><span> and
+                    hit Enter.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the new function skeleton on the canvas and in the code.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click the pink-background </span><code>x1</code><span> and rename it to
+                </span><code>list</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Drag </span><code>length (??)</code><span> from the toolbar at the top of the window into the
+                    subcanvas inside length (the whitespace below &quot;Bindings inside function&quot;).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the new let-binding </span><code>length2 = length (??)</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the </span><code>length</code><span> function is now recursive
+                    (</span><code>let rec length list = ...</code><span>).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that </span><code>length2</code><span> returns Bomb 💣 because it is currently an infinite
+                    loop (</span><code>length</code><span> calls itself with hole value, forever).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Hover the cursor over the opening </span><code>[</code><span> on the input list in the IO grid,
+                    press </span><code>Destruct</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the new </span><code>match</code><span> case split in the code, with two branches.</span>
+            </p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the pink </span><code>hd</code><span> and </span><code>tail</code><span> name subscripts on
+                    the input list </span><code>[0; 0; 0]</code><span> in the IO grid.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the </span><code>hd</code><span> and </span><code>tail</code><span> pattern TVs on the
+                    subcanvas (below &quot;Bindings inside function&quot;).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice &quot;⇠ list ⇢&quot; and the two return TVs in the returns area (&quot;Return expression(s)
+                    and value(s)&quot;), one return for each branch.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Drag the tail list (either the value </span><code>[0;0]</code><span> or the
+                </span><code>tail</code><span> name) onto the </span><code>(??)</code><span> of
+                </span><code>length (??)</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice in the code that </span><code>length2 = length tail</code><span> is now in a particular
+                    branch inside the </span><code>match</code><span> case split.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Click on </span><code>[]</code><span> in the IO grid to focus the call frame for the base
+                    case.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that all the TVs in the function are grayed out, except for the return TV for that branch
+                    (which is still a hole </span><code>(??)</code><span>).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click that </span><code>(??)</code><span> and set it to </span><code>0</code><span>.</span>
+            </p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Click </span><code>[0]</code><span> in the IO grid to bring the second-to-last call frame into
+                    focus.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click the remaining hole </span><code>(??)</code><span> and begin typing &quot;1 + &quot;
+                    (one space plus space).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the values have been colored.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Autocomplete to the </span><code>0</code><span> that has the same color as the return from
+                </span><code>length2 = length tail</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that the return expression is now </span><code>1 + length2</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice in the IO grid that the function is producing the expected outputs for all inputs.</span>
+            </p>
+        </li>
+    </ul>
+    <h3 id='undo-and-delete-sec-22'><span>Undo and delete (Sec 2.2)</span></h3>
+    <p><span>This section claims that Undo works, and delete works on expressions and on let-bindings.</span></p>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Click some expression (black text on green background) and hit delete; verify it becomes
+                </span><code>(??)</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Hit Undo; verify it undid.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Click a let-binding TV such as </span><code>length2 = length tail</code><span> (click the outer
+                    edge of a box to select the whole binding) and hit delete. If the binding is still used, it will
+                    become </span><code>(??)</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Delete the </span><code>length2</code><span> use, then try deleting the
+                </span><code>length2</code><span> binding. Verify the let-binding disappears.</span></p>
+        </li>
+    </ul>
+    <h3 id='drag-to-extract-sec-23'><span>Drag-to-extract (Sec 2.3)</span></h3>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Undo until the </span><code>length</code><span> function contains only
+                </span><code>length2 = length (??)</code><span> but no </span><code>match</code><span> statement. (Make
+                    sure the display refreshes between each time you click Undo, otherwise you may have to clear the
+                    file and start over.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Hover your cursor over the first </span><code>;</code><span> in the input list.
+                </span><code>; 0; 0]</code><span> should be highlighted. Drag this into the
+                </span><code>(??)</code><span> in </span><code>length (??)</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that the </span><code>match</code><span> case split is inserted and the binding is now
+                </span><code>length2 = length tail</code><span>.</span></p>
+        </li>
+    </ul>
+    <h3 id='autocomplete-to-extract-sec-23'><span>Autocomplete-to-extract (Sec 2.3)</span></h3>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Undo until the </span><code>length</code><span> function exists, but is just an empty skeleton with
+                    no let-bindings.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click the return hole expression, type &quot;1 + length &quot; (one space plus space length
+                    space), and autocomplete to the </span><code>; 0; 0]</code><span> tail.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that the function is now nearly complete, except for a hole for the base case.</span></p>
+        </li>
+    </ul>
+    <h3 id='asserts-sec-23'><span>Asserts (Sec 2.3)</span></h3>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Clear the file in your text editor and save. (The browser should refresh to a blank canvas—if not,
+                    hit reload.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click on top-level canvas and write </span><code>length [0; 0; 0] = 3</code></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice that an assert is created (in addition to a skeleton for
+                </span><code>length</code><span>).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>In the function IO grid, press the &quot;+&quot; button, and add an assert that given the input
+                </span><code>[]</code><span> the output should be </span><code>0</code><span>. Hit enter.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice another assert is created.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Edit the return hole </span><code>(??)</code><span> to </span><code>0</code><span> and notice one
+                    assert becomes satisfied.</span></p>
+        </li>
+    </ul>
+    <h3 id='program-synthesis-sec-23'><span>Program Synthesis (Sec 2.3)</span></h3>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Undo until there is only one assert (</span><code>length [0; 0; 0] = 3</code><span>).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Press &quot;Synth&quot;.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the incorrect result (always returns 3 for each input).</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Press &quot;Try again&quot;.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the correct result.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Press &quot;Accept&quot;.</span></p>
+        </li>
+    </ul>
+    <h3 id='subvisualizations-with-asserts-sec-23'><span>Subvisualizations, with asserts (Sec 2.3)</span></h3>
+    <ul>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Clear the file in your text editor and save. (The browser should refresh to a blank canvas— if not,
+                    hit reload.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click and write </span><code>[0; 0; 0]</code><span>.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Click on the literal output value (the opening </span><code>[</code><span> of the bold value below
+                </span><code>int_list = [0; 0; 0]</code><span>)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>In the textbox next to the &quot;Visualize&quot; button, write </span><code>length</code><span> and
+                    press &quot;Visualize&quot;</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the </span><code>?</code><span> subvisualization superscripts on the
+                </span><code>[0; 0; 0]</code><span> value. (A length skeleton is also created.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Double-click the first </span><code>?</code><span> superscript, write 3 and hit Enter.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice an assert is added, and a blue expected value </span><code>3</code><span> appears in the
+                    superscript.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Similarly assert that the tail length should be </span><code>2</code><span> (rhe tail length is the
+                    third </span><code>?</code><span>.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Press Synth to produce the correct function, accept the result.</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the superscripts on the </span><code>0</code><span> values have disappeared (they are no
+                    longer type-compatible with </span><code>length</code><span>.)</span></p>
+        </li>
+        <li class='md-task-list-item task-list-item task-list-not-done'><input type='checkbox' />
+            <p><span>Notice the first superscripts are rendered in green, indicated satisfied asserts.</span></p>
+        </li>
+    </ul>
+    <h3 id='try-your-own-example'><span>Try your own example</span></h3>
+    <p><span>Pick a </span><em><span>simple</span></em><span> function of your choice and try to implement it—the easier
+            exercises in Table 1 can be an inspiration. Final code for each example in Table 1 is included in the
+        </span><code>artifact/examples</code><span> folder, if that is helpful. It is okay to perform text edits in your
+            editor if you get stuck—this </span><em><span>is</span></em><span> a bimodal environment after all!
+            Hints:</span></p>
+    <ul>
+        <li>
+            <p><span>Reminder: the expected way to create a new function is always to provide an example call, before
+                    the function exists.</span></p>
+        </li>
+        <li>
+            <p><span>If you need a new type, double-click on the top-level canvas and write a valid OCaml type
+                    declaration. Here are the types used in the Table 1 examples (copy-paste of these may not work, you
+                    may have to retype manually or paste into your text editor):</span></p>
+            <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
+                lang="ocaml"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="ocaml"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">type</span> <span class="cm-variable">nat</span> <span class="cm-operator">=</span> <span class="cm-variable">Z</span> <span class="cm-operator">|</span> <span class="cm-variable">S</span> <span class="cm-keyword">of</span> <span class="cm-variable">nat</span></span></pre>
+            </div>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">type</span> '<span class="cm-variable">a</span> <span class="cm-variable">ltree</span> <span class="cm-operator">=</span> <span class="cm-variable">Node</span> <span class="cm-keyword">of</span> '<span class="cm-variable">a</span> <span class="cm-variable">ltree</span> <span class="cm-operator">*</span> '<span class="cm-variable">a</span> <span class="cm-variable">ltree</span> <span class="cm-operator">|</span> <span class="cm-variable">Leaf</span> <span class="cm-keyword">of</span> '<span class="cm-variable">a</span></span></pre>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">type</span> '<span class="cm-variable">a</span> <span class="cm-variable">btree</span> <span class="cm-operator">=</span> <span class="cm-variable">Node</span> <span class="cm-keyword">of</span> '<span class="cm-variable">a</span> <span class="cm-variable">btree</span> <span class="cm-operator">*</span> '<span class="cm-variable">a</span> <span class="cm-operator">*</span> '<span class="cm-variable">a</span> <span class="cm-variable">btree</span> <span class="cm-operator">|</span> <span class="cm-variable">Empty</span></span></pre>
+            </div>
+            </div>
+            </div>
+            </div>
+            </div>
+            <div
+                style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 66px;">
+            </div>
+            <div class="CodeMirror-gutters" style="display: none; height: 66px;"></div>
+            </div>
+            </div>
+            </pre>
+        </li>
+        <li>
+            <p><span>If you are using such a custom type, remember that the toolbar at the top will contain example
+                    values that you can drag onto your canvas or into a subexpression (hover your cursor over the down
+                    arrow ▾).</span></p>
+        </li>
+        <li>
+            <p><span>The synthesizer is unlikely to guess an if-then-else expression correctly. Drag the
+                </span><code>if (??) then (??) else (??)</code><span> skeleton from the first toolbar menu into your
+                    code and at least fill in the conditional.</span></p>
+        </li>
+        <li>
+            <p><span>More inspiration: the following single asserts will synthesize the correct function with no extra
+                    information. One trick is using uncommon constants so that the synthesizer will not guess constant
+                    literals (e.g. </span><code>17</code><span>):</span></p>
+            <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
+                lang="ocaml"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="ocaml"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">fold</span> ( <span class="cm-operator">+</span> ) [ <span class="cm-number">1</span>; <span class="cm-number">2</span>; <span class="cm-number">3</span> ] <span class="cm-number">11</span> <span class="cm-operator">=</span> <span class="cm-number">17</span></span></pre>
+            </div>
+            <div class="" style="position: relative;">
+                <pre class=" CodeMirror-line "
+                    role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">map</span> <span class="cm-keyword">succ</span> [ <span class="cm-number">1</span>; <span class="cm-number">2</span>; <span class="cm-number">3</span> ] <span class="cm-operator">=</span> [ <span class="cm-number">2</span>; <span class="cm-number">3</span>; <span class="cm-number">4</span> ]</span></pre>
+            </div>
+            <div class="" style="position: relative;">
+                <pre class=" CodeMirror-line "
+                    role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">list_sum</span> [ <span class="cm-number">10</span>; <span class="cm-number">20</span>; <span class="cm-number">30</span> ] <span class="cm-operator">=</span> <span class="cm-number">60</span></span></pre>
+            </div>
+            </div>
+            </div>
+            </div>
+            </div>
+            </div>
+            <div
+                style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 66px;">
+            </div>
+            <div class="CodeMirror-gutters" style="display: none; height: 66px;"></div>
+            </div>
+            </div>
+            </pre>
+            <p><span>(Copy-paste may not work, you may have to retype the above.)</span></p>
+            <p><span>To verify the function is correct, it&#39;s helpful to rename the arguments (double-click the pink
+                    names).</span></p>
+        </li>
+    </ul>
+    <h2 id='bugs-to-know'><span>Bugs to know</span></h2>
+    <ul>
+        <li>
+            <p><span>Pasting code that was copied from a rich-text source often fails. You will have to retype the code
+                    manually or try pasting into a plain text buffer and recopying.</span></p>
+        </li>
+        <li>
+            <p><span>The positioning code is still not great—don&#39;t fight too much with trying to reposition things
+                    if they do not end up where you want. If something &quot;disappears&quot;, it was probably bumped
+                    further down the page.</span></p>
+        </li>
+        <li>
+            <p><span>If the page fails to render at all, there is likely a major type error or syntax error in your
+                    code. You will have to repair the file in your text editor and then refresh the browser. The
+                    Maniposynth terminal output </span><em><span>may</span></em><span> provide a hint as to what&#39;s
+                    wrong.</span></p>
+        </li>
+        <li>
+            <p><span>The undo history does not remember edits that happened in the text editor.</span></p>
+        </li>
+        <li>
+            <p><span>The synthesizer does not follow the same non-linear semantics as the rest of Maniposynth, so
+                    synthesis on a sketch will fail if a hole is not already inside the appropriate branch. For example,
+                    despite being partway to the goal, the following sketch will fail to synthesize because the
+                    synthesizer will not move </span><code>length2</code><span> into the branch:</span></p>
+            <pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false"
+                lang="ocaml"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="ocaml"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">let</span> <span class="cm-keyword">rec</span> <span class="cm-variable">length</span> <span class="cm-variable">list</span> <span class="cm-operator">=</span></span></pre>
+            </div>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;<span class="cm-keyword">let</span> <span class="cm-variable">length2</span> <span class="cm-operator">=</span> <span class="cm-variable">length</span> (<span class="cm-operator">??</span>) <span class="cm-keyword">in</span></span></pre>
+            <pre class=" CodeMirror-line "
+                role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;<span class="cm-keyword">match</span> <span class="cm-variable">list</span> <span class="cm-keyword">with</span> <span class="cm-variable">hd</span> :: <span class="cm-variable">tail</span> <span class="cm-operator">-&gt;</span> (<span class="cm-operator">??</span>) <span class="cm-operator">|</span> [] <span class="cm-operator">-&gt;</span> (<span class="cm-operator">??</span>)</span></pre>
+            </div>
+            </div>
+            </div>
+            </div>
+            </div>
+            <div
+                style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 66px;">
+            </div>
+            <div class="CodeMirror-gutters" style="display: none; height: 66px;"></div>
+            </div>
+            </div>
+            </pre>
+            <p><span>Delete the </span><code>length2</code><span> binding, or fill in the recursive call manually, and
+                    synthesis will succeed.</span></p>
+        </li>
+    </ul>
+    <p><em><span>Have fun!</span></em></p>
     </div>
     </div>
 </body>
