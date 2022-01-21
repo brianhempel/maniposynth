@@ -38,7 +38,7 @@ let rec apply_fillings_to_exp fillings root_exp =
     Loc_map.bindings fillings
     |> List.fold_left begin fun root_exp (loc, e') ->
       root_exp
-      |> Exp.map_node begin fun e ->
+      |> Exp.FromNode.map begin fun e ->
         if e.pexp_loc = loc then
           (changed := true; e')
         else e
@@ -464,7 +464,8 @@ let nonconstant_names_at_loc target_loc prog =
     (* print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names; *)
     SSet.of_list names
 
-let unused_parameter_names_at_loc target_loc prog =
+
+(* let unused_parameter_names_at_loc target_loc prog =
   let dflt_iter = Ast.dflt_iter in
   let names = ref [] in
   (* Not using Ast.Exp.iter because we want to visit children _after_ mutating names. *)
@@ -474,9 +475,8 @@ let unused_parameter_names_at_loc target_loc prog =
     begin match exp.pexp_desc with
     | Pexp_fun (_, arg_opt, pat, body) ->
       arg_opt |>& iter.expr iter ||& ();
-      let used_names = (arg_opt |>& Scope.free_unqualified_names ||& []) @ Scope.free_unqualified_names body in
-      let ununsed_names = List.diff (Pat.names pat) used_names in
-      names := ununsed_names @ !names;
+      let unused_names = List.diff (Pat.names pat) (Scope.free_unqualified_names body) in
+      names := unused_names @ !names;
       iter.expr iter body
     | _ -> dflt_iter.expr iter exp;
     end;
@@ -489,7 +489,45 @@ let unused_parameter_names_at_loc target_loc prog =
     []
   with Found_names names ->
     print_endline @@ "unused_parameter_names_at_loc: " ^ String.concat ", " names;
-    names
+    names *)
+
+
+exception Unused_name
+
+(* Only care when in a hole filling OR the function contains a hole. *)
+let all_parameter_names_used fillings prog =
+  let dflt_iter = Ast.dflt_iter in
+  let in_a_filling  = ref false in
+  (* Not using Ast.Exp.iter because we want to visit children _after_ mutating names. *)
+  let iter_exp (iter : Ast_iterator.iterator) exp =
+    begin match exp.pexp_desc with
+    | Pexp_fun (_, arg_opt, pat, body) ->
+      arg_opt |>& iter.expr iter ||& ();
+      let unused_names = List.diff (Pat.names pat) (Scope.free_unqualified_names ~fillings body) in
+      if unused_names <> [] && (!in_a_filling || Exp.FromNode.exists Exp.is_hole body) then raise Unused_name;
+      iter.expr iter body
+    | Pexp_ident { txt = Longident.Lident "??"; _ } ->
+      begin match Shared.Loc_map.find_opt exp.pexp_loc fillings with
+      | Some filling_exp ->
+        let in_a_filling_old = !in_a_filling in
+        in_a_filling := true;
+        iter.expr iter filling_exp;
+        in_a_filling := in_a_filling_old
+      | None ->
+        dflt_iter.expr iter exp
+      end
+    | _ -> dflt_iter.expr iter exp;
+    end
+  in
+  let iter = { dflt_iter with expr = iter_exp } in
+  try
+    iter.structure iter prog;
+    true
+  with Unused_name ->
+    false
+
+
+
 
 type hole_synth_env =
     { tenv                               : Env.t
@@ -500,7 +538,6 @@ type hole_synth_env =
     ; check_if_constant                  : expression -> bool
     ; cant_be_constant                   : bool
     ; single_asserted_exp                : (expression * lprob) option
-    ; unused_parameter_names             : string list
     ; mutable nonconstant_idents_at_type : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable idents_at_type             : (Types.type_expr * (expression * Types.type_expr * lprob) list (* Sorted, most probable first *)) list
     ; mutable functions_producing_type   : (Types.type_expr * (expression  * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count, type unified with goal type *)) list
@@ -519,7 +556,7 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs
   let fillings =
     (* Freshen non-holes. *)
     fillings
-    |> Loc_map.map @@ Exp.map_node begin fun exp ->
+    |> Loc_map.map @@ Exp.FromNode.map begin fun exp ->
       if Exp.is_hole exp
       then exp
       else { exp with pexp_loc = Loc.fresh () }
@@ -1002,7 +1039,6 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
             in
             (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
             let nonconstant_names      = nonconstant_names_at_loc hole_loc prog in
-            let unused_parameter_names = unused_parameter_names_at_loc hole_loc prog in
             let user_ctors =
               let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
               let user_ctor_descs =
@@ -1024,7 +1060,6 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
                 ; check_if_constant             = is_constant nonconstant_names
                 ; cant_be_constant              = List.length unique_asserted_exps >= 2
                 ; single_asserted_exp           = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
-                ; unused_parameter_names        = unused_parameter_names
                 ; nonconstant_idents_at_type    = []
                 ; idents_at_type                = []
                 ; functions_producing_type      = []
@@ -1139,11 +1174,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
   let e_guess (fillings, lprob) =
     e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
   in
-  let unused_param_names_at_holes =
-    start_hole_locs
-    |>@  (fun hole_loc    -> (hole_loc, unused_parameter_names_at_loc hole_loc prog))
-    |>@? (fun (_, unused) -> unused <> [])
-  in
+  let top_level_sis_with_holes = prog |>@? (fun si -> Exp.exists Exp.is_hole [si]) in
   Seq.concat
     [ e_guess (Loc_map.empty, lprob_1)
     ; refine prog (Loc_map.empty, lprob_1) reqs file_name
@@ -1160,7 +1191,8 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
   |> Seq.filter begin function (fillings, _lprob) ->
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
     if !terms_tested_count mod 1_000 = 0 then begin
-      print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings prog));
+      let terms_per_sec = int_of_float @@ float_of_int !terms_tested_count /. (Unix.gettimeofday () -. start_sec) in
+      print_endline (string_of_int !terms_tested_count ^ "\t" ^ string_of_int terms_per_sec ^ " terms/sec\t" ^ StructItems.to_string (apply_fillings fillings top_level_sis_with_holes));
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
     end;
     incr terms_tested_count;
@@ -1174,20 +1206,9 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
         (* if String.includes "[3;2;1]" hole_exp_str then (); *)
         not (List.mem (Hashtbl.hash hole_exp_str) hole_rejected_hashes)
       end
-      (* fillings
-      |> List.bindings
-      |> List.for_all  *)
     in
-    let all_params_used =
-      unused_param_names_at_holes
-      |> List.for_all begin fun (hole_loc, unused_parameter_names) ->
-        match Loc_map.find_opt hole_loc fillings with
-        | Some filling ->
-          let exp = apply_fillings_to_exp fillings filling in
-          List.diff unused_parameter_names (Scope.free_unqualified_names exp) = []
-        | None -> false
-      end
-    in
+    (* START HERE okay that bug fixed, now for nonlinearity...somehow! *)
+    let all_params_used = all_parameter_names_used fillings top_level_sis_with_holes in
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)

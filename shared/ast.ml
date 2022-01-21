@@ -416,11 +416,11 @@ end
 module Common
   (Node : sig
     type t
-    val loc : t -> Location.t
-    val mapper : (t -> t) -> Ast_mapper.mapper
-    val iterator : (t -> unit) -> Ast_iterator.iterator
-    val default_iterator : Ast_iterator.iterator -> t -> unit
-    val apply_mapper : Ast_mapper.mapper -> t -> t
+    val loc             : t -> Location.t
+    val mapper          : (t -> t) -> Ast_mapper.mapper
+    val iterator        : (t -> unit) -> Ast_iterator.iterator
+    val mapper_node_f   : Ast_mapper.mapper -> (Ast_mapper.mapper -> t -> t)
+    val iterator_node_f : Ast_iterator.iterator -> (Ast_iterator.iterator -> t -> unit)
   end) = struct
 
   (* type t = Node.t *)
@@ -430,16 +430,17 @@ module Common
     let iterator = Node.iterator f in
     iterator.structure iterator prog
   let iterator = Node.iterator
-  let apply_mapper = Node.apply_mapper
+  let apply_mapper   mapper   node = (Node.mapper_node_f   mapper)   mapper   node
+  let apply_iterator iterator node = (Node.iterator_node_f iterator) iterator node
+
+
+  exception Found of Node.t
+
+  (* let map_node f = apply_mapper (mapper f) *)
 
   let map f struct_items =
     let mapper = Node.mapper f in
     mapper.structure mapper struct_items
-
-  let map_node f = apply_mapper (mapper f)
-
-
-  exception Found of Node.t
 
   let map_by pred f prog =
     map (fun node -> if pred node then f node else node) prog
@@ -466,6 +467,8 @@ module Common
   let find     target_loc = find_by (loc %> (=) target_loc)
   let find_opt target_loc = find_by_opt (loc %> (=) target_loc)
 
+  let exists pred prog = find_by_opt pred prog <> None
+
   (* Returns extracted node, and a function that takes a node and replaces that element. *)
   let extract_by pred prog : Node.t * (Node.t -> program) =
     let node = find_by pred prog in
@@ -481,18 +484,71 @@ module Common
   let extract     target_loc = extract_by (loc %> (=) target_loc)
   let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
 
+  (* Root element is node rather than the whole program *)
+  module FromNode = struct
+    let iter f root =
+      let iterator = Node.iterator f in
+      apply_iterator iterator root
+
+    let map f root =
+      let mapper = Node.mapper f in
+      apply_mapper mapper root
+
+    let map_by pred f root =
+      map (fun node -> if pred node then f node else node) root
+
+    let map_by_loc target_loc f root =
+      map_by (loc %> (=) target_loc) f root
+
+    let replace_by pred node' root =
+      map_by pred (fun _ -> node') root
+
+    let replace target_loc = replace_by (loc %> (=) target_loc)
+
+    let find_by pred root : Node.t =
+      try
+        root |> iter (fun node -> if pred node then raise (Found node));
+        failwith "find_by: couldn't find node"
+      with Found node -> node
+    let find_by_opt pred root : Node.t option =
+      try
+        root |> iter (fun node -> if pred node then raise (Found node));
+        None
+      with Found node -> Some node
+
+    let find     target_loc = find_by (loc %> (=) target_loc)
+    let find_opt target_loc = find_by_opt (loc %> (=) target_loc)
+
+    let exists pred root = find_by_opt pred root <> None
+
+    (* Returns extracted node, and a function that takes a node and replaces that element. *)
+    let extract_by pred root : Node.t * (Node.t -> Node.t) =
+      let node = find_by pred root in
+      ( node
+      , fun node' -> replace_by ((==) node) node' root (* Physical equality (==) will work here because node is always boxed and was pulled out of root *)
+      )
+    let extract_by_opt pred root : (Node.t * (Node.t -> Node.t)) option =
+      find_by_opt pred root |>& fun node ->
+      ( node
+      , fun node' -> replace_by ((==) node) node' root (* Physical equality (==) will work here because node is always boxed and was pulled out of root *)
+      )
+
+    let extract     target_loc = extract_by (loc %> (=) target_loc)
+    let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
+  end
+
   let child_exps node =
     let children = ref [] in
     let iter_exp_no_recurse _ e = children := e :: !children in
     let iter_once = { dflt_iter with expr = iter_exp_no_recurse } in
-    Node.default_iterator iter_once node;
+    (Node.iterator_node_f dflt_iter) iter_once node;
     List.rev !children (* Return the children left-to-right. *)
 
   let child_pats node =
     let children = ref [] in
     let iter_pat_no_recurse _ p = children := p :: !children in
     let iter_once = { dflt_iter with pat = iter_pat_no_recurse } in
-    Node.default_iterator iter_once node;
+    (Node.iterator_node_f dflt_iter) iter_once node;
     List.rev !children (* Return the children left-to-right. *)
 
   let count pred prog =
@@ -517,8 +573,8 @@ module Exp = struct
     let mapper f =
       let map_exp mapper e = f (dflt_mapper.expr mapper e) in
       { dflt_mapper with expr = map_exp }
-    let default_iterator = dflt_iter.expr
-    let apply_mapper (mapper : Ast_mapper.mapper) exp = mapper.expr mapper exp
+    let mapper_node_f (mapper : Ast_mapper.mapper) = mapper.expr
+    let iterator_node_f (iterator : Ast_iterator.iterator) = iterator.expr
   end)
 
   include Ast_helper.Exp (* Exp builders *)
@@ -600,10 +656,6 @@ module Exp = struct
   let is_assert      = function { pexp_desc = Pexp_assert     _; _ } -> true | _ -> false
   let is_ite         = function { pexp_desc = Pexp_ifthenelse _; _ } -> true | _ -> false
   let is_simple_name = simple_name %> (<>) None
-
-  let freshen_locs exp =
-    let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in
-    mapper.expr mapper exp
 end
 
 module Pat = struct
@@ -616,8 +668,8 @@ module Pat = struct
     let mapper f =
       let map_pat mapper p = f (dflt_mapper.pat mapper p) in
       { dflt_mapper with pat = map_pat }
-    let default_iterator = dflt_iter.pat
-    let apply_mapper (mapper : Ast_mapper.mapper) pat = mapper.pat mapper pat
+    let mapper_node_f (mapper : Ast_mapper.mapper) = mapper.pat
+    let iterator_node_f (iterator : Ast_iterator.iterator) = iterator.pat
   end)
 
   let all prog = (everything (Sis prog)).pats
@@ -708,8 +760,8 @@ module Vb = struct
     let mapper f =
       let map_vb mapper vb = f (dflt_mapper.value_binding mapper vb) in
       { dflt_mapper with value_binding = map_vb }
-    let default_iterator = dflt_iter.value_binding
-    let apply_mapper (mapper : Ast_mapper.mapper) vb = mapper.value_binding mapper vb
+    let mapper_node_f (mapper : Ast_mapper.mapper) = mapper.value_binding
+    let iterator_node_f (iterator : Ast_iterator.iterator) = iterator.value_binding
   end)
 
   let all prog = (everything (Sis prog)).vbs
@@ -959,8 +1011,8 @@ module StructItem = struct
     let mapper f =
       let map_si mapper si = f (dflt_mapper.structure_item mapper si) in
       { dflt_mapper with structure_item = map_si }
-    let default_iterator = dflt_iter.structure_item
-    let apply_mapper (mapper : Ast_mapper.mapper) si = mapper.structure_item mapper si
+    let mapper_node_f (mapper : Ast_mapper.mapper) = mapper.structure_item
+    let iterator_node_f (iterator : Ast_iterator.iterator) = iterator.structure_item
   end)
 
   let all prog = (everything (Sis prog)).struct_items

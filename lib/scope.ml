@@ -5,8 +5,8 @@ open Shared.Util
 (* Merge with Name.ml? *)
 
 (* Also searches in [@vis] attributes. *)
-let rec free_unqualified_names exp =
-  let recurse = free_unqualified_names in
+let rec free_unqualified_names ?(fillings = Shared.Loc_map.empty) exp =
+  let recurse = free_unqualified_names ~fillings in
   let free_unqualified_names_case { pc_lhs; pc_guard; pc_rhs } =
     List.diff
       (free_unqualified_names_pat pc_lhs @ (pc_guard |>& recurse ||& []) @ recurse pc_rhs)
@@ -14,6 +14,11 @@ let rec free_unqualified_names exp =
   in
   names_in_vis_attrs exp.pexp_attributes @
   match exp.pexp_desc with
+  | Pexp_ident { txt = Longident.Lident "??"; _ } ->
+    begin match Shared.Loc_map.find_opt exp.pexp_loc fillings with
+    | Some filling_exp -> recurse filling_exp
+    | None             -> ["??"]
+    end
   | Pexp_ident { txt = Longident.Lident name; _ }
   | Pexp_new   { txt = Longident.Lident name; _ } ->
     [name]
