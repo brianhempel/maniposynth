@@ -445,7 +445,7 @@ module Common
   let map_by pred f prog =
     map (fun node -> if pred node then f node else node) prog
 
-  let map_by_loc target_loc f prog =
+  let map_at target_loc f prog =
     map_by (loc %> (=) target_loc) f prog
 
   let replace_by pred node' prog =
@@ -497,7 +497,7 @@ module Common
     let map_by pred f root =
       map (fun node -> if pred node then f node else node) root
 
-    let map_by_loc target_loc f root =
+    let map_at target_loc f root =
       map_by (loc %> (=) target_loc) f root
 
     let replace_by pred node' root =
@@ -1021,14 +1021,15 @@ module StructItem = struct
 
   let value_opt { pstr_desc; _ } = match pstr_desc with Pstr_value (rec_flag, vbs) -> Some (rec_flag, vbs) | _ -> None
   let vbs_opt                    = value_opt %>& snd
+  let vbs_names                  = vbs_opt %>& List.concat_map Vb.names %||& []
 
   let to_string si = Pprintast.string_of_structure [si]
   let from_string  = StructItems.from_string %> List.hd
 
   (* Will search the loc of all items in a struct_items list, hand that si to f, and replace the si with the list of sis returned by f...to thereby effect removes and deletions *)
-  let concat_map             f prog = StructItems.map (fun si -> si |>@@ f) prog
-  let concat_map_by pred     f prog = concat_map (fun si -> if pred si then f si else [si]) prog
-  let concat_map_by_loc loc' f prog = concat_map_by (loc %> (=) loc') f prog
+  let concat_map         f prog = StructItems.map (fun si -> si |>@@ f) prog
+  let concat_map_by pred f prog = concat_map (fun si -> if pred si then f si else [si]) prog
+  let concat_map_at loc' f prog = concat_map_by (loc %> (=) loc') f prog
 end
 
 

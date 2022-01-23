@@ -103,6 +103,12 @@ module List = struct
     try for_all2 pred xs ys
     with Invalid_argument _ -> false
 
+  (* map2 until one list runs out of elements *)
+  let rec map2_best_effort f xs ys =
+    match xs, ys with
+    | x::xs, y::ys -> f x y :: map2_best_effort f xs ys
+    | _            -> []
+
   let hd_opt = function
     | []   -> None
     | x::_ -> Some x

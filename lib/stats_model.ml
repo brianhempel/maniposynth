@@ -4,6 +4,9 @@ open Shared.Ast
 open Shared.Util
 
 (* In NLP, probabilities get too small to work with floats directly and the probabilites round off to 0. Work in log(prob) instead. *)
+
+(* Actually, we end up not getting close to 64bit float roundoff, so we could discard this. *)
+
 type lprob = float
 let lprob p = log p
 let lprob_1 = lprob 1.0

@@ -85,10 +85,25 @@ module ExpFinder = TypedtreeIter.MakeIterator(struct
   let enter_expression exp =
     if exp.Typedtree.exp_loc = !target_loc then raise (Found_exp exp)
 end)
-let find_exp_by_loc loc typed_struct =
+let find_exp_at loc typed_struct =
   target_loc := loc;
   try ExpFinder.iter_structure typed_struct; None
   with Found_exp exp -> Some exp
+
+let target_loc = ref Location.none
+exception Found_struct of Typedtree.structure
+module StructFinder = TypedtreeIter.MakeIterator(struct
+  include TypedtreeIter.DefaultIteratorArgument
+  let enter_structure typed_struct =
+    if List.exists (fun tstr_item -> tstr_item.Typedtree.str_loc = !target_loc) typed_struct.Typedtree.str_items
+    then raise (Found_struct typed_struct)
+end)
+(* Give the loc of any struct item *)
+let find_struct_at loc typed_struct =
+  target_loc := loc;
+  try StructFinder.iter_structure typed_struct; None
+  with Found_struct typed_struct -> Some typed_struct
+
 
 (* Creates a function that given a loc might return a Typedtree.expression node *)
 let type_lookups_of_typed_structure typed_struct : lookups =

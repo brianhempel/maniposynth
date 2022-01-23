@@ -145,15 +145,6 @@ let rec flatten_value (value : Data.value) =
   in
   value :: (children |>@@ flatten_value)
 
-let rec terminal_exps exp = (* Dual of gather_vbs *)
-  let open Parsetree in
-  match exp.pexp_desc with
-  | Pexp_let (_, _, e)       -> terminal_exps e
-  | Pexp_sequence (_, e2)    -> terminal_exps e2
-  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
-  | Pexp_letmodule (_, _, e) -> terminal_exps e
-  | _                        -> [exp]
-
 
 (* let options_for_value_id tenvs visible_values_in_frame selected_value_id =
   match visible_values_in_frame |> List.find_opt (fun (_v_str, v) -> v.Data.id = selected_value_id) with
@@ -182,7 +173,7 @@ let rec terminal_exps exp = (* Dual of gather_vbs *)
 
 (* KISS for now: lexical completions of last word typed *)
 let suggestions (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : program) vbs_loc value_ids_visible value_strs ?selected_value_id (query : string) =
-  let locs = prog |> Exp.find_opt vbs_loc |>& terminal_exps ||& [] |>@ Exp.loc in
+  let locs = prog |> Exp.find_opt vbs_loc |>& Bindings.terminal_exps ||& [] |>@ Exp.loc in
   let tenvs =
     (locs |>@& type_lookups.lookup_exp |>@ fun texp -> texp.Typedtree.exp_env)
     @ [final_tenv]
@@ -195,7 +186,7 @@ let suggestions (type_lookups : Typing.lookups) (final_tenv : Env.t) (prog : pro
     in
     let nonconstant_variableset =
       locs
-      |>@ (fun loc -> Synth.nonconstant_names_at_loc loc prog)
+      |>@ (fun loc -> Synth.nonconstant_names_at loc prog)
       |> List.fold_left SSet.union SSet.empty
     in
     (* let tenv = type_lookups.lookup_exp vbs_loc |>& (fun texp -> texp.Typedtree.exp_env) ||& Env.empty in *)

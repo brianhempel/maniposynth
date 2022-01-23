@@ -13,81 +13,80 @@ let rec free_unqualified_names ?(fillings = Shared.Loc_map.empty) exp =
       (Pat.names pc_lhs)
   in
   names_in_vis_attrs exp.pexp_attributes @
-  match exp.pexp_desc with
-  | Pexp_ident { txt = Longident.Lident "??"; _ } ->
-    begin match Shared.Loc_map.find_opt exp.pexp_loc fillings with
-    | Some filling_exp -> recurse filling_exp
-    | None             -> ["??"]
+  match Shared.Loc_map.find_opt exp.pexp_loc fillings with
+  | Some filling_exp -> recurse filling_exp
+  | None ->
+    begin match exp.pexp_desc with
+    | Pexp_ident { txt = Longident.Lident name; _ }
+    | Pexp_new   { txt = Longident.Lident name; _ } ->
+      [name]
+    | Pexp_ident { txt = _; _ }
+    | Pexp_new   { txt = _; _ }
+    | Pexp_constant _
+    | Pexp_extension _
+    | Pexp_unreachable ->
+      []
+    | Pexp_let (Asttypes.Nonrecursive, vbs, body) ->
+      (vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @
+      (vbs |>@ Vb.exp |>@@ recurse) @
+      List.diff
+        (recurse body)
+        (vbs |>@@ Vb.names)
+    | Pexp_let (Asttypes.Recursive, vbs, body) ->
+      List.diff
+        ((vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @ (vbs |>@ Vb.exp |>@@ recurse) @ recurse body)
+        (vbs |>@@ Vb.names)
+    | Pexp_function cases ->
+      cases |>@@ free_unqualified_names_case
+    | Pexp_fun (_, default, pat, body) ->
+      free_unqualified_names_pat pat @
+      (default |>& recurse ||& []) @
+      List.diff (recurse body) (Pat.names pat)
+    | Pexp_apply (e1, labeled_args) ->
+      (e1 :: (labeled_args |>@ snd)) |>@@ recurse
+    | Pexp_match (e, cases)
+    | Pexp_try (e, cases) ->
+      recurse e @ (cases |>@@ free_unqualified_names_case)
+    | Pexp_array exps
+    | Pexp_tuple exps ->
+      exps |>@@ recurse
+    | Pexp_construct (_, e_opt)
+    | Pexp_variant (_, e_opt) ->
+      e_opt |>& recurse ||& []
+    | Pexp_record (fields, e_opt) ->
+      (e_opt |>& recurse ||& []) @
+      (fields |>@ snd |>@@ recurse)
+    | Pexp_field (e, _) -> recurse e
+    | Pexp_sequence (e1, e2)
+    | Pexp_while (e1, e2)
+    | Pexp_setfield (e1, _, e2) ->
+      [e1; e2] |>@@ recurse
+    | Pexp_ifthenelse (e1, e2, e3_opt) -> ([e1; e2] @ Option.to_list e3_opt) |>@@ recurse
+    | Pexp_for (pat, e1, e2, _, body) ->
+      free_unqualified_names_pat pat @
+      ([e1; e2] |>@@ recurse) @
+      List.diff (recurse body) (Pat.names pat)
+    | Pexp_coerce (e, _, _)
+    | Pexp_send (e, _)
+    | Pexp_setinstvar (_, e)
+    | Pexp_constraint (e, _)
+    | Pexp_assert e
+    | Pexp_lazy e
+    | Pexp_poly (e, _)
+    | Pexp_newtype (_, e)
+    | Pexp_letexception (_, e) ->
+      recurse e
+    | Pexp_override overrides ->
+      overrides |>@ snd |>@@ recurse
+    | Pexp_letmodule (_, mod_exp, body) ->
+      free_unqualified_names_mod mod_exp @ recurse body
+    | Pexp_pack mod_exp ->
+      free_unqualified_names_mod mod_exp
+    | Pexp_object _ ->
+      failwith "free_unqualified_names: classes not handled"
+    | Pexp_open (_, _, _) ->
+      failwith "free_unqualified_names: local opens not handled"
     end
-  | Pexp_ident { txt = Longident.Lident name; _ }
-  | Pexp_new   { txt = Longident.Lident name; _ } ->
-    [name]
-  | Pexp_ident { txt = _; _ }
-  | Pexp_new   { txt = _; _ }
-  | Pexp_constant _
-  | Pexp_extension _
-  | Pexp_unreachable ->
-    []
-  | Pexp_let (Asttypes.Nonrecursive, vbs, body) ->
-    (vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @
-    (vbs |>@ Vb.exp |>@@ recurse) @
-    List.diff
-      (recurse body)
-      (vbs |>@@ Vb.names)
-  | Pexp_let (Asttypes.Recursive, vbs, body) ->
-    List.diff
-      ((vbs |>@ Vb.pat |>@@ free_unqualified_names_pat) @ (vbs |>@ Vb.exp |>@@ recurse) @ recurse body)
-      (vbs |>@@ Vb.names)
-  | Pexp_function cases ->
-    cases |>@@ free_unqualified_names_case
-  | Pexp_fun (_, default, pat, body) ->
-    free_unqualified_names_pat pat @
-    (default |>& recurse ||& []) @
-    List.diff (recurse body) (Pat.names pat)
-  | Pexp_apply (e1, labeled_args) ->
-    (e1 :: (labeled_args |>@ snd)) |>@@ recurse
-  | Pexp_match (e, cases)
-  | Pexp_try (e, cases) ->
-    recurse e @ (cases |>@@ free_unqualified_names_case)
-  | Pexp_array exps
-  | Pexp_tuple exps ->
-    exps |>@@ recurse
-  | Pexp_construct (_, e_opt)
-  | Pexp_variant (_, e_opt) ->
-    e_opt |>& recurse ||& []
-  | Pexp_record (fields, e_opt) ->
-    (e_opt |>& recurse ||& []) @
-    (fields |>@ snd |>@@ recurse)
-  | Pexp_field (e, _) -> recurse e
-  | Pexp_sequence (e1, e2)
-  | Pexp_while (e1, e2)
-  | Pexp_setfield (e1, _, e2) ->
-    [e1; e2] |>@@ recurse
-  | Pexp_ifthenelse (e1, e2, e3_opt) -> ([e1; e2] @ Option.to_list e3_opt) |>@@ recurse
-  | Pexp_for (pat, e1, e2, _, body) ->
-    free_unqualified_names_pat pat @
-    ([e1; e2] |>@@ recurse) @
-    List.diff (recurse body) (Pat.names pat)
-  | Pexp_coerce (e, _, _)
-  | Pexp_send (e, _)
-  | Pexp_setinstvar (_, e)
-  | Pexp_constraint (e, _)
-  | Pexp_assert e
-  | Pexp_lazy e
-  | Pexp_poly (e, _)
-  | Pexp_newtype (_, e)
-  | Pexp_letexception (_, e) ->
-    recurse e
-  | Pexp_override overrides ->
-    overrides |>@ snd |>@@ recurse
-  | Pexp_letmodule (_, mod_exp, body) ->
-    free_unqualified_names_mod mod_exp @ recurse body
-  | Pexp_pack mod_exp ->
-    free_unqualified_names_mod mod_exp
-  | Pexp_object _ ->
-    failwith "free_unqualified_names: classes not handled"
-  | Pexp_open (_, _, _) ->
-    failwith "free_unqualified_names: local opens not handled"
 
 and free_unqualified_names_mod { pmod_desc; _ } =
   let recurse = free_unqualified_names_mod in
@@ -225,8 +224,8 @@ let rename_unqualified_variables subst exp =
 
 (* Only handles single name pats for now, not as-pats. *)
 (* Preserves old attrs and locs *)
-let rename_pat_by_loc loc name' prog =
-  let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = loc in
+let rename_pat_at pat_loc name' prog =
+  let is_target_pat pat = Pat.is_single_name pat && Pat.loc pat = pat_loc in
   let handle_root_pat subst pat =
     let subst = SMap.remove_all (Pat.names pat) subst in
     match pat |> Pat.flatten |> List.find_opt is_target_pat with
@@ -241,10 +240,10 @@ let rename_pat_by_loc loc name' prog =
 exception Found_names of string list
 
 (* Names in file only. Nearest name first (with the exception of as-pats, oh well). *)
-let names_at_loc loc prog =
+let names_at exp_loc prog =
   let init_scope_info = [] in
   let handle_root_pat names pat = Pat.names pat @ names in
-  let f names exp = if exp.pexp_loc = loc then raise (Found_names names) else exp in
+  let f names exp = if exp.pexp_loc = exp_loc then raise (Found_names names) else exp in
   try
     ignore @@ (map_exps_with_scope_prog init_scope_info handle_root_pat f prog);
     raise Not_found

@@ -121,7 +121,7 @@ let name_unnameds ?type_env prog =
   let try_rename vb prog =
     match vb |> Vb.pat |> Pat.single_name with
     | Some name when String.starts_with default_base_name name ->
-      Scope.rename_pat_by_loc (Pat.loc (Vb.pat vb)) (gen_from_exp ?type_env (Vb.exp vb) prog) prog
+      Scope.rename_pat_at (Pat.loc (Vb.pat vb)) (gen_from_exp ?type_env (Vb.exp vb) prog) prog
     | _ ->
       prog
   in

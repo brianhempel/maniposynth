@@ -28,8 +28,9 @@ open Scope
 (*
 
   The non-linear playpens are:
-  1. Top level
-  2. Function bodies
+  1. Structures (including top-level)
+  2. Value-binding RHS
+  3. Function bodies
 
   For each non-linear playpen, variable names should be unique. We look in the playpen
   for names that might be technically out of scope and then move them into scope for
@@ -44,6 +45,108 @@ open Scope
 *)
 
 
+type rearrangment_root (* non-linear playpen; something rendered as a canvas holding TVs *)
+  = RR_StructItems of structure
+  | RR_Exp of expression
+
+
+exception Rearrangment_roots_found of rearrangment_root list
+
+(* For finding what names could be in scope at a hole, were a fixup to occur. *)
+(* Should work the same as maniposynth.js vbsHolderForInsert for all practial purposes (which finds first self or ancenstor .exp.fun or .vbs). *)
+(* And the places where View.local_canvas_vbs_and_returns_htmls is called. *)
+let rec rearrangement_roots_at ?(higher_roots = []) exp_loc prog =
+  try
+    struct_rearrangement_roots_at ~higher_roots exp_loc prog;
+    []
+  with Rearrangment_roots_found roots ->
+    roots
+
+and struct_rearrangement_roots_at ?(higher_roots = []) exp_loc prog =
+  prog
+  |> List.iter begin fun si ->
+    match si.pstr_desc with
+    | Pstr_eval (exp, _attrs) ->
+      exp_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc exp
+    | Pstr_value (_, vbs) ->
+      vbs |>@ Vb.exp |> List.iter begin fun rhs ->
+        exp_rearrangement_roots_at ~higher_roots:(RR_Exp rhs :: RR_StructItems prog :: higher_roots) exp_loc rhs
+      end
+    | Pstr_module mod_binding ->
+      mod_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc mod_binding.pmb_expr
+    | Pstr_recmodule mod_bindings ->
+      mod_bindings |> List.iter begin fun mb ->
+        mod_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc mb.pmb_expr
+      end
+    | Pstr_primitive _
+    | Pstr_type (_, _)
+    | Pstr_typext _
+    | Pstr_exception _
+    | Pstr_modtype _
+    | Pstr_class_type _
+    | Pstr_attribute _
+    | Pstr_extension (_, _) ->
+      ()
+    | Pstr_include _ ->
+      failwith "rearrange_struct_items: includes not handled"
+    | Pstr_open _ ->
+      failwith "rearrange_struct_items: opens not handled"
+    | Pstr_class _ ->
+      failwith "rearrange_struct_items: classes not handled"
+  end
+
+and exp_rearrangement_roots_at ?(higher_roots = []) exp_loc exp =
+  if exp.pexp_loc = exp_loc then raise (Rearrangment_roots_found higher_roots) else
+  begin
+    begin match exp.pexp_desc with
+    | Pexp_let (_, vbs, _)           ->
+      vbs |>@ Vb.exp |> List.iter begin fun rhs ->
+        exp_rearrangement_roots_at ~higher_roots:(RR_Exp rhs :: higher_roots) exp_loc rhs
+      end
+    | Pexp_function _                -> ()
+    | Pexp_fun (_, _, _, body)       -> if Exp.is_fun body then () else exp_rearrangement_roots_at ~higher_roots:(RR_Exp body :: higher_roots) exp_loc body
+    | Pexp_letmodule (_, mod_exp, _) -> mod_rearrangement_roots_at ~higher_roots exp_loc mod_exp
+    | Pexp_pack mod_exp              -> mod_rearrangement_roots_at ~higher_roots exp_loc mod_exp
+    | Pexp_object _                  -> failwith "exp_rearrangement_roots_at: classes not handled"
+    | Pexp_open (_, _, _)            -> failwith "exp_rearrangement_roots_at: local opens not handled"
+    | _                              -> ()
+    end;
+    Exp.child_exps exp
+    |> List.iter (exp_rearrangement_roots_at ~higher_roots exp_loc)
+  end
+
+and mod_rearrangement_roots_at ?(higher_roots = []) exp_loc modl =
+  let recurse = mod_rearrangement_roots_at ~higher_roots exp_loc in
+  match modl.pmod_desc with
+  | Pmod_extension _
+  | Pmod_ident _                                 -> ()
+  | Pmod_structure struct_items                  -> struct_rearrangement_roots_at ~higher_roots exp_loc struct_items
+  | Pmod_unpack exp                              -> exp_rearrangement_roots_at ~higher_roots exp_loc exp
+  | Pmod_constraint (mod_exp, _mod_type)         -> recurse mod_exp
+  | Pmod_functor (_name, _mod_type_opt, mod_exp) -> recurse mod_exp
+  | Pmod_apply (m1, m2)                          -> recurse m1; recurse m2
+
+let rec terminal_exps exp = (* Dual of gather_vbs *)
+  let open Parsetree in
+  match exp.pexp_desc with
+  | Pexp_let (_, _, e)       -> terminal_exps e
+  | Pexp_sequence (_, e2)    -> terminal_exps e2
+  | Pexp_match (_, cases)    -> cases |>@ Case.rhs |>@@ terminal_exps
+  | Pexp_letmodule (_, _, e) -> terminal_exps e
+  | Pexp_constraint (e, _)   -> terminal_exps e
+  | _                        -> [exp]
+
+
+
+(* doesn't catch ancestors for struct items; doesn't matter since, where we use this, those are caught by the terminal exps. *)
+(* let names_at_rearrangement_root rr prog =
+  match rr with
+  | RR_StructItems sis ->
+    sis |>@@ StructItem.vbs_names
+  | RR_Exp exp ->
+    Suggestions.terminal_exps exp
+    |>@@ fun e -> Scope.names_at e.pexp_loc prog
+ *)
 
 (*
     Need two passes.
@@ -908,12 +1011,31 @@ let fixup_ defined_names final_tenv prog =
   |> add_missing_bindings_struct_items defined_names
   |> remove_rejection_attrs_no_longer_on_holes
 
-let fixup final_tenv prog =
-  let defined_names = SSet.elements Name.pervasives_names in
+let synth_fixup_ defined_names prog =
+  (* TODO only do first steps for struct items with holes *)
+  (* Uncomment the log lines to see how all this works *)
+  (* let log prog = print_endline (Shared.Formatter_to_stringifier.f Pprintast.structure prog); prog in *)
   prog
-  |> fixup_ defined_names final_tenv
-  |> fixup_ defined_names final_tenv
-  |> fixup_ defined_names final_tenv
+  (* |> log *)
+  |> move_vbs_into_all_relevant_branches (* VBs pushed down (duplicated) across branches *)
+  (* |> log *)
+  |> move_up_duplicated_bindings (* Since we duplicated VBs, pull them back out. *)
+  (* |> log *)
+  |> rearrange_struct_items defined_names
+  (* |> log *)
+
+let initial_defined_names = SSet.elements Name.pervasives_names
+
+let fixup final_tenv prog =
+  prog
+  |> fixup_ initial_defined_names final_tenv
+  |> fixup_ initial_defined_names final_tenv
+  |> fixup_ initial_defined_names final_tenv
+
+let synth_fixup prog =
+  prog
+  |> synth_fixup_ initial_defined_names
+  |> synth_fixup_ initial_defined_names
 
 
 (* Pats_in_scope_* assumes a fixup happens. *)

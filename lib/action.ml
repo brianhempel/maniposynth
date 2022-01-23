@@ -106,20 +106,20 @@ let delete_vblike vb_loc old =
 
 let add_vis_to_loc loc vis_str final_tenv old =
   old
-  |> Exp.map_by_loc loc begin fun exp ->
+  |> Exp.map_at loc begin fun exp ->
     { exp with pexp_attributes = Vis.add_vis_str_to_attrs vis_str exp.pexp_attributes }
   end
-  |> Pat.map_by_loc loc begin fun pat ->
+  |> Pat.map_at loc begin fun pat ->
     { pat with ppat_attributes = Vis.add_vis_str_to_attrs vis_str pat.ppat_attributes }
   end
   |> Bindings.fixup final_tenv
 
 let remove_vis_from_loc loc vis_str old =
   old
-  |> Exp.map_by_loc loc begin fun exp ->
+  |> Exp.map_at loc begin fun exp ->
     { exp with pexp_attributes = Vis.remove_vis_str_from_attrs vis_str exp.pexp_attributes }
   end
-  |> Pat.map_by_loc loc begin fun pat ->
+  |> Pat.map_at loc begin fun pat ->
     { pat with ppat_attributes = Vis.remove_vis_str_from_attrs vis_str pat.ppat_attributes }
   end
 
@@ -127,7 +127,7 @@ let replace_loc_code loc code final_tenv old =
   (* If new code is a var pattern, try renaming *)
   let try_rename ?(loc = loc) ?(code = code) prog =
     match code |> Pat.from_string_opt |>&& Pat.single_name with
-    | Some name' -> Scope.rename_pat_by_loc loc name' prog
+    | Some name' -> Scope.rename_pat_at loc name' prog
     | None       -> prog
   in
   (* Preserve old attrs and loc. *)
@@ -136,14 +136,14 @@ let replace_loc_code loc code final_tenv old =
     let vb' = Vb.from_string code in
     old
     |> try_rename ~loc:vb.pvb_pat.ppat_loc ~code:(Pat.to_string vb'.pvb_pat)
-    |> Vb.map_by_loc loc begin fun vb -> { vb with pvb_pat = vb'.pvb_pat; pvb_expr = vb'.pvb_expr } end
+    |> Vb.map_at loc begin fun vb -> { vb with pvb_pat = vb'.pvb_pat; pvb_expr = vb'.pvb_expr } end
     |> Bindings.fixup final_tenv
   | None ->
     old
-    |> Exp.map_by_loc loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
+    |> Exp.map_at loc begin fun exp -> { exp with pexp_desc = (Exp.from_string code).pexp_desc } end
     |> try_rename
-    |> Pat.map_by_loc loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
-    |> StructItem.map_by_loc loc begin fun si -> { si with pstr_desc = (StructItem.from_string code).pstr_desc } end
+    |> Pat.map_at loc begin fun pat -> { pat with ppat_desc = (Pat.from_string code).ppat_desc } end (* In case rename failed, just replace the pattern with whatever the user typed. *)
+    |> StructItem.map_at loc begin fun si -> { si with pstr_desc = (StructItem.from_string code).pstr_desc } end
     |> Bindings.fixup final_tenv
 
 (* In the JS, all asserts are added at the top level (for now) *)
@@ -157,8 +157,8 @@ let add_assert_before_loc loc lhs_code rhs_code xy_opt final_tenv old =
     new_sis
   else
     old
-    |> Exp.map_by_loc loc (Exp.sequence assert_exp)
-    |> StructItem.concat_map_by_loc loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
+    |> Exp.map_at loc (Exp.sequence assert_exp)
+    |> StructItem.concat_map_at loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
 
 (* Loc could be at top level (need new struct item binding) or an exp (need new let) *)
 (* OR code could be an entire struct item (e.g. "type nat = Z | S of nat") *)
@@ -188,14 +188,14 @@ let insert_code ?name loc code xy_opt final_tenv old =
       new_sis
     else
       old
-      |> Exp.map_by_loc loc exp_inserter
-      |> StructItem.concat_map_by_loc loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
+      |> Exp.map_at loc exp_inserter
+      |> StructItem.concat_map_at loc (fun si -> si :: new_sis) (* Top level loc is last item in top level. Insert at end of top level. *)
   in
   (* Turn inserted bare functions into calls. *)
   match Typing.exp_typed_lookup_of_parsed_with_error_recovery prog "unknown.ml" new_exp_loc with
   | Some { exp_type; _ } when Type.arrow_arg_count exp_type >= 1 ->
     prog
-    |> Exp.map_by_loc new_exp_loc begin fun fexp ->
+    |> Exp.map_at new_exp_loc begin fun fexp ->
       Exp.apply_with_hole_args fexp (Type.arrow_arg_count exp_type)
     end
   | _ ->
@@ -218,16 +218,16 @@ let destruct loc destruct_code final_tenv old =
 
 let set_pos loc x y old =
   old
-  |> Vb.map_by_loc  loc (Pos.set_vb_pos  x y)
-  |> Exp.map_by_loc loc (Pos.set_exp_pos x y)
-  |> Pat.map_by_loc loc (Pos.set_pat_pos x y)
+  |> Vb.map_at  loc (Pos.set_vb_pos  x y)
+  |> Exp.map_at loc (Pos.set_exp_pos x y)
+  |> Pat.map_at loc (Pos.set_pat_pos x y)
 
 let move_vb vbs_loc mobile_vb_loc xy_opt final_tenv old =
   let old = match xy_opt with Some (x,y) -> set_pos mobile_vb_loc x y old | None -> old in
   print_endline (StructItems.to_string old);
   let (vb, old') = remove_vblike mobile_vb_loc old in
   old'
-  |> Exp.map_by_loc vbs_loc (Exp.let_ Asttypes.Nonrecursive [vb])
+  |> Exp.map_at vbs_loc (Exp.let_ Asttypes.Nonrecursive [vb])
   |>@@ begin fun si ->
     if si.pstr_loc = vbs_loc
     then [Ast_helper.Str.value Asttypes.Nonrecursive [vb]; si]
@@ -276,7 +276,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
       | _                     -> Exp.hole
     in
     delete_vblike loc
-    %> Exp.map_by_loc loc delete
+    %> Exp.map_at loc delete
     %> clear_asserts_with_hole_rhs (* The above step may produce e.g. `assert (x = (??))` which is a sign to delete the whole assert. *)
     %> Bindings.fixup final_tenv
   | NewAssert (loc_str, lhs_code, rhs_code, xy_opt) ->
@@ -292,7 +292,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
       |> Attr.remove_name "not"
       |> Attr.remove_name "accept_or_reject"
     in
-    Exp.map_by_loc loc (fun e -> { e with pexp_attributes = change_attrs e })
+    Exp.map_at loc (fun e -> { e with pexp_attributes = change_attrs e })
   | RejectSynthResult loc_str
   | RejectSynthResultAndContinue loc_str ->
     (* Synth handled by caller. *)
@@ -302,7 +302,7 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
       |> Attr.remove_name "accept_or_reject"
       |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e |> Exp.to_string |> Hashtbl.hash |> Exp.int_lit)
     in
-    Exp.map_by_loc loc (fun e -> { Exp.hole with pexp_attributes = change_attrs e })
+    Exp.map_at loc (fun e -> { Exp.hole with pexp_attributes = change_attrs e })
   | Undo ->
     Undo_redo.undo path
   | Redo ->

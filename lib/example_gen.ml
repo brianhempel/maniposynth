@@ -91,9 +91,7 @@ let examples_with_holes ?ctor_descs tenv typ =
 let func_calls final_tenv prog =
   let top_level_nameset =
     prog
-    |>@& StructItem.vbs_opt
-    |> List.concat
-    |>@@ Vb.names
+    |>@@ StructItem.vbs_names
     |> SSet.of_list
   in
   let f name _path desc out =

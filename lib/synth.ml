@@ -25,7 +25,7 @@ let rec apply_fillings fillings prog =
   let prog' =
     Loc_map.bindings fillings
     |> List.fold_left begin fun prog (loc, exp) ->
-      Exp.map_by_loc loc (fun _ -> changed := true; exp) prog
+      Exp.map_at loc (fun _ -> changed := true; exp) prog
     end prog
   in
   if !changed
@@ -161,211 +161,211 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
     else
       v
   in *)
-  match exp.pexp_desc with
-  | Pexp_ident { txt = Longident.Lident "??"; _ } ->
-    begin match Loc_map.find_opt exp.pexp_loc fillings with
-    | Some filling_exp -> recurse (env, filling_exp, value)
-    | None -> [req]
-    end
-  | Pexp_let (recflag, vbs, e) ->
-    let env' = eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in
-    let deeper_hole_reqs = recurse (env', e, value) in
-    (* If a deeper req constrains a name defined here, transfer that constraint to the bound expression. *)
-    deeper_hole_reqs
-    |>@@ begin fun ((_, exp, value) as req) ->
-      match Exp.ident_lid exp with
-      | Some (Longident.Lident name) ->
-        begin match vbs |>@? (Vb.names %> List.mem name) with
-        | [vb] when Exp.flatten e |> List.exists (Exp.loc %> (=) exp.pexp_loc) -> (* Ensure it's actually an ident inside the body (i.e. we didn't jump out to some function lambda or something) *)
-          let req_env = if recflag = Asttypes.Recursive then env' else env in
-          let new_ex = expand_named_example_to_pat req_env name value vb.pvb_pat in
-          recurse (req_env, vb.pvb_expr, new_ex)
+  match Loc_map.find_opt exp.pexp_loc fillings with
+  | Some filling_exp -> recurse (env, filling_exp, value)
+  | None ->
+    begin match exp.pexp_desc with
+    | Pexp_let (recflag, vbs, e) ->
+      let env' = eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in
+      let deeper_hole_reqs = recurse (env', e, value) in
+      (* If a deeper req constrains a name defined here, transfer that constraint to the bound expression. *)
+      deeper_hole_reqs
+      |>@@ begin fun ((_, exp, value) as req) ->
+        match Exp.ident_lid exp with
+        | Some (Longident.Lident name) ->
+          begin match vbs |>@? (Vb.names %> List.mem name) with
+          | [vb] when Exp.flatten e |> List.exists (Exp.loc %> (=) exp.pexp_loc) -> (* Ensure it's actually an ident inside the body (i.e. we didn't jump out to some function lambda or something) *)
+            let req_env = if recflag = Asttypes.Recursive then env' else env in
+            let new_ex = expand_named_example_to_pat req_env name value vb.pvb_pat in
+            recurse (req_env, vb.pvb_expr, new_ex)
+          | _ -> [req]
+          end
         | _ -> [req]
+      end
+    | Pexp_constant _ -> [req]
+    | Pexp_ident { txt = Longident.Lident "??"; _ } -> [req]
+    | Pexp_ident lid_loced ->
+      (* If ident refers to something that carries an env (a func or a holeval) then push the req into that *)
+      begin match Envir.env_get_value_or_lvar env lid_loced with
+        | Value { v_ = Hole (env_ref, _, e); _ } ->
+          recurse (!env_ref, e, value)
+        | Value { v_ = Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref); _ } ->
+          recurse (!env_ref, Exp.fun_ Nolabel None pat body_exp, value)
+        | Value { v_ = Function (cases, env_ref); _ } ->
+          recurse (!env_ref, Exp.function_ cases, value)
+        | Value _ -> [req]
+        | Instance_variable _ -> [req]
+        | exception Not_found -> [req]
+      end
+    | Pexp_function cases ->
+      begin match value.v_ with
+      | ExCall (arg, expected) ->
+        begin match try_cases arg cases with
+        | None -> [req]
+        | Some (env', branch_exp) -> recurse (env', branch_exp, expected)
+        end
+      | _ ->
+        [req]
+      end
+    | Pexp_fun (Nolabel, None, arg_pat, body_exp) ->
+      begin match value.v_ with
+      | ExCall (arg, expected) -> begin try
+          let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
+          hit_a_function_f arg_pat body_exp arg expected;
+          recurse (env', body_exp, expected)
+        with Match_fail -> [req]
         end
       | _ -> [req]
-    end
-  | Pexp_constant _ -> [req]
-  | Pexp_ident lid_loced ->
-    (* If ident refers to something that carries an env (a func or a holeval) then push the req into that *)
-    begin match Envir.env_get_value_or_lvar env lid_loced with
-      | Value { v_ = Hole (env_ref, _, e); _ } ->
-        recurse (!env_ref, e, value)
-      | Value { v_ = Fun (Asttypes.Nolabel, None, pat, body_exp, env_ref); _ } ->
-        recurse (!env_ref, Exp.fun_ Nolabel None pat body_exp, value)
-      | Value { v_ = Function (cases, env_ref); _ } ->
-        recurse (!env_ref, Exp.function_ cases, value)
-      | Value _ -> [req]
-      | Instance_variable _ -> [req]
-      | exception Not_found -> [req]
-    end
-  | Pexp_function cases ->
-    begin match value.v_ with
-    | ExCall (arg, expected) ->
+      end
+    | Pexp_fun (_, _, _, _) -> [req]
+    | Pexp_apply (fexp, labeled_args) ->
+      if List.for_all (fun (label, _) -> label == Asttypes.Nolabel) labeled_args then
+        let arg_vals = List.map (fun (_, e) -> eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e) labeled_args in
+        (* Expand example to arg1 -> arg2 -> ex *)
+        let expanded_example = List.fold_right (fun arg ex -> new_vtrace @@ ExCall (arg, ex)) arg_vals value in
+        (* Push it down the function expression *)
+        recurse (env, fexp, expanded_example)
+      else
+        [req]
+    | Pexp_tuple exps ->
+      begin match value.v_ with
+      | Tuple vs when List.length vs = List.length exps ->
+        List.map2 (fun e v -> recurse (env, e, v)) exps vs
+        |> List.concat
+      | _ -> [req]
+      end
+    | Pexp_match (e, cases) ->
+      let arg = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e in
       begin match try_cases arg cases with
       | None -> [req]
-      | Some (env', branch_exp) -> recurse (env', branch_exp, expected)
-      end
-    | _ ->
-      [req]
-    end
-  | Pexp_fun (Nolabel, None, arg_pat, body_exp) ->
-    begin match value.v_ with
-    | ExCall (arg, expected) -> begin try
-        let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
-        hit_a_function_f arg_pat body_exp arg expected;
-        recurse (env', body_exp, expected)
-      with Match_fail -> [req]
-      end
-    | _ -> [req]
-    end
-  | Pexp_fun (_, _, _, _) -> [req]
-  | Pexp_apply (fexp, labeled_args) ->
-    if List.for_all (fun (label, _) -> label == Asttypes.Nolabel) labeled_args then
-      let arg_vals = List.map (fun (_, e) -> eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e) labeled_args in
-      (* Expand example to arg1 -> arg2 -> ex *)
-      let expanded_example = List.fold_right (fun arg ex -> new_vtrace @@ ExCall (arg, ex)) arg_vals value in
-      (* Push it down the function expression *)
-      recurse (env, fexp, expanded_example)
-    else
-      [req]
-  | Pexp_tuple exps ->
-    begin match value.v_ with
-    | Tuple vs when List.length vs = List.length exps ->
-      List.map2 (fun e v -> recurse (env, e, v)) exps vs
-      |> List.concat
-    | _ -> [req]
-    end
-  | Pexp_match (e, cases) ->
-    let arg = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e in
-    begin match try_cases arg cases with
-    | None -> [req]
-    | Some (env', branch_exp) -> recurse (env', branch_exp, value)
-    end
-  | Pexp_coerce (e, _, _)  -> recurse (env, e, value)
-  | Pexp_constraint (e, _) -> recurse (env, e, value)
-  | Pexp_sequence (e1, e2) ->
-    let _ = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in (* Do we even need to do this? *)
-    recurse (env, e2, value)
-  | Pexp_while (_, _) -> [req]
-  | Pexp_for (_, _, _, _, _) -> [req]
-  | Pexp_ifthenelse (e1, e2, e3_opt) ->
-    let guard_val = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in
-    begin try if is_true guard_val
-    then recurse (env, e2, value)
-    else (
-      match e3_opt with
-      | None -> [req]
-      | Some e3 -> recurse (env, e3, value))
-    with BombExn -> [req]
-    end
-  | Pexp_unreachable -> failwith "reached unreachable"
-  | Pexp_try (e, cases) ->
-    begin try recurse (env, e, value)
-    with InternalException exn_val ->
-      begin match try_cases exn_val cases with
-      | None -> raise (InternalException exn_val)
       | Some (env', branch_exp) -> recurse (env', branch_exp, value)
       end
-    end
-  | Pexp_construct (_, None) -> [req]
-  | Pexp_construct (lid_loced, Some e) ->
-    let ctor_name = lident_name lid_loced.txt in
-    let d = Envir.env_get_constr env lid_loced in
-    begin match value.v_ with
-    | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = ctor_name && d_ex = d ->
-      recurse (env, e, ex)
-    | _ -> [req]
-    end
-  | Pexp_variant (_, None) -> [req]
-  | Pexp_variant (cn, Some e) ->
-    let hash = Hashtbl.hash cn in
-    begin match value.v_ with
-    | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = cn && d_ex = hash ->
-      recurse (env, e, ex)
-    | _ -> [req]
-    end
-  | Pexp_record (fields, e_opt) ->
-    begin match value.v_ with
-    | Record ex_fields ->
-      let literal_field_names = fields |>@ fst |>@ Loc.txt |>@ lident_name in
-      let expected_labels = SMap.bindings ex_fields |>@ fst in
-      let expected_labels_not_in_literal =
-        expected_labels |>@? (fun name -> not (List.mem name literal_field_names)) in
-      begin match e_opt, expected_labels_not_in_literal with
-      | _, [] ->
-        SMap.bindings ex_fields
-        |>@@ begin fun (ex_label, expected_ref) ->
-          let _, field_exp = fields |> List.find (fst %> Loc.txt %> lident_name %> (=) ex_label) in
-          recurse (env, field_exp, !expected_ref)
+    | Pexp_coerce (e, _, _)  -> recurse (env, e, value)
+    | Pexp_constraint (e, _) -> recurse (env, e, value)
+    | Pexp_sequence (e1, e2) ->
+      let _ = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in (* Do we even need to do this? *)
+      recurse (env, e2, value)
+    | Pexp_while (_, _) -> [req]
+    | Pexp_for (_, _, _, _, _) -> [req]
+    | Pexp_ifthenelse (e1, e2, e3_opt) ->
+      let guard_val = eval_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no e1 in
+      begin try if is_true guard_val
+      then recurse (env, e2, value)
+      else (
+        match e3_opt with
+        | None -> [req]
+        | Some e3 -> recurse (env, e3, value))
+      with BombExn -> [req]
+      end
+    | Pexp_unreachable -> failwith "reached unreachable"
+    | Pexp_try (e, cases) ->
+      begin try recurse (env, e, value)
+      with InternalException exn_val ->
+        begin match try_cases exn_val cases with
+        | None -> raise (InternalException exn_val)
+        | Some (env', branch_exp) -> recurse (env', branch_exp, value)
         end
-      | Some base_rec_exp, _ ->
-        (* Labels not in literal are pushed to base_rec, others to the fields *)
-        let base_ex = new_vtrace @@
-          Record (SMap.filter (fun name _ -> List.mem name expected_labels_not_in_literal) ex_fields) in
-        let lit_push_downs =
+      end
+    | Pexp_construct (_, None) -> [req]
+    | Pexp_construct (lid_loced, Some e) ->
+      let ctor_name = lident_name lid_loced.txt in
+      let d = Envir.env_get_constr env lid_loced in
+      begin match value.v_ with
+      | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = ctor_name && d_ex = d ->
+        recurse (env, e, ex)
+      | _ -> [req]
+      end
+    | Pexp_variant (_, None) -> [req]
+    | Pexp_variant (cn, Some e) ->
+      let hash = Hashtbl.hash cn in
+      begin match value.v_ with
+      | Constructor (ex_ctor_name, d_ex, Some ex) when ex_ctor_name = cn && d_ex = hash ->
+        recurse (env, e, ex)
+      | _ -> [req]
+      end
+    | Pexp_record (fields, e_opt) ->
+      begin match value.v_ with
+      | Record ex_fields ->
+        let literal_field_names = fields |>@ fst |>@ Loc.txt |>@ lident_name in
+        let expected_labels = SMap.bindings ex_fields |>@ fst in
+        let expected_labels_not_in_literal =
+          expected_labels |>@? (fun name -> not (List.mem name literal_field_names)) in
+        begin match e_opt, expected_labels_not_in_literal with
+        | _, [] ->
           SMap.bindings ex_fields
-          |>@? (fun (name, _) -> List.mem name literal_field_names)
           |>@@ begin fun (ex_label, expected_ref) ->
             let _, field_exp = fields |> List.find (fst %> Loc.txt %> lident_name %> (=) ex_label) in
             recurse (env, field_exp, !expected_ref)
-          end in
-        let base_rec_push_downs =
-          recurse (env, base_rec_exp, base_ex) in
-          lit_push_downs @ base_rec_push_downs
+          end
+        | Some base_rec_exp, _ ->
+          (* Labels not in literal are pushed to base_rec, others to the fields *)
+          let base_ex = new_vtrace @@
+            Record (SMap.filter (fun name _ -> List.mem name expected_labels_not_in_literal) ex_fields) in
+          let lit_push_downs =
+            SMap.bindings ex_fields
+            |>@? (fun (name, _) -> List.mem name literal_field_names)
+            |>@@ begin fun (ex_label, expected_ref) ->
+              let _, field_exp = fields |> List.find (fst %> Loc.txt %> lident_name %> (=) ex_label) in
+              recurse (env, field_exp, !expected_ref)
+            end in
+          let base_rec_push_downs =
+            recurse (env, base_rec_exp, base_ex) in
+            lit_push_downs @ base_rec_push_downs
+        | _ -> [req]
+        end
       | _ -> [req]
       end
-    | _ -> [req]
+    | Pexp_field (e, { txt = lident; _ }) ->
+      let label = lident_name lident in
+      let record_ex = new_vtrace @@ Record (SMap.singleton label (ref value)) in
+      recurse (env, e, record_ex)
+    | Pexp_setfield (_, _, _) -> [req]
+    | Pexp_array exps ->
+      begin match value.v_ with
+      | Array v_arr when List.length exps = Array.length v_arr ->
+        List.map2 (fun e v -> recurse (env, e, v)) exps (Array.to_list v_arr)
+        |> List.concat
+      | _ -> [req]
+      end
+    | Pexp_send (_, _) -> [req]
+    | Pexp_new _ -> [req]
+    | Pexp_setinstvar (_, _) -> [req]
+    | Pexp_override _ -> [req]
+    | Pexp_letexception ({ pext_name = name; pext_kind = k; _ }, e) ->
+      let nenv =
+        match k with
+        | Pext_decl _ ->
+          let d = next_exn_id () in (* :/ :/ :/ *)
+          Envir.env_set_constr name.txt d env
+        | Pext_rebind path ->
+          Envir.env_set_constr name.txt (Envir.env_get_constr env path) env
+      in
+      recurse (nenv, e, value)
+    | Pexp_letmodule (name, me, e) ->
+      (* Will this mutate? :/ *)
+      begin match eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no me with
+      | Some m ->
+        let env' = Envir.env_set_module name.txt m env in
+        recurse (env', e, value)
+      | None -> [req]
+      end
+    | Pexp_assert _ -> [req]
+    | Pexp_lazy _ -> [req]
+    | Pexp_poly (e, _) -> recurse (env, e, value)
+    | Pexp_newtype (_, e) -> recurse (env, e, value)
+    | Pexp_open (_, lident, e) ->
+      let nenv =
+        match Envir.env_get_module_data env lident with
+        | exception Not_found ->
+          (* Module might be a .mli only *)
+          env
+        | module_data -> Envir.env_extend false env module_data
+      in
+      recurse (nenv, e, value)
+    | Pexp_object _ -> [req]
+    | Pexp_pack _ -> [req]
+    | Pexp_extension _ -> [req]
     end
-  | Pexp_field (e, { txt = lident; _ }) ->
-    let label = lident_name lident in
-    let record_ex = new_vtrace @@ Record (SMap.singleton label (ref value)) in
-    recurse (env, e, record_ex)
-  | Pexp_setfield (_, _, _) -> [req]
-  | Pexp_array exps ->
-    begin match value.v_ with
-    | Array v_arr when List.length exps = Array.length v_arr ->
-      List.map2 (fun e v -> recurse (env, e, v)) exps (Array.to_list v_arr)
-      |> List.concat
-    | _ -> [req]
-    end
-  | Pexp_send (_, _) -> [req]
-  | Pexp_new _ -> [req]
-  | Pexp_setinstvar (_, _) -> [req]
-  | Pexp_override _ -> [req]
-  | Pexp_letexception ({ pext_name = name; pext_kind = k; _ }, e) ->
-    let nenv =
-      match k with
-      | Pext_decl _ ->
-        let d = next_exn_id () in (* :/ :/ :/ *)
-        Envir.env_set_constr name.txt d env
-      | Pext_rebind path ->
-        Envir.env_set_constr name.txt (Envir.env_get_constr env path) env
-    in
-    recurse (nenv, e, value)
-  | Pexp_letmodule (name, me, e) ->
-    (* Will this mutate? :/ *)
-    begin match eval_module_exp_fueled fillings prims env lookup_exp_typed trace_state frame_no me with
-    | Some m ->
-      let env' = Envir.env_set_module name.txt m env in
-      recurse (env', e, value)
-    | None -> [req]
-    end
-  | Pexp_assert _ -> [req]
-  | Pexp_lazy _ -> [req]
-  | Pexp_poly (e, _) -> recurse (env, e, value)
-  | Pexp_newtype (_, e) -> recurse (env, e, value)
-  | Pexp_open (_, lident, e) ->
-    let nenv =
-      match Envir.env_get_module_data env lident with
-      | exception Not_found ->
-        (* Module might be a .mli only *)
-        env
-      | module_data -> Envir.env_extend false env module_data
-    in
-    recurse (nenv, e, value)
-  | Pexp_object _ -> [req]
-  | Pexp_pack _ -> [req]
-  | Pexp_extension _ -> [req]
 
 let push_down_req fillings _prog ?(lookup_exp_typed = fun _ -> None) ?(hit_a_function_f = fun _ _ _ _ -> ()) req =
   try
@@ -409,7 +409,7 @@ let program_size prog = ast_size (fun iterator -> iterator.structure iterator pr
 exception Found_names of string list
 
 (* Estimate that all names syntactically under a lambda are "non-constant". *)
-let nonconstant_names_at_loc target_loc prog =
+let nonconstant_names_at target_loc prog =
   let dflt_iter = Ast.dflt_iter in
   let in_func = ref false in
   let names = ref [] in
@@ -458,38 +458,86 @@ let nonconstant_names_at_loc target_loc prog =
   let iter = { dflt_iter with case = iter_case; expr = iter_exp } in
   try
     iter.structure iter prog;
-    print_endline @@ "nonconstant_names_at_loc: didn't find loc " ^ Loc.to_string target_loc;
+    print_endline @@ "nonconstant_names_at: didn't find loc " ^ Loc.to_string target_loc;
     SSet.empty
   with Found_names names ->
-    (* print_endline @@ "nonconstant_names_at_loc: " ^ String.concat ", " names; *)
+    (* print_endline @@ "nonconstant_names_at: " ^ String.concat ", " names; *)
     SSet.of_list names
 
+let nonlinear_nonconstant_names_at target_loc prog =
+  let open Bindings in
+  rearrangement_roots_at target_loc prog
+  |>@@ begin function
+  | RR_StructItems _ -> [SSet.empty]
+  | RR_Exp exp       -> terminal_exps exp |>@ fun e -> nonconstant_names_at e.pexp_loc prog
+  end
+  |> SSet.union_all
 
-(* let unused_parameter_names_at_loc target_loc prog =
-  let dflt_iter = Ast.dflt_iter in
-  let names = ref [] in
-  (* Not using Ast.Exp.iter because we want to visit children _after_ mutating names. *)
-  let iter_exp (iter : Ast_iterator.iterator) exp =
-    let higher_names = !names in
-    if exp.pexp_loc = target_loc then raise (Found_names !names);
-    begin match exp.pexp_desc with
-    | Pexp_fun (_, arg_opt, pat, body) ->
-      arg_opt |>& iter.expr iter ||& ();
-      let unused_names = List.diff (Pat.names pat) (Scope.free_unqualified_names body) in
-      names := unused_names @ !names;
-      iter.expr iter body
-    | _ -> dflt_iter.expr iter exp;
-    end;
-    names := higher_names;
-  in
-  let iter = { dflt_iter with expr = iter_exp } in
-  try
-    iter.structure iter prog;
-    print_endline @@ "unused_parameter_names_at_loc: didn't find loc " ^ Loc.to_string target_loc;
-    []
-  with Found_names names ->
-    print_endline @@ "unused_parameter_names_at_loc: " ^ String.concat ", " names;
-    names *)
+let local_idents_at loc tenv prog : (expression * Types.type_expr * lprob) list =
+  let local_names = Scope.names_at loc prog in
+  let local_name_count = List.length local_names in
+  (* local_names *)
+  (* |>@& begin fun name -> (name, Typing.type_of_name name tenv)) *)
+  Stats_model.local_idents |>@& begin fun (nth, lprob) ->
+    if nth >= local_name_count then None else
+    let name = List.nth local_names nth in
+    Some
+      ( Exp.simple_var name
+      , Typing.type_of_name name tenv
+      , lprob
+      )
+  end
+
+(*
+This program:
+
+let stuff1 = 19
+let stuff2 = 19
+
+let rec length list =
+  let length3 = length (??) [@@pos 93, 11] in
+  let length2 = length (??) [@@pos 93, 11] in
+  match list with hd :: tail -> (??) | [] -> (??)
+  [@@pos 97, 125]
+
+let stuff3 = 19
+let stuff4 = 19
+
+Produces this order of idents:
+
+tail, hd, length2, length3, list, length, stuff2, stuff1, stuff3, stuff4
+
+That feels right to me.
+*)
+(* "local" means same file and ostensibly visible at hole_loc after Bindings.synth_fixup *)
+let nonlinear_local_idents_at hole_loc typed_prog prog =
+  let open Bindings in
+  rearrangement_roots_at hole_loc prog
+  |>@@ begin function
+  | RR_StructItems [] -> []
+  | RR_StructItems ((si::_) as sis) ->
+    begin match Typing.find_struct_at si.pstr_loc typed_prog with
+    | Some typed_struct ->
+      sis
+      |>@@ StructItem.vbs_names
+      |>@ (fun name -> (name, Typing.type_of_name name typed_struct.str_final_env))
+    | None ->
+      []
+    end
+  | RR_Exp exp ->
+    terminal_exps exp
+    (* |> List.rev *)
+    |>@@ begin fun { pexp_loc = loc; _ } ->
+      match Typing.find_exp_at loc typed_prog with
+      | Some texp ->
+        Scope.names_at loc prog
+        |>@ (fun name -> (name, Typing.type_of_name name texp.exp_env))
+      | None ->
+        []
+    end
+  end
+  |> List.dedup_by fst
+  |> List.map2_best_effort (fun (_nth, lprob) (name, typ) -> (Exp.simple_var name, typ, lprob)) Stats_model.local_idents
 
 
 exception Unused_name
@@ -500,24 +548,21 @@ let all_parameter_names_used fillings prog =
   let in_a_filling  = ref false in
   (* Not using Ast.Exp.iter because we want to visit children _after_ mutating names. *)
   let iter_exp (iter : Ast_iterator.iterator) exp =
-    begin match exp.pexp_desc with
-    | Pexp_fun (_, arg_opt, pat, body) ->
-      arg_opt |>& iter.expr iter ||& ();
-      let unused_names = List.diff (Pat.names pat) (Scope.free_unqualified_names ~fillings body) in
-      if unused_names <> [] && (!in_a_filling || Exp.FromNode.exists Exp.is_hole body) then raise Unused_name;
-      iter.expr iter body
-    | Pexp_ident { txt = Longident.Lident "??"; _ } ->
-      begin match Shared.Loc_map.find_opt exp.pexp_loc fillings with
-      | Some filling_exp ->
-        let in_a_filling_old = !in_a_filling in
-        in_a_filling := true;
-        iter.expr iter filling_exp;
-        in_a_filling := in_a_filling_old
-      | None ->
-        dflt_iter.expr iter exp
+    match Shared.Loc_map.find_opt exp.pexp_loc fillings with
+    | Some filling_exp ->
+      let in_a_filling_old = !in_a_filling in
+      in_a_filling := true;
+      iter.expr iter filling_exp;
+      in_a_filling := in_a_filling_old
+    | None ->
+      begin match exp.pexp_desc with
+      | Pexp_fun (_, arg_opt, pat, body) ->
+        arg_opt |>& iter.expr iter ||& ();
+        let unused_names = List.diff (Pat.names pat) (Scope.free_unqualified_names ~fillings body) in
+        if unused_names <> [] && (!in_a_filling || Exp.FromNode.exists Exp.is_hole body) then raise Unused_name;
+        iter.expr iter body
+      | _ -> dflt_iter.expr iter exp;
       end
-    | _ -> dflt_iter.expr iter exp;
-    end
   in
   let iter = { dflt_iter with expr = iter_exp } in
   try
@@ -530,8 +575,7 @@ let all_parameter_names_used fillings prog =
 
 
 type hole_synth_env =
-    { tenv                               : Env.t
-    ; hole_type                          : Types.type_expr
+    { hole_type                          : Types.type_expr
     ; user_ctors                         : (Longident.t * Types.constructor_description * lprob) list
     ; nonconstant_names                  : SSet.t
     ; local_idents                       : (expression * Types.type_expr * lprob) list
@@ -543,16 +587,17 @@ type hole_synth_env =
     ; mutable functions_producing_type   : (Types.type_expr * (expression  * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count, type unified with goal type *)) list
     ; mutable ctors_producing_type       : (Types.type_expr * (Longident.t * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count type unified with goal type *)) list
     }
-let is_req_satisified_by trace_state fillings (env, exp, expected) =
+
+(* let is_req_satisified_by trace_state fillings (env, exp, expected) =
   (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
   with _ -> Loc_map.bindings fillings |>@ snd |>@ (Formatter_to_stringifier.f (Printast.expression 0)) |> List.iter print_endline
   end; *)
   (* print_endline @@ string_of_req (env, exp, expected); *)
   let evaled = eval trace_state fillings env exp in
   (* print_endline @@ Formatter_to_stringifier.f pp_print_value evaled; *)
-  Assert_comparison.values_equal_for_assert evaled expected
+  Assert_comparison.values_equal_for_assert evaled expected *)
 
-let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs =
+let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog =
   let fillings =
     (* Freshen non-holes. *)
     fillings
@@ -562,8 +607,20 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs
       else { exp with pexp_loc = Loc.fresh () }
     end
   in
+  let prog = apply_fillings fillings prog |> Bindings.synth_fixup in
   let trace_state = Trace.new_trace_state () in
-  reqs |> List.for_all (is_req_satisified_by trace_state fillings)
+  trace_state.Trace.frame_no <- trace_state.Trace.frame_no + 1;
+  let frame_no = trace_state.frame_no in
+  let file_name = "synth_internal.ml" in
+  let loc = Location.in_file file_name in
+  let local_env = Interp.(eval_env_flag ~loc (stdlib_env ()) (Open (Longident.Lident "Stdlib"))) in
+  Eval.with_throwing_asserts begin fun () ->
+    try
+      ignore @@ Eval.eval_structure ~fuel_per_binding:300 Shared.Loc_map.empty Primitives.prims local_env Typing.empty_lookups.lookup_exp trace_state frame_no prog;
+      true
+    with _ ->
+      false
+  end
   && begin
     (* print_endline (Loc_map.to_string Exp.to_string fillings); *)
     (* Ensure all expressions exercised during execution (we didn't insert junk branches etc.) *)
@@ -585,21 +642,6 @@ let build_cache_list typ idents =
     |>& (fun t' -> (exp, t', lprob))
   end
   |> List.sort_by (fun (_, _, lprob) -> -.lprob)
-
-let local_idents_at_loc loc tenv prog : (expression * Types.type_expr * lprob) list =
-  let local_names = Scope.names_at_loc loc prog in
-  let local_name_count = List.length local_names in
-  (* local_names *)
-  (* |>@& begin fun name -> (name, Typing.type_of_name name tenv)) *)
-  Stats_model.local_idents |>@& begin fun (nth, lprob) ->
-    if nth >= local_name_count then None else
-    let name = List.nth local_names nth in
-    Some
-      ( Exp.simple_var name
-      , Typing.type_of_name name tenv
-      , lprob
-      )
-  end
 
 let rec drop_n_args_from_arrow n typ =
   if n <= 0 then typ else
@@ -906,14 +948,14 @@ and terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env typ min_
   (* print_endline (terms |>@ Tup3.fst |>@ Exp.to_string |> String.concat "  "); *)
   terms2 @ terms1
 
-let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env _reqs_on_hole _prog : (bool * fillings * lprob) Seq.t =
+let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env : (bool * fillings * lprob) Seq.t =
   let term_min_lprob = div_lprobs min_lprob lprob in
   (* let terms_seq = *)
     (* let nonconstant_names = SSet.empty in *)
     (* print_endline (Loc.to_string hole_loc);
     print_endline (string_of_int (List.length reqs_on_hole));
     print_endline (String.concat "\n" (reqs_on_hole |>@ string_of_req)); *)
-    (* let nonconstant_names = nonconstant_names_at_loc hole_loc prog in *)
+    (* let nonconstant_names = nonconstant_names_at hole_loc prog in *)
   (* let hole_synth_env = new_hole_synth_env tenv in *)
     (* Seq.append
       (constants_at_type_seq hole_synth_env static_hole_type term_max_lprob term_min_lprob)
@@ -923,24 +965,29 @@ let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc sta
   (* print_endline (Loc.to_string hole_loc); *)
   let if_constant_must_be = hole_synth_env.single_asserted_exp in
   terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env static_hole_type term_min_lprob
-  |>@ begin fun (term, _term_t, term_lprob) ->
+  |> List.to_seq
+  |> Seq.map begin fun (term, _term_t, term_lprob) ->
     (* print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term ^ "\t" ^ Type.to_string term_t ^ "\t" ^ Type.to_string static_hole_type); *)
     (* Printast.expression 0 Format.std_formatter term; *)
-    let fillings = Loc_map.add hole_loc term fillings in
+    let fillings = Loc_map.add hole_loc (Exp.freshen_locs term) fillings in
     (hole_synth_env.check_if_constant term, fillings, mult_lprobs term_lprob lprob)
     (* if reqs_on_hole |> List.for_all (is_req_satisified_by fillings) then
       Some (fillings, mult_lprobs term_lprob lprob)
     else
       None *)
   end
-  |> List.to_seq
 
 
 let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? Exp.is_hole |>@ Exp.loc
 
 
 (* Return a list of programs with arg and return types concretized to each assert. *)
-let apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs : program list =
+let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : program list =
+  let (typed_struct, _, _) =
+    try Typing.typedtree_sig_env_of_parsed prog file_name
+    with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
+  in
+  let lookup_exp_typed = (Typing.type_lookups_of_typed_structure typed_struct).lookup_exp in
   reqs
   |>@ begin fun req ->
     let pats_to_annotate = ref [] in
@@ -998,16 +1045,16 @@ let count_type_var_annotations prog =
   !n *)
 
 
-let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name : (fillings * lprob) Seq.t =
+let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (fillings * lprob) Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
-  let progs = apply_fillings_and_degeneralize_functions fillings lookup_exp_typed prog reqs in
-  print_endline @@ string_of_int (List.length progs) ^ " programs";
-  let prog_and_typed_progs =
+  let progs = apply_fillings_and_degeneralize_functions fillings file_name prog reqs in
+  (* print_endline @@ string_of_int (List.length progs) ^ " programs"; *)
+  (* let prog_and_typed_progs =
     let progs' =
       progs
       |>@ begin fun prog ->
-        print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob;
+        (* print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob; *)
         let (typed_prog, _, _) =
           try Typing.typedtree_sig_env_of_parsed prog file_name
           with _ ->
@@ -1021,42 +1068,53 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
     let min_type_var_annotations_count = progs' |>@ fst %> count_type_var_annotations |> List.fold_left min max_int in
     progs'
     |>@? (fst %> count_type_var_annotations %> (=) min_type_var_annotations_count)
-  in
+  in *)
   (* ignore @@ exit 0; *)
-  print_endline @@ string_of_int (List.length prog_and_typed_progs) ^ " programs will be used";
+  print_endline @@ string_of_int (List.length progs) ^ " programs will be used";
   let reqs' = reqs |>@@ push_down_req fillings prog in
-  let hole_locs_progs_and_synth_envs : (Location.t * (program * hole_synth_env) Seq.t) list =
-    hole_locs
-    |>@ begin fun hole_loc ->
-      let progs_and_synth_envs =
-        prog_and_typed_progs |>@@ begin fun (prog, typed_prog) ->
-          match Typing.find_exp_by_loc hole_loc typed_prog with
-          | None -> []
-          | Some hole_typed_node ->
-            let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
-            let unique_asserted_exps =
-              reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
+  (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
+  let rec fillings_seq (fillings, lprob) min_lprob hole_locs : (bool * fillings * lprob) Seq.t =
+    match hole_locs with
+    | [] -> Seq.return (false, fillings, lprob)
+    | hole_loc::rest ->
+      fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
+      |> Seq.flat_map begin fun (any_constant_holes, fillings, lprob) ->
+        let synth_envs =
+          progs |>@@ begin fun prog ->
+            let prog = apply_fillings fillings prog in
+            let (typed_prog, _, _) =
+              try Typing.typedtree_sig_env_of_parsed prog file_name
+              with _ ->
+                (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+                ({ Typedtree.str_items = []; str_type = []; str_final_env = Typing.initial_env }, [], Env.empty)
             in
-            (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
-            let nonconstant_names      = nonconstant_names_at_loc hole_loc prog in
-            let user_ctors =
-              let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
-              let user_ctor_descs =
-                Env.fold_constructors List.cons None(* not looking in a nested module *) typed_prog.str_final_env []
-                |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
+            match Typing.find_exp_at hole_loc typed_prog with
+            | None -> []
+            | Some hole_typed_node ->
+              let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+              let unique_asserted_exps =
+                reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
               in
-              user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
-                (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
-              end
-            in
-            print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors";
-            print_endline @@ "Nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", ");
-            [ ( prog
-              , { tenv                          = hole_typed_node.exp_env
-                ; hole_type                     = hole_typed_node.exp_type
+              (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
+              let nonconstant_names = nonlinear_nonconstant_names_at hole_loc prog in
+              let user_ctors =
+                let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
+                let user_ctor_descs =
+                  Env.fold_constructors List.cons None(* not looking in a nested module *) typed_prog.str_final_env []
+                  |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
+                in
+                user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
+                  (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
+                end
+              in
+              let nonlinear_local_idents = nonlinear_local_idents_at hole_loc typed_prog prog in
+              (* print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors"; *)
+              (* print_endline @@ "Nonlinear local idents at hole: " ^ (nonlinear_local_idents |>@ (fun (e, _, _) -> Exp.to_string e) |> String.concat ", "); *)
+              (* print_endline @@ "Nonlinear nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", "); *)
+              [ { hole_type                     = hole_typed_node.exp_type
                 ; user_ctors                    = user_ctors
                 ; nonconstant_names             = nonconstant_names
-                ; local_idents                  = local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+                ; local_idents                  = nonlinear_local_idents
                 ; check_if_constant             = is_constant nonconstant_names
                 ; cant_be_constant              = List.length unique_asserted_exps >= 2
                 ; single_asserted_exp           = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
@@ -1065,32 +1123,22 @@ let e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs fil
                 ; functions_producing_type      = []
                 ; ctors_producing_type          = []
                 }
-              )
-            ]
-        end
-      in
-      (hole_loc, List.to_seq progs_and_synth_envs)
-    end
-  in
-  (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
-  let rec fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs : (bool * fillings * lprob) Seq.t =
-    match hole_locs_progs_and_synth_envs with
-    | [] -> Seq.return (false, fillings, lprob)
-    | (hole_loc, prog_and_synth_envs)::rest ->
-      fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
-      |> Seq.flat_map begin fun (any_constant_holes, fillings, lprob) ->
+              ]
+          end
+          |> List.to_seq
+        in
         (* print_endline "retyping prog"; *)
         (* progs *)
         (* ignore (exit 0); *)
-        prog_and_synth_envs
-        |> Seq.flat_map begin fun (prog, hole_synth_env) ->
-            (* At most one hole can be constant. *)
-            hole_fillings_seq ~cant_be_constant:any_constant_holes (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env [] prog
-          end
+        synth_envs
+        |> Seq.flat_map begin fun hole_synth_env ->
+          (* At most one hole can be constant. *)
+          hole_fillings_seq ~cant_be_constant:any_constant_holes (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env
+        end
         |> Seq.map (Tup3.map_fst (fun hole_is_constant -> hole_is_constant || any_constant_holes))
       end
   in
-  fillings_seq (fillings, lprob) min_lprob hole_locs_progs_and_synth_envs
+  fillings_seq (fillings, lprob) min_lprob hole_locs
   |> Seq.filter (fun (_, _, lprob) -> lprob <= max_lprob)
   |> Seq.map (fun (_, fillings, lprob) -> (fillings, lprob))
 
@@ -1113,7 +1161,7 @@ let refine prog (fillings, lprob) reqs file_name next =
   let avoid_names = StructItems.deep_names prog in
   hole_locs
   |>@@ begin fun hole_loc ->
-    match Typing.find_exp_by_loc hole_loc typed_prog with None -> [] | Some hole_typed_node ->
+    match Typing.find_exp_at hole_loc typed_prog with None -> [] | Some hole_typed_node ->
     let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
     (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
     if reqs_on_hole = [] then [] else
@@ -1130,8 +1178,8 @@ let refine prog (fillings, lprob) reqs file_name next =
         []
     in
     let destruct_seqs =
-      let nonconstant_names = nonconstant_names_at_loc hole_loc prog in
-      local_idents_at_loc hole_loc hole_typed_node.exp_env prog
+      let nonconstant_names = nonconstant_names_at hole_loc prog in
+      local_idents_at hole_loc hole_typed_node.exp_env prog
       |>@& (fun (e, _t, scrutinee_lprob) -> Exp.simple_name e |>& fun name -> (name, scrutinee_lprob))
       |>@? (fun (name, _) -> SSet.mem name nonconstant_names)
       |>@@ begin fun (scrutinee_name, scrutinee_lprob) ->
@@ -1165,14 +1213,14 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 let abort_lprob = log(min_float) (* If using 64bit floats directly (rather than lprobs), enter denormalized IEEE numbers after this (which is close to rounding off to zero). We never get close to this. *)
 
-let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec rejected_exp_hashes prog reqs file_name : fillings option =
   let start_hole_locs = hole_locs prog Loc_map.empty in
   if  start_hole_locs = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob <= abort_lprob then (print_endline "aborting"; None) else
   let min_lprob = max (mult_lprobs max_lprob (lprob 0.05)) abort_lprob in
   print_endline @@ "============== MIN LOGPROB " ^ string_of_float min_lprob ^ " =====================================";
   let e_guess (fillings, lprob) =
-    e_guess (fillings, lprob) max_lprob min_lprob lookup_exp_typed prog reqs file_name
+    e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name
   in
   let top_level_sis_with_holes = prog |>@? (fun si -> Exp.exists Exp.is_hole [si]) in
   Seq.concat
@@ -1190,7 +1238,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function (fillings, _lprob) ->
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
-    if !terms_tested_count mod 1_000 = 0 then begin
+    if !terms_tested_count mod 10_000 = 0 then begin
       let terms_per_sec = int_of_float @@ float_of_int !terms_tested_count /. (Unix.gettimeofday () -. start_sec) in
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ string_of_int terms_per_sec ^ " terms/sec\t" ^ StructItems.to_string (apply_fillings fillings top_level_sis_with_holes));
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
@@ -1207,7 +1255,6 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
         not (List.mem (Hashtbl.hash hole_exp_str) hole_rejected_hashes)
       end
     in
-    (* START HERE okay that bug fixed, now for nonlinearity...somehow! *)
     let all_params_used = all_parameter_names_used fillings top_level_sis_with_holes in
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
@@ -1219,11 +1266,11 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
 
-    all_params_used && not_rejected && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings reqs
+    all_params_used && not_rejected && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
   end
   |> Seq.filter begin fun (fillings, _) ->
     (* One final typecheck...apparently x :: x isn't valid... *)
-    try ignore @@ Typing.typedtree_sig_env_of_parsed (apply_fillings fillings prog) file_name; true
+    try ignore @@ Typing.typedtree_sig_env_of_parsed (apply_fillings fillings prog |> Bindings.synth_fixup) file_name; true
     with _ -> false
   end
   (* Return first valid filling. *)
@@ -1237,7 +1284,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec lookup
       if Unix.gettimeofday () -. start_sec > timeout_secs then
         (print_endline "Synth timeout"; None)
       else
-        fill_holes ~max_lprob:min_lprob start_sec lookup_exp_typed rejected_exp_hashes prog reqs file_name (* Keep trying, with lower prob threshold. *)
+        fill_holes ~max_lprob:min_lprob start_sec rejected_exp_hashes prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1274,12 +1321,7 @@ let best_result prog _trace assert_results file_name =
   let reqs = assert_results |>@ req_of_assert_result in
   (* print_string "Req "; *)
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  print_endline @@ "Typing " ^ StructItems.to_string prog;
-  let (typed_struct, _, _) =
-    try Typing.typedtree_sig_env_of_parsed prog file_name
-    with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
-  in
-  let type_lookups = Typing.type_lookups_of_typed_structure typed_struct in
+  (* print_endline @@ "Typing " ^ StructItems.to_string prog; *)
   let starting_hole_locs = hole_locs prog Loc_map.empty in
   let rejected_exp_hashes = ref Loc_map.empty in
   begin
@@ -1288,7 +1330,7 @@ let best_result prog _trace assert_results file_name =
       rejected_exp_hashes := Loc_map.add_all_to_key e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int) !rejected_exp_hashes
     end
   end;
-  match fill_holes start_sec type_lookups.lookup_exp !rejected_exp_hashes prog reqs file_name with
+  match fill_holes start_sec !rejected_exp_hashes prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
   | None -> print_endline "synth failed"; None
   | Some fillings' ->
@@ -1304,7 +1346,7 @@ let best_result prog _trace assert_results file_name =
         else e'
       end
     in
-    Some (apply_fillings fillings'' prog)
+    Some (apply_fillings fillings'' prog |> Bindings.synth_fixup)
 
 
 let try_async path =
