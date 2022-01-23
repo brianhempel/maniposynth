@@ -203,7 +203,8 @@ let handle_connection in_chan out_chan =
       print_endline request_str;
       respond_not_found request_str out_chan
   );
-  if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
+  if false && String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
+  (* if String.includes ".ml" request_str then print_endline @@ request_str ^ "\t" ^ string_of_float (1000. *. (Unix.gettimeofday () -. start_sec)) ^ "ms"; *)
   flush out_chan;
   close_in in_chan (* This apparently closes both channels. *)
 

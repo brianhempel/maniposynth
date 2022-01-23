@@ -147,6 +147,7 @@ let rec expand_named_example_to_pat env name (value : value) pat : value =
 (* Because we are not unevaluating yet, not guarenteed to succeed even where we might want it to. *)
 let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, value) as req) : req list =
   let open Eval in
+  (* print_endline @@ string_of_int !fuel ^ "\t" ^ Exp.to_string exp ^ "\t=\t" ^ value_to_string value; *)
   decr fuel;
   if !fuel <= 0 then raise No_fuel;
   (* print_endline @@ "Pushing down " ^ string_of_req req; *)
@@ -166,7 +167,8 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
   | None ->
     begin match exp.pexp_desc with
     | Pexp_let (recflag, vbs, e) ->
-      let env' = eval_bindings fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in
+      let env' = env in
+      (* let env' = eval_bindings ~alloc_fuel_per_binding:10 fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in *)
       let deeper_hole_reqs = recurse (env', e, value) in
       (* If a deeper req constrains a name defined here, transfer that constraint to the bound expression. *)
       deeper_hole_reqs
@@ -597,6 +599,10 @@ type hole_synth_env =
   (* print_endline @@ Formatter_to_stringifier.f pp_print_value evaled; *)
   Assert_comparison.values_equal_for_assert evaled expected *)
 
+(* START HERE *)
+(* push_down_req is getting stuck on divergent bindings, preventing match refinement (currently have let bindings disabled there) *)
+
+
 let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog =
   let fillings =
     (* Freshen non-holes. *)
@@ -616,8 +622,12 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
   let local_env = Interp.(eval_env_flag ~loc (stdlib_env ()) (Open (Longident.Lident "Stdlib"))) in
   Eval.with_throwing_asserts begin fun () ->
     try
-      ignore @@ Eval.eval_structure ~fuel_per_binding:300 Shared.Loc_map.empty Primitives.prims local_env Typing.empty_lookups.lookup_exp trace_state frame_no prog;
-      true
+      Eval.with_fuel 300
+        begin fun () ->
+          ignore @@ Eval.eval_structure Shared.Loc_map.empty Primitives.prims local_env Typing.empty_lookups.lookup_exp trace_state frame_no prog;
+          true
+        end
+        (fun () -> false)
     with _ ->
       false
   end
@@ -627,6 +637,7 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
     fillings
     |> Loc_map.values
     |>@@ Exp.flatten
+    |>@? (Exp.is_hole %> not)
     |>@ Exp.loc
     (* |>@ (fun loc -> print_endline @@ Loc.to_string loc; loc) *)
     |> List.for_all (fun loc -> Trace.entries_for_loc loc trace_state.trace <> [])
@@ -1001,7 +1012,7 @@ let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : pro
       match expected_output.v_, expected_output.type_opt with
       | ExCall _, _      -> ()
       | _, Some out_type -> exps_to_annotate := (f_body.pexp_loc, out_type) :: !exps_to_annotate
-      | _                -> ()
+      | _                -> () (* print_endline "asdfasdfasdf"; print_endline @@ value_to_string expected_output *)
     in
     ignore @@ push_down_req fillings prog ~lookup_exp_typed ~hit_a_function_f req;
     prog
@@ -1071,6 +1082,7 @@ let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (filling
   in *)
   (* ignore @@ exit 0; *)
   print_endline @@ string_of_int (List.length progs) ^ " programs will be used";
+  progs |> List.iter (fun prog -> print_endline @@ StructItems.to_string prog);
   let reqs' = reqs |>@@ push_down_req fillings prog in
   (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
   let rec fillings_seq (fillings, lprob) min_lprob hole_locs : (bool * fillings * lprob) Seq.t =
@@ -1081,7 +1093,7 @@ let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (filling
       |> Seq.flat_map begin fun (any_constant_holes, fillings, lprob) ->
         let synth_envs =
           progs |>@@ begin fun prog ->
-            let prog = apply_fillings fillings prog in
+            let prog = apply_fillings fillings prog |> Bindings.synth_fixup in
             let (typed_prog, _, _) =
               try Typing.typedtree_sig_env_of_parsed prog file_name
               with _ ->
@@ -1202,6 +1214,7 @@ let refine prog (fillings, lprob) reqs file_name next =
         | Some [type_path] ->
           let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
           let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
+          print_endline "REFINING";
           [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs scrutinee_lprob (mult_lprobs match_lprob lprob)) ]
         | _ -> []
       end
@@ -1238,7 +1251,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function (fillings, _lprob) ->
     (* if !terms_tested_count mod 10_000 = 0 then print_endline (string_of_int !terms_tested_count ^ "\t" ^ Exp.to_string term); *)
-    if !terms_tested_count mod 10_000 = 0 then begin
+    if !terms_tested_count mod 1_000 = 0 then begin
       let terms_per_sec = int_of_float @@ float_of_int !terms_tested_count /. (Unix.gettimeofday () -. start_sec) in
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ string_of_int terms_per_sec ^ " terms/sec\t" ^ StructItems.to_string (apply_fillings fillings top_level_sis_with_holes));
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)

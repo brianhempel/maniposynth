@@ -326,10 +326,10 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
         with Not_found -> (* print_endline @@ "ident " ^ Longident.last id.txt ^ " not found"; *) intro_bomb ()
       end
     | Pexp_constant c -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ value_of_constant c
-    | Pexp_let (recflag, vals, e) ->
+    | Pexp_let (recflag, vbs, e) ->
       (* Don't bother attaching vtrace to let results for now (the body exp will have an entry) *)
       let alloc_fuel_per_binding = if !fuel > 100 then !fuel - 50 else 50 in
-      eval_expr fillings prims (eval_bindings ~alloc_fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag vals) lookup_exp_typed trace_state frame_no e
+      eval_expr fillings prims (eval_bindings ~alloc_fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag vbs) lookup_exp_typed trace_state frame_no e
     | Pexp_function cl -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Function (cl, ref env)
     | Pexp_fun (label, default, p, e) -> add_type_opt (lookup_type_opt lookup_exp_typed expr.pexp_loc) @@ intro @@ new_vtrace @@ Fun (label, default, p, e, ref env)
     | Pexp_apply (f, l) -> ret @@
@@ -513,7 +513,9 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
       | Gather assert_results ->
         begin match parse_assert e with
         | Some (lhs_exp, expected_exp) ->
-          let actual   = (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no lhs_exp      with _ -> intro_bomb ()) in
+          let eval_lhs () = eval_expr fillings prims env lookup_exp_typed trace_state frame_no lhs_exp in
+          let allocation = if !fuel > 100 then !fuel - 50 else 50 in
+          let actual   = (try alloc_fuel allocation eval_lhs (fun () -> intro_bomb ())                        with _ -> intro_bomb ()) in
           let expected = (try eval_expr fillings prims env lookup_exp_typed trace_state frame_no expected_exp with _ -> intro_bomb ()) in
           let passed =
             begin match (try Some (value_compare actual expected) with _ -> None) with
