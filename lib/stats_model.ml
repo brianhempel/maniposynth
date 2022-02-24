@@ -79,14 +79,14 @@ let term_shape_count =
   counts.match_count +
   counts.fun_count
 
-let ctor_lprob  = lprob_by_counts ctor_count         term_shape_count
-let const_lprob = lprob_by_counts const_count        term_shape_count
-let app_lprob   = lprob_by_counts counts.app_count   term_shape_count
-let ite_lprob   = lprob_by_counts counts.ite_count   term_shape_count
-let ident_lprob = lprob_by_counts ident_count        term_shape_count
+let ctor_lprob  = lprob_by_counts ctor_count         term_shape_count (* 8.1% *)
+let const_lprob = lprob_by_counts const_count        term_shape_count (* 6.6% *)
+let app_lprob   = lprob_by_counts counts.app_count   term_shape_count (* 20% *)
+let ite_lprob   = lprob_by_counts counts.ite_count   term_shape_count (* 1.3% *)
+let ident_lprob = lprob_by_counts ident_count        term_shape_count (* 52% *)
 
-let match_lprob = lprob_by_counts counts.match_count term_shape_count
-let fun_lprob   = lprob_by_counts counts.fun_count   term_shape_count
+let match_lprob = lprob_by_counts counts.match_count term_shape_count (* 1.9% *)
+let fun_lprob   = lprob_by_counts counts.fun_count   term_shape_count (* 10% *)
 
 
 (* Given we are going to gen a ctor... *)
