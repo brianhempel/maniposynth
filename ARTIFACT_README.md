@@ -1,6 +1,7 @@
 # ![The Magnificent Maniposynth](assets/maniposynth.svg)
 
-![teaser](assets/teaser.png)
+<video controls width="250"><source src="assets/Maniposynth_Overview.mp4"type="video/mp4">Sorry, your browser doesn't support embedded videos.</video>
+[(Download video)](http://maniposynth.org/assets/Maniposynth_Overview.mp4)
 
 Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
 
