@@ -559,26 +559,23 @@ and eval_expr_exn fillings prims env lookup_exp_typed trace_state frame_no expr 
 
 (* fuel_per_binding is top-level only and not recursed to children *)
 and eval_bindings ?fuel_per_binding ?alloc_fuel_per_binding fillings prims env lookup_exp_typed trace_state frame_no recflag defs =
+  let fueled f out_of_fuel_f =
+    begin match fuel_per_binding, alloc_fuel_per_binding with
+    | Some fuel, _ -> with_fuel fuel f out_of_fuel_f (* Top level only, set fuel per binding. *)
+    | _, Some fuel -> alloc_fuel fuel f out_of_fuel_f (* Non-top level, we can't exceed our fuel allocation but might not want to spend it all on one binding *)
+    | _            -> f ()
+    end
+  in
   let bind_value env vb =
     let f () =
       let v = eval_expr fillings prims env lookup_exp_typed trace_state frame_no vb.pvb_expr in
       pattern_bind fillings prims env lookup_exp_typed trace_state frame_no v [] vb.pvb_pat v
     in
-    begin match fuel_per_binding with
-    | None -> begin match alloc_fuel_per_binding with
-      | None -> f ()
-      | Some fuel ->
-        (* Non-top level, we can't exceed our fuel allocation but might not want to spend it all on one binding *)
-        alloc_fuel fuel f
-          (* If out of fuel, set all var names to Bomb *)
-          (fun () -> vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env)
-      end
-    | Some fuel ->
-      (* Top level only, set fuel per binding. *)
-      with_fuel fuel f
-        (* If out of fuel, set all var names to Bomb *)
-        (fun () -> vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env)
-    end
+    let out_of_fuel_f () =
+      (* If out of fuel, set all var names to Bomb *)
+      vb.pvb_pat |> Shared.Ast.Pat.names |> List.fold_left (fun env name -> env_set_value name (new_vtrace Bomb) env) env
+    in
+    fueled f out_of_fuel_f
   in
   match recflag with
     | Nonrecursive ->
@@ -617,10 +614,7 @@ and eval_bindings ?fuel_per_binding ?alloc_fuel_per_binding fillings prims env l
       let dummy_env = List.fold_left (fun env vb -> env_set_value (single_name vb.pvb_pat) (new_vtrace Bomb) env) env defs in
       let vals = defs |> List.map begin fun vb ->
         let f () = eval_expr fillings prims dummy_env lookup_exp_typed trace_state frame_no vb.pvb_expr in
-        begin match fuel_per_binding with
-        | None      -> f ()
-        | Some fuel -> with_fuel fuel f (fun () -> new_vtrace Bomb) (* If out of fuel, value is Bomb *)
-        end
+        fueled f (fun () -> new_vtrace Bomb) (* If out of fuel, value is Bomb *)
       end in
       let nenv = List.fold_left2
         (* (fun env vb v -> env_set_value (single_name vb.pvb_pat) (pat_match vb.pvb_pat [] v v) env) *)
