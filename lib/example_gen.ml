@@ -61,7 +61,6 @@ and arg_candidates ?ctor_descs size_limit tenv type_as_arrows =
     end
 
 let examples_with_holes ?ctor_descs tenv typ =
-  (* START HERE *)
   let open Type in
   let open Types in
   if Type.is_var_type typ then [(Exp.hole, new_var ())] else

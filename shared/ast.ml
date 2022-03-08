@@ -817,6 +817,8 @@ module Vb = struct
 end
 
 module VbGroups = struct
+  type t = Asttypes.rec_flag * value_binding list
+
   let clear_empty_vb_groups struct_items =
     let map_sis mapper sis =
       dflt_mapper.structure mapper sis
@@ -982,6 +984,16 @@ module StructItems = struct
   let from_string = Lexing.from_string %> Parse.implementation
   let from_string_opt exp = try Some (from_string exp) with Syntaxerr.Error _ -> None
 
+  let vb_groups sis =
+    sis
+    |>@& begin fun si ->
+      match si.pstr_desc with
+      | Pstr_value (recflag, vbs) -> Some (recflag, vbs)
+      | _                         -> None
+    end
+
+  let vbs   = vb_groups %>@@ snd
+  let names = vbs %>@@ Vb.names
 
   (* Variable names introduced or used. Excludes ctors. *)
   (* Includes endings of qualified names, e.g. "x" in Thing.x *)

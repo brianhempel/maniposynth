@@ -14,14 +14,42 @@ open Stats_model
   - try using assert information to speculate types on holes, from specific to general (e.g. if assert result is (int list), try (int list), ('a list), and 'a)
 *)
 
+(*
+this is the problem. need a cycle check:
+
+
+type 'a tree = Node of 'a tree * 'a tree | Leaf of 'a
+
+let tree = Node (Node (Leaf 0, Leaf 1), Leaf 0) [@@pos 29, 673]
+
+let rec fold f tree acc =
+  match tree with
+  | Node (a_tree, a_tree2) ->
+      let fold_f = fold f a_tree2 (??) [@@pos 627, 161] in
+      let fold2 = fold f a_tree (??) [@@pos 170, 141] in
+      (??)
+  | Leaf (a2[@pos 271, 12]) ->
+      let f_a = f a2 acc [@@pos 344, 16] in
+      f_a
+  [@@pos 13, 78]
+
+let () = assert (fold (fun a b -> a + b) tree 0 = 1) [@@pos 485, 113]
+
+let int_tree = Node (Leaf 0, Node (Leaf 0, Leaf 24)) [@@pos 113, 954]
+
+let () = assert (fold (fun a b -> a + b) int_tree 1 = 25) [@@pos 712, 191]
+
+let () = assert (fold List.cons int_tree [] = [ 0; 0; 24 ]) [@@pos 343, 313]
+
+
+*)
+
 let terms_tested_count = ref 0
 let timeout_secs       = 10.0
 
 type fillings = expression Loc_map.t
 
-(* Apply until fixpoint. *)
-let rec apply_fillings fillings prog =
-  let changed = ref false in
+  (* let changed = ref false in
   let prog' =
     Loc_map.bindings fillings
     |> List.fold_left begin fun prog (loc, exp) ->
@@ -30,8 +58,9 @@ let rec apply_fillings fillings prog =
   in
   if !changed
   then apply_fillings fillings prog'
-  else prog'
+  else prog' *)
 
+(* Apply until fixpoint. *)
 let rec apply_fillings_to_exp fillings root_exp =
   let changed = ref false in
   let root_exp' =
@@ -49,6 +78,10 @@ let rec apply_fillings_to_exp fillings root_exp =
   then apply_fillings_to_exp fillings root_exp'
   else root_exp'
 
+let apply_fillings fillings prog =
+  let targets = Loc_map.keys fillings in
+  prog
+  |> Exp.map_by (fun e -> List.mem e.pexp_loc targets) (apply_fillings_to_exp fillings)
 
 (* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
 type req = Data.env * expression * value
@@ -167,8 +200,8 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
   | None ->
     begin match exp.pexp_desc with
     | Pexp_let (recflag, vbs, e) ->
-      let env' = env in
-      (* let env' = eval_bindings ~alloc_fuel_per_binding:10 fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in *)
+      (* let env' = env in *)
+      let env' = eval_bindings ~alloc_fuel_per_binding:10 fillings prims env lookup_exp_typed trace_state frame_no recflag vbs in
       let deeper_hole_reqs = recurse (env', e, value) in
       (* If a deeper req constrains a name defined here, transfer that constraint to the bound expression. *)
       deeper_hole_reqs
@@ -411,6 +444,7 @@ let program_size prog = ast_size (fun iterator -> iterator.structure iterator pr
 exception Found_names of string list
 
 (* Estimate that all names syntactically under a lambda are "non-constant". *)
+(* Exculude structure-introduced names. *)
 let nonconstant_names_at target_loc prog =
   let dflt_iter = Ast.dflt_iter in
   let in_func = ref false in
@@ -466,6 +500,12 @@ let nonconstant_names_at target_loc prog =
     (* print_endline @@ "nonconstant_names_at: " ^ String.concat ", " names; *)
     SSet.of_list names
 
+(*
+  Not the same logic as asking what are all the nonlinear names available at a location.
+
+  Because of our definition of "non-constant", the names available
+  are more circumscribed (we ignore struct-introduced names).
+*)
 let nonlinear_nonconstant_names_at target_loc prog =
   let open Bindings in
   rearrangement_roots_at target_loc prog
@@ -572,8 +612,6 @@ let all_parameter_names_used fillings prog =
     true
   with Unused_name ->
     false
-
-
 
 
 type hole_synth_env =
@@ -1268,7 +1306,6 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
         not (List.mem (Hashtbl.hash hole_exp_str) hole_rejected_hashes)
       end
     in
-    let all_params_used = all_parameter_names_used fillings top_level_sis_with_holes in
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
@@ -1278,8 +1315,10 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
     end else
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
-
-    all_params_used && not_rejected && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
+    not_rejected
+    && all_parameter_names_used fillings top_level_sis_with_holes
+    (* && all_letexps_with_holes_used fillings top_level_sis_with_holes *)
+    && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
   end
   |> Seq.filter begin fun (fillings, _) ->
     (* One final typecheck...apparently x :: x isn't valid... *)
