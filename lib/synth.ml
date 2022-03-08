@@ -44,8 +44,23 @@ let () = assert (fold List.cons int_tree [] = [ 0; 0; 24 ]) [@@pos 343, 313]
 
 *)
 
-let terms_tested_count = ref 0
-let timeout_secs       = 10.0
+let _ =
+  let prog = StructItems.from_string {|
+let rec fold f tree acc =
+  let fold_f = fold f a_tree2 fold2 [@@pos 627, 161] in
+  let fold2 = fold f a_tree fold_f [@@pos 170, 141] in
+  (??)
+  |}
+  in
+  print_endline ("Fixing up: " ^ StructItems.to_string prog);
+  let prog' = Bindings.synth_fixup prog in
+  print_endline ("Fixed up: " ^ StructItems.to_string prog')
+
+
+let terms_tested_count         = ref 0
+let timeout_secs               = 10.0
+let fuel_per_top_level_binding = 300
+
 
 type fillings = expression Loc_map.t
 
@@ -660,12 +675,8 @@ let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
   let local_env = Interp.(eval_env_flag ~loc (stdlib_env ()) (Open (Longident.Lident "Stdlib"))) in
   Eval.with_throwing_asserts begin fun () ->
     try
-      Eval.with_fuel 300
-        begin fun () ->
-          ignore @@ Eval.eval_structure Shared.Loc_map.empty Primitives.prims local_env Typing.empty_lookups.lookup_exp trace_state frame_no prog;
-          true
-        end
-        (fun () -> false)
+      ignore @@ Eval.eval_structure ~fuel_per_binding:fuel_per_top_level_binding Shared.Loc_map.empty Primitives.prims local_env Typing.empty_lookups.lookup_exp trace_state frame_no prog;
+      true
     with _ ->
       false
   end
@@ -1422,7 +1433,7 @@ let try_async path =
     let lookup_exp_typed = Typing.exp_typed_lookup_of_parsed_with_error_recovery parsed path in
     let (trace, assert_results) =
       Eval.with_gather_asserts begin fun () ->
-        Interp.run_parsed ~fuel_per_top_level_binding:10_000 lookup_exp_typed parsed path
+        Interp.run_parsed ~fuel_per_top_level_binding lookup_exp_typed parsed path
       end in
     begin match best_result parsed trace assert_results path |>& remove_unnecessary_rec_flags with
     | Some result ->

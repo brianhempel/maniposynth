@@ -499,9 +499,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
     | Pexp_assert e ->
       begin match !asserts_mode with
       | Throw_exception ->
-        if is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)
-        then unit
-        else (
+        let assertion_failed () =
           (*failwith "assert failure"*)
           let loc = expr.pexp_loc in
           let Lexing.{ pos_fname; pos_lnum; pos_cnum; _ } =
@@ -509,7 +507,13 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
           in
           raise
             (InternalException
-              (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum)))
+              (Runtime_base.assert_failure_exn pos_fname pos_lnum pos_cnum))
+        in
+        begin match is_true (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e) with
+        | true              -> unit
+        | _                 -> assertion_failed ()
+        | exception No_fuel -> assertion_failed ()
+        end
       | Gather assert_results ->
         begin match parse_assert e with
         | Some (lhs_exp, expected_exp) ->
