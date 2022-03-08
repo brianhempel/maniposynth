@@ -171,10 +171,10 @@ let rec extract_vb_group_with_name_top_level name struct_items =
 let rec extract_vb_group_with_name name body =
   let recurse = extract_vb_group_with_name name in
   match body.pexp_desc with
-  | Pexp_let (recflag, vbs, body) when List.mem name (vbs |>@@ Vb.names)  -> Some (recflag, vbs, body)
-  | Pexp_let (recflag, vbs, body)                                         -> recurse body |>& Tup3.map_thd (fun body' -> { body with pexp_desc = Pexp_let (recflag, vbs, body') })
-  | Pexp_sequence (e1, e2) (* Treat Pexp_sequence as let () = e1 in e2 *) -> recurse e2   |>& Tup3.map_thd (fun e2'   -> { body with pexp_desc = Pexp_sequence (e1, e2') })
-  | Pexp_letmodule (str_loced, mod_exp, body)                             -> recurse body |>& Tup3.map_thd (fun body' -> { body with pexp_desc = Pexp_letmodule (str_loced, mod_exp, body') })
+  | Pexp_let (recflag, vbs, body) when List.mem name (vbs |>@@ Vb.names)  -> Some (recflag, vbs, body, name)
+  | Pexp_let (recflag, vbs, body)                                         -> recurse body |>& Tup4.map_thd (fun body' -> { body with pexp_desc = Pexp_let (recflag, vbs, body') })
+  | Pexp_sequence (e1, e2) (* Treat Pexp_sequence as let () = e1 in e2 *) -> recurse e2   |>& Tup4.map_thd (fun e2'   -> { body with pexp_desc = Pexp_sequence (e1, e2') })
+  | Pexp_letmodule (str_loced, mod_exp, body)                             -> recurse body |>& Tup4.map_thd (fun body' -> { body with pexp_desc = Pexp_letmodule (str_loced, mod_exp, body') })
   | _                                                                     -> None
 
 let move_type_decls_to_top struct_items =
@@ -194,7 +194,7 @@ let rec rearrange_struct_items struct_items =
   let movable_names   = StructItems.names struct_items in
   rearrange_struct_items' movable_names struct_items
 
-and rearrange_struct_items' later_movable_names struct_items =
+and rearrange_struct_items' ?(names_already_moved_here = []) later_movable_names struct_items =
   let recurse = rearrange_struct_items' in
   let recurse_exp = rearrange_exp in
   let recurse_mod = rearrange_mod in
@@ -207,7 +207,11 @@ and rearrange_struct_items' later_movable_names struct_items =
       | name::other_names ->
         begin match extract_vb_group_with_name_top_level name rest with
         | None                       -> fix_a_name_and_continue later_movable_names' si' other_names
-        | Some (recflag, vbs, rest') -> recurse later_movable_names (StructItem.value recflag vbs :: si' :: rest')
+        | Some (recflag, vbs, rest') ->
+          (* Cycle check. *)
+          if List.mem name names_already_moved_here
+          then fix_a_name_and_continue later_movable_names' si' other_names
+          else recurse ~names_already_moved_here:(name::names_already_moved_here) later_movable_names (StructItem.value recflag vbs :: si' :: rest')
         end
       end
     in
@@ -267,9 +271,11 @@ and rearrange_vbs later_movable_names recflag vbs =
 
 and rearrange_exp exp =
   let movable_names = movable_names_exp exp in
+  (* print_endline (movable_names |> String.concat ", ");
+  print_endline (Exp.to_string exp); *)
   rearrange_exp' movable_names exp
 
-and rearrange_exp' later_movable_names exp =
+and rearrange_exp' ?(names_already_moved_here = []) later_movable_names exp =
   let recurse = rearrange_exp' in
   (* let continue exp =
     (fun desc' -> { exp with pexp_desc = desc' }) @@
@@ -279,35 +285,39 @@ and rearrange_exp' later_movable_names exp =
     | Pexp_letmodule (str_loced, mod_exp, body) -> Pexp_letmodule (str_loced, mod_exp, recurse later_movable_names body)
     end
   in *)
-  let rewrap desc' = { exp with pexp_desc = desc' } in
   let extract_a_name body names_needed =
-    names_needed
+    List.diff names_needed names_already_moved_here (* Avoid cycles. *)
     |> List.findmap_opt (fun name -> extract_vb_group_with_name name body)
   in
   let recurse_case { pc_lhs; pc_guard; pc_rhs } =
     { pc_lhs = pc_lhs; pc_guard = pc_guard |>& rearrange_exp; pc_rhs = rearrange_exp pc_rhs }
   in
+  let rewrap desc' = { exp with pexp_desc = desc' } in
+  let wrap_with_let_and_continue new_recflag new_vbs name desc' =
+    Exp.let_ new_recflag new_vbs { exp with pexp_desc = desc' }
+    |> recurse ~names_already_moved_here:(name::names_already_moved_here) later_movable_names
+  in
   match exp.pexp_desc with
   | Pexp_let (recflag, vbs, body) ->
     let later_movable_names', recflag', vbs', names_needed = rearrange_vbs later_movable_names recflag vbs in
     begin match extract_a_name body names_needed with
-    | None                               -> Pexp_let (recflag', vbs', body)  |> rewrap
-    | Some (new_recflag, new_vbs, body') -> Pexp_let (recflag', vbs', body') |> rewrap |> Exp.let_ new_recflag new_vbs |> recurse later_movable_names'
+    | None                                     -> Pexp_let (recflag', vbs', rearrange_exp' later_movable_names' body) |> rewrap
+    | Some (new_recflag, new_vbs, body', name) -> Pexp_let (recflag', vbs', body') |> wrap_with_let_and_continue new_recflag new_vbs name
     end
   (* Treat Pexp_sequence as let () = e1 in e2 *)
   | Pexp_sequence (e1, e2) ->
     let e1' = recurse later_movable_names e1 in
     let names_needed = List.inter (free_unqualified_names e1') later_movable_names in
     begin match extract_a_name e2 names_needed with
-    | None                             -> Pexp_sequence (e1', e2)  |> rewrap
-    | Some (new_recflag, new_vbs, e2') -> Pexp_sequence (e1', e2') |> rewrap |> Exp.let_ new_recflag new_vbs |> recurse later_movable_names
+    | None                                   -> Pexp_sequence (e1', recurse later_movable_names e2)  |> rewrap
+    | Some (new_recflag, new_vbs, e2', name) -> Pexp_sequence (e1', e2') |> wrap_with_let_and_continue new_recflag new_vbs name
     end
   | Pexp_letmodule (str_loced, mod_exp, body) ->
     let mod_exp' = rearrange_mod mod_exp in
     let names_needed = List.inter (free_unqualified_names_mod mod_exp') later_movable_names in
     begin match extract_a_name body names_needed with
-    | None                               -> Pexp_letmodule (str_loced, mod_exp', body)  |> rewrap
-    | Some (new_recflag, new_vbs, body') -> Pexp_letmodule (str_loced, mod_exp', body') |> rewrap |> Exp.let_ new_recflag new_vbs |> recurse later_movable_names
+    | None                                     -> Pexp_letmodule (str_loced, mod_exp', recurse later_movable_names body)  |> rewrap
+    | Some (new_recflag, new_vbs, body', name) -> Pexp_letmodule (str_loced, mod_exp', body') |> wrap_with_let_and_continue new_recflag new_vbs name
     end
   | Pexp_ident _
   | Pexp_new   _
