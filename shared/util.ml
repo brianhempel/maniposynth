@@ -454,7 +454,7 @@ let write_file contents path =
 let time message f =
   let start_sec = Unix.gettimeofday () in
   let result = f () in
-  print_endline @@ message ^ "\t" ^ string_of_float (1000.0 *. (Unix.gettimeofday () -. start_sec));
+  print_endline @@ message ^ "\t" ^ string_of_float (1000.0 *. (Unix.gettimeofday () -. start_sec)) ^ "ms";
   result
 
 let sample_this_process output_path =

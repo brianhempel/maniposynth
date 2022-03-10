@@ -302,7 +302,23 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
       |> Attr.remove_name "accept_or_reject"
       |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e |> Exp.to_string |> Hashtbl.hash |> Exp.int_lit)
     in
-    Exp.map_at loc (fun e -> { Exp.hole with pexp_attributes = change_attrs e })
+    (* Because of non-linearity, sometimes let-bindings will be pulled into a hole (when the hole was refined to a match). *)
+    (* Need to pull those back out, so we don't discard them when the hole is rejected. *)
+    (* Returns list of (expression -> expression) funtions that will take an exp and wrap it with the let-binding *)
+    let rec gather_lets exp : (expression -> expression) list =
+      match exp.pexp_desc with
+      | Pexp_let (recflag, vbs, e)             -> (fun e'  -> { exp with pexp_desc = Pexp_let (recflag, vbs, e')             }) :: gather_lets e
+      | Pexp_sequence (e1, e2)                 -> (fun e2' -> { exp with pexp_desc = Pexp_sequence (e1, e2')                 }) :: gather_lets e2
+      | Pexp_letmodule (str_loced, mod_exp, e) -> (fun e'  -> { exp with pexp_desc = Pexp_letmodule (str_loced, mod_exp, e') }) :: gather_lets e
+      | Pexp_match (_, cases)                  -> cases |>@ Case.rhs |>@@ gather_lets
+      | _                                      -> []
+    in
+    Exp.map_at loc begin fun e ->
+      let lets_as_wrappers = gather_lets e in
+      let e_rewrapped = List.fold_right (fun wrap e -> wrap e) lets_as_wrappers Exp.hole in
+      { e_rewrapped with pexp_attributes = change_attrs e }
+    end
+    %> Bindings.fixup final_tenv
   | Undo ->
     Undo_redo.undo path
   | Redo ->

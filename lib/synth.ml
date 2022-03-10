@@ -44,7 +44,7 @@ let () = assert (fold List.cons int_tree [] = [ 0; 0; 24 ]) [@@pos 343, 313]
 
 *)
 
-let _ =
+(* let _ =
   let prog = StructItems.from_string {|
 let rec fold f tree acc =
   let fold_f = fold f a_tree2 fold2 [@@pos 627, 161] in
@@ -54,7 +54,7 @@ let rec fold f tree acc =
   in
   print_endline ("Fixing up: " ^ StructItems.to_string prog);
   let prog' = Bindings.synth_fixup prog in
-  print_endline ("Fixed up: " ^ StructItems.to_string prog')
+  print_endline ("Fixed up: " ^ StructItems.to_string prog') *)
 
 
 let terms_tested_count         = ref 0
