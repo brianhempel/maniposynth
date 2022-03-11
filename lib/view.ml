@@ -565,23 +565,28 @@ let html_of_values_for_pat ?(single_line_only = false) stuff pat =
 
 type parens_context = NoParens | NormalArg | NextToInfixOp
 
-let accept_or_reject_options_html ?(item_name = "") exp =
+let accept_or_reject_options_html ?(item_name = "") prog exp =
   let ast_size_change =
     (* AST size of expression, less any holes or nested expressions that are also pending accept/reject *)
     (* For synth stats for paper. *)
     let with_all_descendents_rejected =
       { exp with pexp_attributes = [] }
-      |> Exp.FromNode.replace_by (fun e -> Attr.has_tag "accept_or_reject" e.pexp_attributes) Exp.hole
+      |> Exp.FromNode.replace_by Synth.has_accept_reject_tag Exp.hole
       |> Attrs.remove_all_deep_exp
     in
     let hole_count = with_all_descendents_rejected |> Exp.FromNode.count Exp.is_hole in
     Synth.exp_size with_all_descendents_rejected - hole_count
   in
-  span ~attrs:[("class","accept-or-reject-options")]
+  (* Only show "try again" button when there's one accept/reject left. *)
+  let perhaps_try_again =
+    if Exp.count Synth.has_accept_reject_tag prog = 1
+    then [ button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"] ]
+    else []
+  in
+  span ~attrs:[("class","accept-or-reject-options")] @@
     [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size-change", string_of_int ast_size_change)] ["✅ Accept " ^ item_name]
     ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject " ^ item_name]
-    ; button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"]
-    ]
+    ] @ perhaps_try_again
 
 
 
@@ -609,10 +614,10 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     let type_error_htmls = type_error_htmls stuff exp.pexp_loc in
     let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
     let (perhaps_accept_reject_class, perhaps_accept_or_reject_html) =
-      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
+      if Synth.has_accept_reject_tag exp
       then
         ( " accept-or-reject-exp"
-        , [ accept_or_reject_options_html exp ]
+        , [ accept_or_reject_options_html stuff.prog exp ]
         )
       else ("", [])
     in
@@ -716,8 +721,8 @@ and ret_tree_html stuff exp =
   | Pexp_letmodule (_, _, e)      -> recurse e
   | Pexp_match (scrutinee, cases) ->
     let perhaps_accept_or_reject =
-      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
-      then [accept_or_reject_options_html ~item_name:"case split" exp]
+      if Synth.has_accept_reject_tag exp
+      then [accept_or_reject_options_html ~item_name:"case split" stuff.prog exp]
       else []
     in
     let (_, attrs) = exp_gunk stuff exp in
@@ -816,8 +821,8 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
         ] @ tds @ [td ~attrs:[("class", "new-expectation-return")] [textbox []]]
     in
     let perhaps_accept_or_reject =
-      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
-      then [accept_or_reject_options_html ~item_name:"function introduction" exp]
+      if Synth.has_accept_reject_tag exp
+      then [accept_or_reject_options_html ~item_name:"function introduction" stuff.prog exp]
       else []
     in
     (* Technically, a function is a value and one can argue the above code should be in html_of_values_for_exp *)

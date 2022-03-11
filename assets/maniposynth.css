@@ -541,7 +541,7 @@ table.subvalue-annotations td {
 .case > .return {
   text-align: left;
 }
-.scrutinee + .cases > .case > .pat {
+.match > .cases > .case > .pat {
   font-size: 0.8em;
   margin-top: -1.2em;
   color: var(--pat-color);
@@ -550,8 +550,7 @@ table.subvalue-annotations td {
   position: absolute;
 
 }
-.scrutinee:hover + .cases > .case > .pat,
-.scrutinee + .cases:hover > .case > .pat {
+.match:hover > .cases > .case > .pat {
   opacity: 1;
 }
 .return {

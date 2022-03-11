@@ -1417,6 +1417,9 @@ let remove_unnecessary_rec_flags prog =
       | vb_group -> vb_group
   end
 
+
+let has_accept_reject_tag exp = Attr.has_tag "accept_or_reject" exp.pexp_attributes
+
 let best_result prog _trace assert_results file_name =
   terms_tested_count := 0;
   let start_sec = Unix.gettimeofday () in
