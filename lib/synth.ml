@@ -76,6 +76,7 @@ type fillings = expression Loc_map.t
   else prog' *)
 
 (* Apply until fixpoint. *)
+(* Preserves attrs on holes (so we can test hole rejection attrs after binding fixups) *)
 let rec apply_fillings_to_exp fillings root_exp =
   let changed = ref false in
   let root_exp' =
@@ -84,7 +85,7 @@ let rec apply_fillings_to_exp fillings root_exp =
       root_exp
       |> Exp.FromNode.map begin fun e ->
         if e.pexp_loc = loc then
-          (changed := true; e')
+          (changed := true; { e' with pexp_attributes = e'.pexp_attributes @ e.pexp_attributes })
         else e
       end
     end root_exp
@@ -97,6 +98,9 @@ let apply_fillings fillings prog =
   let targets = Loc_map.keys fillings in
   prog
   |> Exp.map_by (fun e -> List.mem e.pexp_loc targets) (apply_fillings_to_exp fillings)
+
+let rejection_hash_of_exp = Attrs.remove_all_deep_exp %> Exp.to_string %> Hashtbl.hash
+
 
 (* Constraints/examples. But "constraint" is an OCaml keyword, so let's call them "req"s *)
 type req = Data.env * expression * value
@@ -1275,7 +1279,7 @@ let refine prog (fillings, lprob) reqs file_name next =
 
 let abort_lprob = log(min_float) (* If using 64bit floats directly (rather than lprobs), enter denormalized IEEE numbers after this (which is close to rounding off to zero). We never get close to this. *)
 
-let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec rejected_exp_hashes prog reqs file_name : fillings option =
+let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec prog reqs file_name : fillings option =
   let start_hole_locs = hole_locs prog Loc_map.empty in
   if  start_hole_locs = [] then (print_endline "no holes"; Some Loc_map.empty) else
   if max_lprob <= abort_lprob then (print_endline "aborting"; None) else
@@ -1306,17 +1310,6 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
     end;
     incr terms_tested_count;
-    let not_rejected =
-      fillings
-      |> Loc_map.for_all begin fun hole_loc filling_exp ->
-        let hole_rejected_hashes = Loc_map.all_at_key hole_loc rejected_exp_hashes in
-        if hole_rejected_hashes = [] then true else
-        let hole_exp_str = Exp.to_string (apply_fillings_to_exp fillings filling_exp) in
-        (* print_endline hole_exp_str; *)
-        (* if String.includes "[3;2;1]" hole_exp_str then (); *)
-        not (List.mem (Hashtbl.hash hole_exp_str) hole_rejected_hashes)
-      end
-    in
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)
     (* print_endline code; *)
@@ -1326,15 +1319,34 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
     end else
       false *)
     (* reqs |> List.iter (fun req -> print_endline @@ string_of_req req ^ " is satisfied: " ^ string_of_bool (is_req_satisified_by fillings req)); *)
-    not_rejected
-    && all_parameter_names_used fillings top_level_sis_with_holes
+    all_parameter_names_used fillings top_level_sis_with_holes
     (* && all_letexps_with_holes_used fillings top_level_sis_with_holes *)
     && reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog
   end
   |> Seq.filter begin fun (fillings, _) ->
-    (* One final typecheck...apparently x :: x isn't valid... *)
-    try ignore @@ Typing.typedtree_sig_env_of_parsed (apply_fillings fillings prog |> Bindings.synth_fixup) file_name; true
-    with _ -> false
+    (* Rejection check needs to happen after binding reordering, since that's the expression rejected by the user. *)
+    let final_prog = apply_fillings fillings prog |> Bindings.synth_fixup in
+    let not_rejected =
+      final_prog
+      |> Exp.all
+      |> List.for_all begin fun e ->
+        let rejected_exp_hashes = Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int in
+        rejected_exp_hashes = [] || not (List.mem (rejection_hash_of_exp e) rejected_exp_hashes)
+      end
+      (* fillings
+      |> Loc_map.for_all begin fun hole_loc filling_exp ->
+        let hole_rejected_hashes = Loc_map.all_at_key hole_loc rejected_exp_hashes in
+        if hole_rejected_hashes = [] then true else
+        let hole_exp = apply_fillings_to_exp fillings filling_exp in
+       not (List.mem (rejection_hash_of_exp hole_exp) hole_rejected_hashes)
+      end *)
+    in
+    let typechecks () =
+      (* One final typecheck...apparently x :: x isn't valid... *)
+      try ignore @@ Typing.typedtree_sig_env_of_parsed final_prog file_name; true
+      with _ -> false
+    in
+    not_rejected && typechecks ()
   end
   (* Return first valid filling. *)
   |> begin fun seq ->
@@ -1347,7 +1359,7 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec reject
       if Unix.gettimeofday () -. start_sec > timeout_secs then
         (print_endline "Synth timeout"; None)
       else
-        fill_holes ~max_lprob:min_lprob start_sec rejected_exp_hashes prog reqs file_name (* Keep trying, with lower prob threshold. *)
+        fill_holes ~max_lprob:min_lprob start_sec prog reqs file_name (* Keep trying, with lower prob threshold. *)
   end
 
 let make_bindings_with_holes_recursive prog =
@@ -1386,14 +1398,7 @@ let best_result prog _trace assert_results file_name =
   (* reqs |> List.iter (string_of_req %> print_endline); *)
   (* print_endline @@ "Typing " ^ StructItems.to_string prog; *)
   let starting_hole_locs = hole_locs prog Loc_map.empty in
-  let rejected_exp_hashes = ref Loc_map.empty in
-  begin
-    prog
-    |> Exp.iter begin fun e ->
-      rejected_exp_hashes := Loc_map.add_all_to_key e.pexp_loc (Attr.findall_exp "not" e.pexp_attributes |>@& Exp.int) !rejected_exp_hashes
-    end
-  end;
-  match fill_holes start_sec !rejected_exp_hashes prog reqs file_name with
+  match fill_holes start_sec prog reqs file_name with
   | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
   | None -> print_endline "synth failed"; None
   | Some fillings' ->

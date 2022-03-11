@@ -300,11 +300,38 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
     let change_attrs e =
       e.pexp_attributes
       |> Attr.remove_name "accept_or_reject"
-      |> Attr.add_exp "not" (Attrs.remove_all_deep_exp e |> Exp.to_string |> Hashtbl.hash |> Exp.int_lit)
+      |> Attr.add_exp "not" (Synth.rejection_hash_of_exp e |> Exp.int_lit)
     in
     (* Because of non-linearity, sometimes let-bindings will be pulled into a hole (when the hole was refined to a match). *)
     (* Need to pull those back out, so we don't discard them when the hole is rejected. *)
-    (* Returns list of (expression -> expression) funtions that will take an exp and wrap it with the let-binding *)
+    (* Example: *)
+    (*
+      let rec length list =
+        let length2 = length (??) [@@pos 248, -5] in
+        (??)
+        [@@pos 0, 119]
+
+      let () = assert (length [ 0; 0; 0 ] = 3) [@@pos 546, 100]
+
+      ...will eventually synth to...
+
+      let rec length list =
+        match[@not 654274102] [@accept_or_reject] [@not 654274102] list with
+        | [] -> 3
+        | hd :: tail ->
+            let length2 =
+              length (tail [@not 156427255] [@accept_or_reject] [@not 156427255])
+              [@@pos 248, -5]
+            in
+            length2
+        [@@pos 0, 119]
+
+      ...and we want rejection of the match to
+      (a) not discard the length2 let-binding
+      (b) actually cause a different term to be synthesized the next time around.
+    *)
+    (* START HERE: want to offer terminal exps of a synthesized match for accept/reject. *)
+    (* gather_lets returns list of (expression -> expression) funtions that will take an exp and wrap it with the let-binding *)
     let rec gather_lets exp : (expression -> expression) list =
       match exp.pexp_desc with
       | Pexp_let (recflag, vbs, e)             -> (fun e'  -> { exp with pexp_desc = Pexp_let (recflag, vbs, e')             }) :: gather_lets e
@@ -313,10 +340,16 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
       | Pexp_match (_, cases)                  -> cases |>@ Case.rhs |>@@ gather_lets
       | _                                      -> []
     in
+    (* If any of those bindings also had holes with synth results, turn them back into holes because they may have depended on variables introduced by the match (the match we are removing). *)
+    let reject_all_pending_subexps =
+      Exp.FromNode.map_by
+        (fun e -> Attr.has_tag "accept_or_reject" e.pexp_attributes)
+        (fun e -> { e with pexp_desc = Exp.hole.pexp_desc; pexp_attributes = Attr.remove_name "accept_or_reject" e.pexp_attributes })
+    in
     Exp.map_at loc begin fun e ->
       let lets_as_wrappers = gather_lets e in
-      let e_rewrapped = List.fold_right (fun wrap e -> wrap e) lets_as_wrappers Exp.hole in
-      { e_rewrapped with pexp_attributes = change_attrs e }
+      let e_rewrapped = List.fold_right (fun wrap e -> wrap e) lets_as_wrappers { Exp.hole with pexp_attributes = change_attrs e } in
+      e_rewrapped |> reject_all_pending_subexps
     end
     %> Bindings.fixup final_tenv
   | Undo ->
