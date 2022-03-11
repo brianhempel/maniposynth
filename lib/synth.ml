@@ -1403,15 +1403,23 @@ let best_result prog _trace assert_results file_name =
   | None -> print_endline "synth failed"; None
   | Some fillings' ->
     print_endline @@ "synth success. " ^ string_of_float (Unix.gettimeofday () -. start_sec) ^ "s";
-    (* Preserve original attrs on hole, and add "accept_or_reject" tag. *)
+    (* Add "accept_or_reject" tag to starting holes, and to branch return expression of introduced matches. *)
+    let set_accept_reject_tag e = { e with pexp_attributes = Attr.set_tag "accept_or_reject" e.pexp_attributes } in
     let fillings'' =
       fillings'
       |> Loc_map.mapi begin fun loc e' ->
         if List.mem loc starting_hole_locs
-        then
-          let orig = Exp.find loc prog in
-          { e' with pexp_attributes = Attr.set_tag "accept_or_reject" orig.pexp_attributes }
+        then set_accept_reject_tag e'
         else e'
+      end
+      |> Loc_map.map begin fun e' ->
+        begin match e'.pexp_desc with
+        | Pexp_match (scrutinee, cases) ->
+          let cases' = cases |>@ Case.map_rhs set_accept_reject_tag in
+          { e' with pexp_desc = Pexp_match (scrutinee, cases') }
+        | _ ->
+          e'
+        end
       end
     in
     Some (apply_fillings fillings'' prog |> Bindings.synth_fixup)
