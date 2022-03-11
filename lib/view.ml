@@ -565,10 +565,10 @@ let html_of_values_for_pat ?(single_line_only = false) stuff pat =
 
 type parens_context = NoParens | NormalArg | NextToInfixOp
 
-let accept_or_reject_options_html exp =
+let accept_or_reject_options_html ?(item_name = "") exp =
   span ~attrs:[("class","accept-or-reject-options")]
-    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size", string_of_int (Synth.exp_size (Attrs.remove_all_deep_exp exp)))] ["✅ Accept"]
-    ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject"]
+    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size", string_of_int (Synth.exp_size (Attrs.remove_all_deep_exp exp)))] ["✅ Accept " ^ item_name]
+    ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject " ^ item_name]
     ; button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"]
     ]
 
@@ -706,7 +706,7 @@ and ret_tree_html stuff exp =
   | Pexp_match (scrutinee, cases) ->
     let perhaps_accept_or_reject =
       if Attr.has_tag "accept_or_reject" exp.pexp_attributes
-      then [accept_or_reject_options_html exp]
+      then [accept_or_reject_options_html ~item_name:"case split" exp]
       else []
     in
     let (_, attrs) = exp_gunk stuff exp in
@@ -804,13 +804,19 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
         [ td ~attrs:[("class", "returns-label")] ["Return"]
         ] @ tds @ [td ~attrs:[("class", "new-expectation-return")] [textbox []]]
     in
+    let perhaps_accept_or_reject =
+      if Attr.has_tag "accept_or_reject" exp.pexp_attributes
+      then [accept_or_reject_options_html ~item_name:"function introduction" exp]
+      else []
+    in
     (* Technically, a function is a value and one can argue the above code should be in html_of_values_for_exp *)
     (* Don't remember why I double wrapped this. But when I do, hovering over a top level value causes other top level functions to gray out because there's no child element that has the same frameNo as the top level. So let's try not double wrapping and see what happens... *)
     (* div ~attrs:[("class", "tv")] [ *)
       div ~attrs:[("class", "fun exp tv")] begin
         [ table @@ param_rows @ [ret_row] ] @
         [ div ~attrs:[("class", "add-expectation");("title", "Add example call")] ["+"]] @
-        local_canvas_vbs_and_returns_htmls stuff body
+        local_canvas_vbs_and_returns_htmls stuff body @
+        perhaps_accept_or_reject
       end
     (* ] *)
   | Some ({ pexp_desc = Pexp_assert e; _ }) ->

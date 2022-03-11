@@ -680,10 +680,12 @@ table.subvalue-annotations td {
   padding: var(--padding) calc(var(--padding) * 3);
   cursor: pointer;
 }
+.fun > .accept-or-reject-options,
 .match > .accept-or-reject-options {
   padding-top: var(--padding);
   display: grid;
 }
+.fun > .accept-or-reject-options button,
 .match > .accept-or-reject-options button {
   text-align: center;
 }
