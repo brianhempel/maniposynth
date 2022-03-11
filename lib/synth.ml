@@ -1210,72 +1210,78 @@ let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (filling
 (* Use hole requirements+types to sketch out possible solutions *)
 (* e.g introduce lambda or pattern match *)
 (* If lambda is rhs of a lone binding, make the binding recursive. *)
-let refine prog (fillings, lprob) reqs file_name next =
-  let reqs'           = reqs |>@@ push_down_req fillings prog in
-  let hole_locs       = hole_locs prog fillings in
-  let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false in
-  let is_ex_dont_care = function { v_ = ExDontCare; _ } -> true | _ -> false in
+
+let is_ex_call      = function { v_ = ExCall _; _ } -> true | _ -> false
+let is_ex_dont_care = function { v_ = ExDontCare; _ } -> true | _ -> false
+
+(* Possibly refine (??) to (fun x1 -> (??)), if all examples on the hole are example calls *)
+let refine_lambda prog (fillings, lprob) reqs next =
+  let reqs' = reqs |>@@ push_down_req fillings prog in
   (* reqs |> List.iter (string_of_req %> print_endline); *)
-  (* hole_locs |> List.iter (Loc.to_string %> print_endline); *)
   (* reqs' |> List.iter (string_of_req %> print_endline); *)
   let prog = apply_fillings fillings prog in
+  hole_locs prog fillings
+  |>@@ begin fun hole_loc ->
+    let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
+    (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
+    if reqs_on_hole = [] then [] else
+    if reqs_on_hole |> List.for_all (fun (_, _, expected) -> is_ex_call expected) then
+      let base_name =
+        match List.hd reqs_on_hole with
+        | (_, _, { v_ = ExCall (v, _); _} ) -> Name.base_name_from_val v
+        | _ -> "var"
+      in
+      let sketch = Exp.from_string @@ "fun " ^ Name.gen ~base_name prog ^ " -> (??)" in
+      [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs fun_lprob lprob) ]
+    else
+      []
+  end
+  |> Seq.concat
+
+let refine_match prog (fillings, lprob) reqs file_name next =
+  let reqs'                 = reqs |>@@ push_down_req fillings prog in
+  let prog                  = apply_fillings fillings prog in
   let (typed_prog, _, tenv) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let avoid_names = StructItems.deep_names prog in
-  hole_locs
+  hole_locs prog fillings
   |>@@ begin fun hole_loc ->
     match Typing.find_exp_at hole_loc typed_prog with None -> [] | Some hole_typed_node ->
     let reqs_on_hole = reqs' |>@? (fun (_, exp, expected) -> Exp.loc exp = hole_loc && not (is_ex_dont_care expected)) in
     (* reqs_on_hole |> List.iter (string_of_req %> print_endline); *)
     if reqs_on_hole = [] then [] else
-    let intro_lambda_seqs =
-      if reqs_on_hole |> List.for_all (fun (_, _, expected) -> is_ex_call expected) then
-        let base_name =
-          match List.hd reqs_on_hole with
-          | (_, _, { v_ = ExCall (v, _); _} ) -> Name.base_name_from_val v
-          | _ -> "var"
-        in
-        let sketch = Exp.from_string @@ "fun " ^ Name.gen ~base_name prog ^ " -> (??)" in
-        [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs fun_lprob lprob) ]
-      else
-        []
-    in
-    let destruct_seqs =
-      let nonconstant_names = nonconstant_names_at hole_loc prog in
-      local_idents_at hole_loc hole_typed_node.exp_env prog
-      |>@& (fun (e, _t, scrutinee_lprob) -> Exp.simple_name e |>& fun name -> (name, scrutinee_lprob))
-      |>@? (fun (name, _) -> SSet.mem name nonconstant_names)
-      |>@@ begin fun (scrutinee_name, scrutinee_lprob) ->
-        let ctor_type_path_opts_at_name =
-          (* Ensure the name is always a ctor... *)
-          reqs_on_hole
-          |>@ begin fun (env, _, _) ->
-            match Envir.env_get_value_or_lvar env (Longident.lident scrutinee_name) with
-            | Value { v_ = Constructor (ctor_name, _, _); _} ->
-              begin match Env.lookup_constructor (Longident.Lident ctor_name) tenv with
-              | { cstr_res = { desc = Types.Tconstr (type_path, _, _); _ } ; _ } -> Some type_path
-              | _ -> None
-              | exception Not_found -> None
-            end
+    let nonconstant_names = nonconstant_names_at hole_loc prog in
+    local_idents_at hole_loc hole_typed_node.exp_env prog
+    |>@& (fun (e, _t, scrutinee_lprob) -> Exp.simple_name e |>& fun name -> (name, scrutinee_lprob))
+    |>@? (fun (name, _) -> SSet.mem name nonconstant_names)
+    |>@@ begin fun (scrutinee_name, scrutinee_lprob) ->
+      let ctor_type_path_opts_at_name =
+        (* Ensure the name is always a ctor... *)
+        reqs_on_hole
+        |>@ begin fun (env, _, _) ->
+          match Envir.env_get_value_or_lvar env (Longident.lident scrutinee_name) with
+          | Value { v_ = Constructor (ctor_name, _, _); _} ->
+            begin match Env.lookup_constructor (Longident.Lident ctor_name) tenv with
+            | { cstr_res = { desc = Types.Tconstr (type_path, _, _); _ } ; _ } -> Some type_path
             | _ -> None
             | exception Not_found -> None
           end
-        in
-        match Option.project ctor_type_path_opts_at_name |>& List.dedup with
-        | Some [type_path] ->
-          let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
-          let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
-          print_endline "REFINING";
-          [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs scrutinee_lprob (mult_lprobs match_lprob lprob)) ]
-        | _ -> []
-      end
-    in
-    intro_lambda_seqs @ destruct_seqs
+          | _ -> None
+          | exception Not_found -> None
+        end
+      in
+      match Option.project ctor_type_path_opts_at_name |>& List.dedup with
+      | Some [type_path] ->
+        let cases = Case_gen.gen_ctor_cases ~avoid_names type_path tenv in
+        let sketch = Exp.match_ (Exp.var scrutinee_name) cases in
+        print_endline "REFINING";
+        [ next (fillings |> Loc_map.add hole_loc (Exp.freshen_locs sketch), mult_lprobs scrutinee_lprob (mult_lprobs match_lprob lprob)) ]
+      | _ -> []
+    end
   end
   |> Seq.concat
-
 
 let abort_lprob = log(min_float) (* If using 64bit floats directly (rather than lprobs), enter denormalized IEEE numbers after this (which is close to rounding off to zero). We never get close to this. *)
 
@@ -1291,15 +1297,36 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec prog r
   let top_level_sis_with_holes = prog |>@? (fun si -> Exp.exists Exp.is_hole [si]) in
   Seq.concat
     [ e_guess (Loc_map.empty, lprob_1)
-    ; refine prog (Loc_map.empty, lprob_1) reqs file_name
+    (* refine 1 lambda *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
         (fun (fillings, lprob) -> e_guess (fillings, lprob))
-    (* ; refine prog (Loc_map.empty, lprob_1) reqs file_name
-        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
-        (fun (fillings, lprob) -> e_guess (fillings, lprob))) *)
-    (* ; refine prog (Loc_map.empty, lprob_1) reqs file_name
-        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
-        (fun (fillings, lprob) -> refine prog (fillings, lprob) reqs file_name
-        (fun (fillings, lprob) -> e_guess (fillings, lprob)))) *)
+    (* refine 2 lambdas *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> e_guess (fillings, lprob)))
+    (* refine 3 lambdas *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))))
+    (* refine 1 match *)
+    ; refine_match prog (Loc_map.empty, lprob_1) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))
+    (* refine 1 lambda + 1 match *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
+        (fun (fillings, lprob) -> refine_match prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob)))
+    (* refine 2 lambdas + 1 match *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> refine_match prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob))))
+    (* refine 3 lambdas + 1 match *)
+    ; refine_lambda prog (Loc_map.empty, lprob_1) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> refine_lambda prog (fillings, lprob) reqs
+        (fun (fillings, lprob) -> refine_match prog (fillings, lprob) reqs file_name
+        (fun (fillings, lprob) -> e_guess (fillings, lprob)))))
     ]
   (* Some reqs may not be pushed down to holes, so we need to verify them too. *)
   |> Seq.filter begin function (fillings, _lprob) ->
