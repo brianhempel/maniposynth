@@ -484,6 +484,11 @@ module Common
   let extract     target_loc = extract_by (loc %> (=) target_loc)
   let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
 
+  let count pred prog =
+    let n = ref 0 in
+    prog |> iter (fun node -> if pred node then incr n);
+    !n
+
   (* Root element is node rather than the whole program *)
   module FromNode = struct
     let iter f root =
@@ -535,6 +540,11 @@ module Common
 
     let extract     target_loc = extract_by (loc %> (=) target_loc)
     let extract_opt target_loc = extract_by_opt (loc %> (=) target_loc)
+
+    let count pred root =
+      let n = ref 0 in
+      root |> iter (fun node -> if pred node then incr n);
+      !n
   end
 
   let child_exps node =
@@ -550,11 +560,6 @@ module Common
     let iter_once = { dflt_iter with pat = iter_pat_no_recurse } in
     (Node.iterator_node_f dflt_iter) iter_once node;
     List.rev !children (* Return the children left-to-right. *)
-
-  let count pred prog =
-    let n = ref 0 in
-    prog |> iter (fun node -> if pred node then incr n);
-    !n
 
   let freshen_locs node =
     let mapper = { dflt_mapper with location = (fun _ _ -> Loc_.fresh ()) } in

@@ -1266,7 +1266,7 @@ function gratuitousLamdas() {
 
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-accept-loc]').forEach(elem => {
-    elem.addEventListener("click", event => { logHolesAccepted(); logAcceptedAstSize(parseInt(elem.dataset.astSize)); acceptSynthResult(elem.dataset.acceptLoc); event.stopImmediatePropagation() });
+    elem.addEventListener("click", event => { logHolesAccepted(); logAcceptedAstSize(parseInt(elem.dataset.astSizeChange)); acceptSynthResult(elem.dataset.acceptLoc); event.stopImmediatePropagation() });
   });
   document.querySelectorAll('[data-reject-loc]').forEach(elem => {
     elem.addEventListener("click", event => { logHolesRejected(); rejectSynthResult(elem.dataset.rejectLoc); event.stopImmediatePropagation() });

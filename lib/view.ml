@@ -566,8 +566,19 @@ let html_of_values_for_pat ?(single_line_only = false) stuff pat =
 type parens_context = NoParens | NormalArg | NextToInfixOp
 
 let accept_or_reject_options_html ?(item_name = "") exp =
+  let ast_size_change =
+    (* AST size of expression, less any holes or nested expressions that are also pending accept/reject *)
+    (* For synth stats for paper. *)
+    let with_all_descendents_rejected =
+      { exp with pexp_attributes = [] }
+      |> Exp.FromNode.replace_by (fun e -> Attr.has_tag "accept_or_reject" e.pexp_attributes) Exp.hole
+      |> Attrs.remove_all_deep_exp
+    in
+    let hole_count = with_all_descendents_rejected |> Exp.FromNode.count Exp.is_hole in
+    Synth.exp_size with_all_descendents_rejected - hole_count
+  in
   span ~attrs:[("class","accept-or-reject-options")]
-    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size", string_of_int (Synth.exp_size (Attrs.remove_all_deep_exp exp)))] ["✅ Accept " ^ item_name]
+    [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size-change", string_of_int ast_size_change)] ["✅ Accept " ^ item_name]
     ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject " ^ item_name]
     ; button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"]
     ]
