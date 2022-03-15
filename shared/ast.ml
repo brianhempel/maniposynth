@@ -317,10 +317,95 @@ module Type = struct
   (* let is_more_general more_general target =
     Ctype.moregeneral Env.empty true more_general target *)
 
+
+  (* First pass to quickly discard non-unifiable terms. *)
+  let rec might_unify t1 t2 =
+    let open Types in
+    (* let rec safe_repr v = function (* copied from printtyp.ml *)
+      {desc = Tlink t; _} when not (List.memq t v) ->
+        safe_repr (t::v) t
+      | t -> t
+    in *)
+    let recurse = might_unify (* ~show *) in
+    let t1 = regular t1 in
+    let t2 = regular t2 in
+    match t1.desc, t2.desc with
+    | Tvar _, _
+    | _, Tvar _
+    | Tunivar _, _
+    | _, Tunivar _ ->
+      true
+
+    | Tarrow (_lab1, t_l1, t_r1, _comm1)
+    , Tarrow (_lab2, t_l2, t_r2, _comm2) ->
+      recurse t_l1 t_l2 && recurse t_r1 t_r2
+
+    | Tarrow _, _
+    | _, Tarrow _ -> false
+
+    | Ttuple ts1
+    , Ttuple ts2 -> List.for_all2_safe recurse ts1 ts2
+
+    | Ttuple _, _
+    | _, Ttuple _ -> false
+
+    | Tconstr (_path1, ts1, _abbrev_memo1)
+    , Tconstr (_path2, ts2, _abbrev_memo2) ->
+      List.for_all2_safe recurse ts1 ts2
+
+    | Tconstr _, _
+    | _, Tconstr _ -> false
+
+    | Tobject _
+    , Tobject _ ->
+      true
+
+    | Tobject _, _
+    | _, Tobject _ -> false
+
+    | Tfield (lab1, kind1, t1, t_rest1)
+    , Tfield (lab2, kind2, t2, t_rest2) ->
+      lab1 = lab2 && kind1 = kind2 && recurse t1 t2 && recurse t_rest1 t_rest2
+
+    | Tfield _, _
+    | _, Tfield _ -> false
+
+    | Tnil
+    , Tnil -> true
+
+    | Tnil, _
+    | _, Tnil -> false
+
+    | Tvariant _
+    , Tvariant _ ->
+      true
+
+    | Tvariant _, _
+    | _, Tvariant _ -> false
+
+    | Tpoly (t1, ts1)
+    , Tpoly (t2, ts2) -> recurse t1 t2 && List.for_all2_safe recurse ts1 ts2
+
+    | Tpoly _, _
+    | _, Tpoly _ -> false
+
+    | Tpackage (_path1, _lids1, ts1)
+    , Tpackage (_path2, _lids2, ts2) ->
+      List.for_all2_safe recurse ts1 ts2
+
+    | Tpackage _, _
+    | _, Tpackage _ -> false
+
+    | Tlink _, _
+    | Tsubst _, _ -> failwith "equal_ignoring_id_and_scope: shouldn't happen"
+
+
   (* May only need type env in case of GADTs, which we don't care about. *)
   let does_unify t1 t2 =
+    (* print_endline @@ "Unifying " ^ to_string t1 ^ "\twith " ^ to_string t2; *)
     (* Ctype.matches Env.empty t1 t2 *)
     (* is_more_general t1 t2 *)
+    might_unify t1 t2 &&
     try
       (* Ctype.unify Env.empty (Ctype.generic_instance t1) (Ctype.generic_instance t2); *)
       Ctype.unify Env.empty (copy t1) (copy t2);
@@ -335,12 +420,16 @@ module Type = struct
 
   (* I think t1 and t2 may still be mutated even if unification fails. *)
   let unify_mutating_opt t1 t2 =
+    (* print_endline @@ "Unifying " ^ to_string t1 ^ "\twith " ^ to_string t2; *)
+    if not (might_unify t1 t2) then None else
     try
       Ctype.unify Env.empty t1 t2;
       Some t1
     with _ -> None
 
   let unify_opt t1 t2 =
+    (* print_endline @@ "Unifying " ^ to_string t1 ^ "\twith " ^ to_string t2; *)
+    if not (might_unify t1 t2) then None else
     let t1' = copy t1 in
     try
       Ctype.unify Env.empty t1' (copy t2);

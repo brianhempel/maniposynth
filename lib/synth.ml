@@ -922,9 +922,10 @@ and terms_at_type ~cant_be_constant ?if_constant_must_be hole_synth_env typ min_
       []
     end
   in
-  (* print_endline @@ "terms at " ^ Type.to_string typ ^ " lprob > " ^ string_of_float min_lprob; *)
+  let terms = terms2 @ terms1 in
+  (* print_endline @@ string_of_int (List.length terms) ^ "\tterms at\t" ^ Type.to_string typ ^ "\tlprob > " ^ string_of_float min_lprob; *)
   (* print_endline (terms |>@ Tup3.fst |>@ Exp.to_string |> String.concat "  "); *)
-  terms2 @ terms1
+  terms
 
 let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc static_hole_type hole_synth_env : (bool * fillings * lprob) Seq.t =
   let term_min_lprob = div_lprobs min_lprob lprob in
