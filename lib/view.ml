@@ -858,6 +858,8 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
       [ div ~attrs:[("class", "label")] [pass_fail_icon; html_of_exp ~tv_root_exp:true stuff e]
       ] @ if is_passing then [] else (lhs_opt |>& html_of_values_for_exp stuff None |> Option.to_list)
     end
+  | Some ({ pexp_desc = Pexp_constraint (e, _); _ }) ->
+    render_tv stuff pat_opt (Some e)
   | Some exp ->
     div ~attrs:[("class", "tv")] begin
       if should_show_vbs exp then

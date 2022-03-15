@@ -427,7 +427,7 @@ and eval_expr fillings prims env lookup_exp_typed trace_state frame_no expr =
         | None -> None
         | Some e -> Some (eval_expr fillings prims env lookup_exp_typed trace_state frame_no e)
       in
-      intro @@ new_vtrace @@ Constructor (cn, Hashtbl.hash cn, ee)
+      intro @@ new_vtrace @@ Constructor ("`" ^ cn, Hashtbl.hash cn, ee)
     | Pexp_record (r, e) ->
       let base =
         match e with
@@ -723,7 +723,7 @@ and pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_v
   | Ppat_variant (name, p) ->
     (match v_ with
     | Constructor (cn, _, e) ->
-      if cn <> name then raise Match_fail;
+      if cn <> "`" ^ name then raise Match_fail;
       (match (p, e) with
       | None, None -> env
       | Some p, Some e -> pattern_bind fillings prims env lookup_exp_typed trace_state frame_no root_val (path @ [Child 0]) p e

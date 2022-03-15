@@ -259,7 +259,11 @@ let rec exp_of_value Data.{ v_; _ } =
   | String bytes                          -> Exp.constant (Const.string (Bytes.to_string bytes))
   | Float n                               -> Exp.constant (Const.float (string_of_float n))
   | Tuple vs                              -> Exp.tuple (vs |>@ exp_of_value)
-  | Constructor (ctor, _, v_opt)          -> Exp.construct (Loc.lident ctor) (v_opt |>& exp_of_value)
+  | Constructor (ctor, _, v_opt)          ->
+    if String.length ctor >= 1 && ctor.[0] = '`' then
+      Exp.variant (String.drop 1 ctor) (v_opt |>& exp_of_value)
+    else
+      Exp.construct (Loc.lident ctor) (v_opt |>& exp_of_value)
   | Prim (prim_name, _)                   ->
     let uninfixed = prim_name |> String.drop_prefix "(" |> String.drop_suffix ")" in
     Shared.Ast.Exp.simple_var @@ if SSet.mem uninfixed Name.pervasives_names then uninfixed else "??"
