@@ -1217,6 +1217,16 @@ let const_floats : (expression * Types.type_expr * lprob) list =
   ; ("0.1", 1) *)
   ]
 
+let all_consts_ordered =
+  List.concat
+    [ const_strs_1_char_or_less
+    ; const_ints
+    ; const_chars
+    ; const_floats
+    ]
+  |> List.sort_by (fun (_, _, lprob) -> -.lprob)
+
+
 (* Keyed by how recently introduced. *)
 let local_idents : (int * lprob) list =
   begin fun nth_str_and_counts ->
@@ -1654,7 +1664,12 @@ let max_single_constant_term_lprob =
   end
 
 (* Use this to reserve probability for other holes! *)
-let max_single_term_lprob =
+let max_ctor_lprob_given_ctor = max stdlib_ctor_lprob nonstdlib_ctor_lprob
+let max_local_ident_lprob_given_ident =
   match local_idents with
-  | (_, best_local_ident_given_ident_lprob)::_ -> mult_lprobs ident_lprob best_local_ident_given_ident_lprob
+  | (_, max_local_ident_lprob_given_ident)::_ -> max_local_ident_lprob_given_ident
   | _ -> failwith "asjndvoisehbvbhskdjvfkjdfs"
+
+
+let max_const_lprob_given_const = all_consts_ordered |>@ Tup3.thd |> List.max
+let max_single_term_lprob = mult_lprobs ident_lprob max_local_ident_lprob_given_ident

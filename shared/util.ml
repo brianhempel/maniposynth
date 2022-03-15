@@ -141,7 +141,7 @@ module List = struct
     let rec loop out list =
       match list with
       | x::rest when pred x -> loop (x::out) rest
-      | _                   -> out
+      | _                   -> rev out
     in
     loop [] list
 

@@ -60,11 +60,6 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "SetRecFlag"; `String vb_loc_str; `Bool is_rec]                   -> SetRecFlag (vb_loc_str, is_rec)
   | _                                                                                -> failwith @@ "bad action json " ^ Yojson.Safe.to_string action_yojson
 
-(* plan: ditch the local rewrite strategy. it's too much when the strategy for handling variable renaming is the same whether its local or global
-1. assign unique names (not done yet)
-2. move binding
-3. resolve (not done yet)
-*)
 
 let remove_vblike_opt vb_loc old =
   let removed_vb = ref None in

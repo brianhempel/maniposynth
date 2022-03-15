@@ -647,18 +647,6 @@ type hole_synth_env =
     ; mutable ctors_producing_type       : (Types.type_expr * (Longident.t * int * Types.type_expr * lprob) list (* Sorted, most probable first, arg count type unified with goal type *)) list
     }
 
-(* let is_req_satisified_by trace_state fillings (env, exp, expected) =
-  (* begin try Loc_map.bindings fillings |>@ snd |>@ Exp.to_string |> List.iter print_endline
-  with _ -> Loc_map.bindings fillings |>@ snd |>@ (Formatter_to_stringifier.f (Printast.expression 0)) |> List.iter print_endline
-  end; *)
-  (* print_endline @@ string_of_req (env, exp, expected); *)
-  let evaled = eval trace_state fillings env exp in
-  (* print_endline @@ Formatter_to_stringifier.f pp_print_value evaled; *)
-  Assert_comparison.values_equal_for_assert evaled expected *)
-
-(* START HERE *)
-(* push_down_req is getting stuck on divergent bindings, preventing match refinement (currently have let bindings disabled there) *)
-
 
 let reqs_satisfied_and_all_filled_expressions_hit_during_execution fillings prog =
   let fillings =
@@ -760,53 +748,8 @@ let rec args_seq ~cant_be_constant hole_synth_env func_type arg_count_remaining 
     end
   | _ -> failwith "this shouldn't happen"
 
-
-(* and ctor_terms ~cant_be_constant hole_synth_env typ min_lprob (lid, { Types.cstr_res; cstr_args; cstr_arity; _ }, lprob) =
-  (* print_endline @@ cstr_name ^ " " ^ string_of_float lprob; *)
-  if min_lprob > lprob then [] else
-  let ctor_type_as_arrows = Type.unflatten_arrows (cstr_args @ [cstr_res]) in
-  (* print_endline @@ (Type.to_string typ); *)
-  (* print_endline @@ (Type.to_string ctor_type_as_arrows); *)
-  (* print_endline @@ (Typing.can_produce_typ ctor_type_as_arrows typ <> None |> string_of_bool); *)
-  (* ignore (exit 0); *)
-  (* print_endline @@ Longident.to_string lid ^ "\t" ^ Type.to_string ctor_type_as_arrows; *)
-  match Typing.can_produce_typ ctor_type_as_arrows typ with
-  | Some (arg_count, ctor_type_as_arrows_unified_with_goal_ret_t) ->
-    if arg_count <> cstr_arity then [] else begin (* Ctors must always be fully applied *)
-      (* print_endline @@ Longident.to_string lid ^ "\t\t" ^ Type.to_string ctor_type_as_arrows_unified_with_goal_ret_t; *)
-      (* This wil properly exclude 0 arg ctors when we can't be constant *)
-      args_seq ~cant_be_constant hole_synth_env ctor_type_as_arrows_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
-      |>@ begin fun (arg_terms, ctor_type_as_arrows', args_lprob) ->
-        let out_type = drop_n_args_from_arrow arg_count ctor_type_as_arrows' in
-        let ctor_arg =
-          match arg_count with
-          | 0 -> None
-          | 1 -> Some (List.hd arg_terms)
-          | _ -> Some (Exp.tuple arg_terms)
-        in
-        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
-        ( Exp.construct (Location.mknoloc lid) ctor_arg
-        , out_type
-        , mult_lprobs args_lprob lprob
-        )
-      end
-    end
-  | None ->
-    [] *)
-
-(* and stdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-
-    stdlib_ctors |>@ Tup3.map_thd (mult_lprobs stdlib_ctor_lprob)
-    (* | Some std *)
-  |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob *)
-
-(* and nonstdlib_ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
-  hole_synth_env.user_ctors |>@ Tup3.map_thd (mult_lprobs nonstdlib_ctor_lprob) |>@@ ctor_terms ~cant_be_constant hole_synth_env typ min_lprob *)
-
 and ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > max_ctor_lprob_given_ctor then [] else
   begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.ctors_producing_type with
   | None ->
     let ctors_producing_type =
@@ -854,19 +797,11 @@ and ctors_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression *
     end
   end
 
-and all_consts_ordered =
-  List.concat
-    [ const_strs_1_char_or_less
-    ; const_ints
-    ; const_chars
-    ; const_floats
-    ]
-  |> List.sort_by (fun (_, _, lprob) -> -.lprob)
-
 and consts_at_type _hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > max_const_lprob_given_const then [] else
   List.take_while (fun (_, _, lprob) -> lprob >= min_lprob) @@
   if Type.is_var_type typ then
+    (* [] *)
     all_consts_ordered
   else
     if Type.is_string_type typ then const_strs_1_char_or_less else
@@ -877,7 +812,7 @@ and consts_at_type _hole_synth_env typ min_lprob : (expression * Types.type_expr
 
 (* Apps are never constant—they require a non-constant arg *)
 and apps_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > (mult_lprobs max_local_ident_lprob_given_ident max_single_term_lprob) then [] else (* function name and one arg *)
   begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.functions_producing_type with
   | None ->
     let funcs_producing_type =
@@ -910,27 +845,6 @@ and apps_at_type hole_synth_env typ min_lprob : (expression * Types.type_expr * 
     end
   end
 
-  (* (hole_synth_env.local_idents @ stdlib_idents) *)
-  (* (hole_synth_env.local_idents @ pervasives_pure_idents_only)
-  |>@@ begin fun (fexp, func_type, lprob) ->
-    if min_lprob > lprob then [] else
-    if not (Type.is_arrow_type func_type) then [] else
-    match Typing.can_produce_typ func_type typ with
-    | Some (0, _) -> [] (* functions must be at least partially applied *)
-    | Some (arg_count, func_type_unified_with_goal_ret_t) ->
-      args_seq ~cant_be_constant:true hole_synth_env func_type_unified_with_goal_ret_t arg_count 0 (div_lprobs min_lprob lprob)
-      |>@ begin fun (arg_terms, func_type', args_lprob) ->
-        let out_type = drop_n_args_from_arrow arg_count func_type' in
-        (* print_endline @@ Exp.to_string (Exp.construct (Location.mknoloc lid) ctor_arg); *)
-        ( Exp.apply fexp (arg_terms |>@ fun arg -> (Asttypes.Nolabel, arg))
-        , out_type
-        , mult_lprobs args_lprob lprob
-        )
-      end
-    | None ->
-      []
-  end *)
-
 and ites_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
   if min_lprob > max_single_term_lprob *. 3.0 then [] else
   let else_terms =
@@ -955,7 +869,7 @@ and ites_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * 
 
 
 and idents_at_type ~cant_be_constant hole_synth_env typ min_lprob : (expression * Types.type_expr * lprob) list =
-  if min_lprob > lprob_1 then [] else
+  if min_lprob > max_local_ident_lprob_given_ident then [] else
   (* (hole_synth_env.local_idents @ stdlib_idents) *)
   begin if cant_be_constant then
     begin match List.assoc_by_opt (Type.equal_ignoring_id_and_scope typ) hole_synth_env.nonconstant_idents_at_type with
