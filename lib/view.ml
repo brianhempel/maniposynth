@@ -578,15 +578,21 @@ let accept_or_reject_options_html ?(item_name = "") prog exp =
     Synth.exp_size with_all_descendents_rejected - hole_count
   in
   (* Only show "try again" button when there's one accept/reject left. *)
-  let perhaps_try_again =
+  let perhaps_accept_and_try_again =
+    if Exp.count Synth.has_accept_reject_tag prog = 1 && Exp.count Exp.is_hole prog >= 1
+    then [ button ~attrs:[("data-accept-and-continue-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size-change", string_of_int ast_size_change)] ["✅ Accept & try again"] ]
+    else []
+  in
+  let perhaps_reject_and_try_again =
     if Exp.count Synth.has_accept_reject_tag prog = 1
-    then [ button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Try again"] ]
+    then [ button ~attrs:[("data-reject-and-continue-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject & try again"] ]
     else []
   in
   span ~attrs:[("class","accept-or-reject-options")] @@
     [ button ~attrs:[("data-accept-loc", Serialize.string_of_loc exp.pexp_loc); ("data-ast-size-change", string_of_int ast_size_change)] ["✅ Accept " ^ item_name]
-    ; button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject " ^ item_name]
-    ] @ perhaps_try_again
+    ] @ perhaps_accept_and_try_again @
+    [ button ~attrs:[("data-reject-loc", Serialize.string_of_loc exp.pexp_loc)] ["❌ Reject " ^ item_name]
+    ] @ perhaps_reject_and_try_again
 
 
 

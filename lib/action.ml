@@ -18,6 +18,7 @@ type t =
   | DoSynth
   | AcceptSynthResult            of string (* loc *)
   | RejectSynthResult            of string (* loc *)
+  | AcceptSynthResultAndContinue of string (* loc *)
   | RejectSynthResultAndContinue of string (* loc *)
   | InsertCode                   of string * string * (int * int) option (* vbs loc str, code, pos opt *)
   | Destruct                     of string * string  (* vbs loc str, scrutinee code *)
@@ -44,6 +45,7 @@ let t_of_yojson (action_yojson : Yojson.Safe.t) =
   | `List [`String "DoSynth"]                                                        -> DoSynth
   | `List [`String "AcceptSynthResult"; `String loc_str]                             -> AcceptSynthResult loc_str
   | `List [`String "RejectSynthResult"; `String loc_str]                             -> RejectSynthResult loc_str
+  | `List [`String "AcceptSynthResultAndContinue"; `String loc_str]                  -> AcceptSynthResultAndContinue loc_str
   | `List [`String "RejectSynthResultAndContinue"; `String loc_str]                  -> RejectSynthResultAndContinue loc_str
   | `List [`String "Undo"]                                                           -> Undo
   | `List [`String "Redo"]                                                           -> Redo
@@ -249,6 +251,7 @@ let clear_asserts_with_hole_rhs old =
 
 let should_synth_afterward = function
   | DoSynth
+  | AcceptSynthResultAndContinue _
   | RejectSynthResultAndContinue _ -> true
   | _ -> false
 
@@ -280,8 +283,9 @@ let f path final_tenv : t -> Shared.Ast.program -> Shared.Ast.program = function
   | DoSynth ->
     (* Synth handled by caller. *)
     (fun prog -> prog)
-  | AcceptSynthResult loc_str ->
-    let loc = Serialize.loc_of_string loc_str in
+  | AcceptSynthResult loc_str
+  | AcceptSynthResultAndContinue loc_str ->
+      let loc = Serialize.loc_of_string loc_str in
     let change_attrs e =
       e.pexp_attributes
       |> Attr.remove_name "not"

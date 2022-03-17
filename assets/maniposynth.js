@@ -197,6 +197,13 @@ function rejectSynthResult(loc) {
   ]);
 }
 
+function acceptSynthResultAndContinue(loc) {
+  doAction([
+    "AcceptSynthResultAndContinue",
+    loc,
+  ]);
+}
+
 function rejectSynthResultAndContinue(loc) {
   doAction([
     "RejectSynthResultAndContinue",
@@ -1270,6 +1277,9 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('[data-reject-loc]').forEach(elem => {
     elem.addEventListener("click", event => { logHolesRejected(); rejectSynthResult(elem.dataset.rejectLoc); event.stopImmediatePropagation() });
+  });
+  document.querySelectorAll('[data-accept-and-continue-loc]').forEach(elem => {
+    elem.addEventListener("click", event => { logHolesAccepted(); logSynthAttempts(); acceptSynthResultAndContinue(elem.dataset.acceptAndContinueLoc); event.stopImmediatePropagation() });
   });
   document.querySelectorAll('[data-reject-and-continue-loc]').forEach(elem => {
     elem.addEventListener("click", event => { logHolesRejected(); logSynthAttempts(); rejectSynthResultAndContinue(elem.dataset.rejectAndContinueLoc); event.stopImmediatePropagation() });
