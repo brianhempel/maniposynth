@@ -196,10 +196,10 @@ module List = struct
     xs |> exists (fun x -> mem x ys)
 
   (* Removes first *)
-  let rec remove x = function
+  let rec remove_one x = function
     | []                 -> []
     | y::rest when x = y -> rest
-    | y::rest            -> y :: remove x rest
+    | y::rest            -> y :: remove_one x rest
 
   let remove_all x = filter ((<>) x)
 

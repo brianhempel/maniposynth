@@ -112,9 +112,9 @@ let render_suggestions out_chan uri =
   match ["vbs_loc"; "value_ids_visible"; "value_strs"; "q"] |>@ (fun key -> List.assoc_opt key query_params) |> Option.project with
   | Some [[vbs_loc_str]; [value_ids_visible_comma_separated]; [value_strs_comma_separated]; [q_str]] ->
     (* print_endline value_ids_visible_comma_separated; *)
-    let value_ids_visible = value_ids_visible_comma_separated |> String.split_on_char ',' |> List.remove "" |>@ int_of_string in
+    let value_ids_visible = value_ids_visible_comma_separated |> String.split_on_char ',' |> List.remove_one "" |>@ int_of_string in
     (* print_endline value_strs_comma_separated; *)
-    let value_strs = value_strs_comma_separated |> String.split_on_char ',' |> List.remove "" |>@ String.replace "~CoMmA~" "," in
+    let value_strs = value_strs_comma_separated |> String.split_on_char ',' |> List.remove_one "" |>@ String.replace "~CoMmA~" "," in
     let vbs_loc = Serialize.loc_of_string vbs_loc_str in
     let parsed = Camlboot_interpreter.Interp.parse file_path in
     (* let parsed_with_comments = Parse_unparse.parse_file file_path in

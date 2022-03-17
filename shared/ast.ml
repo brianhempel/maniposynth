@@ -140,9 +140,10 @@ module Type = struct
 
   let copy (t : t) : t = Btype.cleanup_abbrev (); Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
 
+  let rec iter f typ = Btype.iter_type_expr (fun t -> iter f t; f t) typ
+
   let new_var () = Btype.newgenvar ()
   let tuple ts = Btype.newgenty (Ttuple ts)
-
 
   (* Follow links/substs to a regular type *)
   (* See printtyp.ml for "safe_repr" version that catches cycles *)
@@ -298,25 +299,30 @@ module Type = struct
     | _ -> false
 
 
+
+  let rec var_name typ = match typ.Types.desc with
+    | Types.Tvar name_opt
+    | Types.Tunivar name_opt -> name_opt
+    | Types.Tlink t
+    | Types.Tsubst t      -> var_name t
+    | _                   -> None
+
   let rec tvar_name typ = match typ.Types.desc with
     | Types.Tvar name_opt -> name_opt
     | Types.Tlink t
     | Types.Tsubst t      -> tvar_name t
     | _                   -> None
 
-  (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
-  (* These all don't work. *)
-
-    (* Ctype.generic_instance (Ctype.correct_levels t) *)
-    (* Ctype.instance t *)
-    (* Ctype.instance ~partial:false t *)
-    (* Ctype.instance ~partial:true t *)
-    (* let t' = Ctype.correct_levels t in
-    Ctype.generalize t';
-    t' *)
-  (* let is_more_general more_general target =
-    Ctype.moregeneral Env.empty true more_general target *)
-
+  let names typ =
+    let names = ref [] in
+    typ
+    |> iter begin fun t ->
+      match t.desc with
+      | Types.Tvar    (Some name)
+      | Types.Tunivar (Some name) -> if List.mem name !names then () else names := name :: !names
+      | _                         -> ()
+    end;
+    List.rev !names
 
   (* First pass to quickly discard non-unifiable terms. *)
   let rec might_unify t1 t2 =
@@ -399,6 +405,20 @@ module Type = struct
     | Tlink _, _
     | Tsubst _, _ -> failwith "equal_ignoring_id_and_scope: shouldn't happen"
 
+
+
+  (* LOOK AT ALL THIS STUFF I TRIED TO NOT MUTATE WHEN TRYING TO UNIFY/SUBTYPE! *)
+  (* These all don't work. *)
+
+    (* Ctype.generic_instance (Ctype.correct_levels t) *)
+    (* Ctype.instance t *)
+    (* Ctype.instance ~partial:false t *)
+    (* Ctype.instance ~partial:true t *)
+    (* let t' = Ctype.correct_levels t in
+    Ctype.generalize t';
+    t' *)
+  (* let is_more_general more_general target =
+    Ctype.moregeneral Env.empty true more_general target *)
 
   (* May only need type env in case of GADTs, which we don't care about. *)
   let does_unify t1 t2 =
@@ -499,6 +519,55 @@ module Type = struct
     | Tpackage (_, _, ts)                      -> concat_map flatten ts
     | Tvariant { row_fields; row_more; row_name = Some (_, ts); _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more @ concat_map flatten ts
     | Tvariant { row_fields; row_more; row_name = None;         _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more
+
+  (* Bottom up (children mapped before parents). *)
+  (* Note that mutable refs will no longer point to their originals (replaced instead with copies). Should matter for us. *)
+  let rec map f typ =
+    let open Types in
+    let recurse = map                                      f in
+    let rec map_abbrev_memo (abbrev_memo : abbrev_memo) =
+      match abbrev_memo with
+      | Mnil ->
+        Mnil
+      | Mcons (private_flag, path, abbrev, expansion, memo) ->
+        Mcons (private_flag, path, recurse abbrev, recurse expansion, map_abbrev_memo memo)
+      | Mlink memo_ref ->
+        Mlink { contents = map_abbrev_memo !memo_ref }
+    in
+    let map_row_desc { row_fields; row_more; row_bound; row_closed; row_fixed; row_name } =
+      let rec map_row_field (row_field : row_field) =
+        match row_field with
+        | Rpresent None                                               -> row_field
+        | Rpresent (Some t)                                           -> Rpresent (Some (recurse t))
+        | Reither (isconst, ts, ispat, { contents = None })           -> Reither (isconst, ts |>@ recurse, ispat, { contents = None })
+        | Reither (isconst, ts, ispat, { contents = Some row_field }) -> Reither (isconst, ts |>@ recurse, ispat, { contents = Some (map_row_field row_field) })
+        | Rabsent                                                     -> Rabsent
+      in
+      {
+        row_fields = row_fields |>@ (fun (name, row_field) -> (name, map_row_field row_field));
+        row_more   = recurse row_more;
+        row_bound  = row_bound;
+        row_closed = row_closed;
+        row_fixed  = row_fixed;
+        row_name   = row_name |>& (fun (path, ts) -> (path, ts |>@ recurse))
+      }
+    in
+    match typ.desc with
+    | Tnil
+    | Tunivar _
+    | Tvar _                                      -> f typ
+    | Tlink t
+    | Tsubst t                                    -> f (recurse t)
+    | Tarrow (lab, l, r, comm)                    -> f { typ with desc = Tarrow (lab, recurse l, recurse r, comm) }
+    | Ttuple ts                                   -> f { typ with desc = Ttuple (ts |>@ recurse) }
+    | Tconstr (path, ts, abbrev)                  -> f { typ with desc = Tconstr (path, ts |>@ recurse, { contents = map_abbrev_memo !abbrev }) }
+    | Tobject (t, { contents = Some (path, ts) }) -> f { typ with desc = Tobject (recurse t, { contents = Some (path, ts |>@ recurse) }) }
+    | Tobject (t, { contents = None })            -> f { typ with desc = Tobject (recurse t, { contents = None }) }
+    | Tfield (name, fkind, t1, t2)                -> f { typ with desc = Tfield (name, fkind, recurse t1, recurse t2) }
+    | Tpoly (t, ts)                               -> f { typ with desc = Tpoly (recurse t, ts |>@ recurse) }
+    | Tpackage (path, lids, ts)                   -> f { typ with desc = Tpackage (path, lids, ts |>@ recurse) }
+    | Tvariant row_desc                           -> f { typ with desc = Tvariant (map_row_desc row_desc) }
+
 end
 
 
