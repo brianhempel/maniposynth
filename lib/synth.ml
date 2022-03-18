@@ -264,8 +264,13 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
     | Pexp_fun (Nolabel, None, arg_pat, body_exp) ->
       begin match value.v_ with
       | ExCall (arg, expected) -> begin try
+          let rec follow_through_holes e =
+            match Loc_map.find_opt e.pexp_loc fillings with
+            | Some filling_exp -> follow_through_holes filling_exp
+            | None             -> e
+          in
+          hit_a_function_f (follow_through_holes body_exp).pexp_loc value;
           let env' = pattern_bind_fueled fillings prims env lookup_exp_typed trace_state frame_no arg [] arg_pat arg in
-          hit_a_function_f arg_pat body_exp arg expected;
           recurse (env', body_exp, expected)
         with Match_fail -> [req]
         end
@@ -421,7 +426,7 @@ let rec push_down_req_ fillings lookup_exp_typed hit_a_function_f ((env, exp, va
     | Pexp_extension _ -> [req]
     end
 
-let push_down_req fillings _prog ?(lookup_exp_typed = fun _ -> None) ?(hit_a_function_f = fun _ _ _ _ -> ()) req =
+let push_down_req fillings _prog ?(lookup_exp_typed = fun _ -> None) ?(hit_a_function_f = fun _ _ -> ()) req =
   try
     Eval.with_fuel 300
       (fun () -> push_down_req_ fillings lookup_exp_typed hit_a_function_f req)
@@ -960,44 +965,74 @@ let hole_fillings_seq ~cant_be_constant (fillings, lprob) min_lprob hole_loc sta
 let hole_locs prog fillings = apply_fillings fillings prog |> Exp.all |>@? Exp.is_hole |>@ Exp.loc
 
 
-(* Return a list of programs with arg and return types concretized to each assert. *)
-let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : program list =
+(* Turn the type variables 'a 'b etc into [`a] [`b] so they can no longer unify with anything else. *)
+let harden_type_vars typ =
+  typ |> Type.map begin fun typ ->
+    match typ.desc with
+    | Tvar (Some name) -> Type.from_string @@ "[`" ^ name ^ "]"
+    | _                -> typ
+  end
+
+let rec type_of_expectation value =
+  let recurse = type_of_expectation in
+  match value.type_opt with
+  | Some t -> t
+  | None ->
+    begin match value.v_ with
+    | ExCall (l, r) -> Type.arrow (recurse l) (recurse r)
+    | _             -> failwith @@ "synth can't generalize correctly :/\n" ^ Data.value_to_string value
+    end
+
+(*
+  Return a list of programs with arg and return types concretized to each assert, because with type
+  annotations, bare function skeletons will have the unhelpful type 'a -> 'b, which can unify to
+  almost anything.
+
+  To speculate a more specific type, we antiunify by looking at the examples. So if we see that
+  a function used, e.g., as int -> int and string -> int, we will annotate it as 'a -> int.
+
+  In practice, we annotate it as [`a] -> int, because an ordinary variable 'a can unify with anything,
+  whereas [`a] will only unify with [`a].
+*)
+let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : program =
   let (typed_struct, _, _) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
   let lookup_exp_typed = (Typing.type_lookups_of_typed_structure typed_struct).lookup_exp in
-  reqs
-  |>@ begin fun req ->
-    let pats_to_annotate = ref [] in
-    let exps_to_annotate = ref [] in
-    let hit_a_function_f arg_pat f_body arg_val expected_output =
-      begin match arg_val.type_opt with
-      | Some val_type ->
-        pats_to_annotate := (arg_pat.ppat_loc, val_type) :: !pats_to_annotate;
-      | None -> ()
-      end;
-      match expected_output.v_, expected_output.type_opt with
-      | ExCall _, _      -> ()
-      | _, Some out_type -> exps_to_annotate := (f_body.pexp_loc, out_type) :: !exps_to_annotate
-      | _                -> () (* print_endline "asdfasdfasdf"; print_endline @@ value_to_string expected_output *)
+  let exps_to_annotate : (Types.type_expr list) Loc_map.t ref = ref Loc_map.empty in
+  let filled_prog = apply_fillings fillings prog in
+  reqs |> List.iter begin fun req ->
+    let exps_not_to_annotate = ref Loc_set.empty in
+    let hit_a_function_f body_loc ex_call =
+      (* Can't search for fun_exp directly because it wasn't in the closure. *)
+      match filled_prog |> Exp.find_by_opt (Exp.body_of_fun %>& Exp.loc %>& (=) body_loc %||& false) with
+      | Some fun_exp ->
+        if Loc_set.mem fun_exp.pexp_loc !exps_not_to_annotate then () else
+        let typ = type_of_expectation ex_call in
+        (* print_endline @@ "fun loc: " ^ Loc.to_string fun_exp.pexp_loc; *)
+        (* print_endline @@ "type of expectation: " ^ Type.to_string typ; *)
+        exps_to_annotate := Loc_map.add_to_key fun_exp.pexp_loc typ !exps_to_annotate;
+        (* Don't annotate the nested fun's *)
+        exps_not_to_annotate := Loc_set.add_all (fun_exp |> Exp.flatten |>@ Exp.loc) !exps_not_to_annotate;
+      | None ->
+        ()
     in
-    ignore @@ push_down_req fillings prog ~lookup_exp_typed ~hit_a_function_f req;
-    prog
-    |> Exp.map begin fun e ->
-      match List.assoc_opt e.pexp_loc !exps_to_annotate with
-      | Some typ -> Exp.constraint_ e (Type.to_core_type typ)
-      | None     -> e
-    end
-    |> Pat.map begin fun p ->
-      match List.assoc_opt p.ppat_loc !pats_to_annotate with
-      | Some typ -> Pat.constraint_ p (Type.to_core_type typ)
-      | None     -> p
-    end
-    |> apply_fillings fillings
-    |> Exp.replace_by Exp.is_assert Exp.unit (* Asserts on diff types can prematurely produce type-incorrect programs. *)
-  end
-  |> List.dedup_by StructItems.to_string
+    ignore @@ push_down_req fillings filled_prog ~lookup_exp_typed ~hit_a_function_f req
+  end;
+  let perhaps_annotate_exp exp =
+    match Loc_map.all_at_key exp.pexp_loc !exps_to_annotate with
+    | []    ->
+      (* print_endline @@ "hi " ^ Loc.to_string exp.pexp_loc; *)
+      exp
+    | types ->
+      let type_to_annotate = Antiunify.most_specific_shared_generalization_of_types types |> harden_type_vars in
+      (* print_endline @@ "annotating: " ^ Type.to_string type_to_annotate; *)
+      Exp.constraint_ exp (Type.to_core_type type_to_annotate)
+  in
+  filled_prog
+  |> Exp.map perhaps_annotate_exp
+  |> Exp.replace_by Exp.is_assert Exp.unit (* Asserts on diff types can prematurely produce type-incorrect programs. *)
 
 let count_type_var_annotations prog =
   let n = ref 0 in
@@ -1027,31 +1062,9 @@ let count_type_var_annotations prog =
 let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (fillings * lprob) Seq.t =
   (* Printast.structure 0 Format.std_formatter prog; *)
   let hole_locs = hole_locs prog fillings in
-  let progs = apply_fillings_and_degeneralize_functions fillings file_name prog reqs in
-  (* print_endline @@ string_of_int (List.length progs) ^ " programs"; *)
-  (* let prog_and_typed_progs =
-    let progs' =
-      progs
-      |>@ begin fun prog ->
-        (* print_endline @@ "Typing " ^ StructItems.to_string prog ^ string_of_float min_lprob; *)
-        let (typed_prog, _, _) =
-          try Typing.typedtree_sig_env_of_parsed prog file_name
-          with _ ->
-            print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog;
-            ({ Typedtree.str_items = []; str_type = []; str_final_env = Typing.initial_env }, [], Env.empty)
-        in
-        (prog, typed_prog)
-      end
-    in
-    (* Only keep progs with a minium number of type vars in the added annotations. *)
-    let min_type_var_annotations_count = progs' |>@ fst %> count_type_var_annotations |> List.fold_left min max_int in
-    progs'
-    |>@? (fst %> count_type_var_annotations %> (=) min_type_var_annotations_count)
-  in *)
-  (* ignore @@ exit 0; *)
-  print_endline @@ string_of_int (List.length progs) ^ " programs will be used";
-  progs |> List.iter (fun prog -> print_endline @@ StructItems.to_string prog);
   let reqs' = reqs |>@@ push_down_req fillings prog in
+  let prog = apply_fillings_and_degeneralize_functions fillings file_name prog reqs in
+  print_endline @@ "Type annotated program:\n" ^ StructItems.to_string prog;
   (* print_endline (hole_locs |>@ Loc.to_string |> String.concat ",\n"); *)
   let rec fillings_seq (fillings, lprob) min_lprob hole_locs : (bool * fillings * lprob) Seq.t =
     match hole_locs with
@@ -1060,57 +1073,55 @@ let e_guess (fillings, lprob) max_lprob min_lprob prog reqs file_name : (filling
       fillings_seq (fillings, lprob) (div_lprobs min_lprob max_single_term_lprob (* reserve some probability for this hole! *)) rest
       |> Seq.flat_map begin fun (any_constant_holes, fillings, lprob) ->
         let synth_envs =
-          progs |>@@ begin fun prog ->
-            let prog = apply_fillings fillings prog |> Bindings.synth_fixup in
-            let (typed_prog, _, _) =
-              try Typing.typedtree_sig_env_of_parsed prog file_name
-              with _ ->
-                (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
-                ({ Typedtree.str_items = []; str_type = []; str_final_env = Typing.initial_env }, [], Env.empty)
+          let prog = apply_fillings fillings prog |> Bindings.synth_fixup in
+          let (typed_prog, _, _) =
+            try Typing.typedtree_sig_env_of_parsed prog file_name
+            with _ ->
+              (* print_endline @@ "Could not type program:\n" ^ StructItems.to_string prog; *)
+              ({ Typedtree.str_items = []; str_type = []; str_final_env = Typing.initial_env }, [], Env.empty)
+          in
+          match Typing.find_exp_at hole_loc typed_prog with
+          | None -> []
+          | Some hole_typed_node ->
+            let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
+            let unique_asserted_exps =
+              reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
             in
-            match Typing.find_exp_at hole_loc typed_prog with
-            | None -> []
-            | Some hole_typed_node ->
-              let reqs_on_hole = reqs' |>@? (fun (_, exp, _) -> Exp.loc exp = hole_loc) in
-              let unique_asserted_exps =
-                reqs_on_hole |>@ (fun (_, _, value) -> Assert_comparison.exp_of_value value) |> List.dedup_by Exp.to_string
+            (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
+            let nonconstant_names = nonlinear_nonconstant_names_at hole_loc prog in
+            let user_ctors =
+              let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
+              let user_ctor_descs =
+                Env.fold_constructors List.cons None(* not looking in a nested module *) typed_prog.str_final_env []
+                |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
               in
-              (* print_endline @@ "Names at hole: " ^ String.concat "   " (hole_synth_env.local_idents |>@ fun (exp, typ, lprob) -> Exp.to_string exp ^ " : " ^ Type.to_string typ ^ " " ^ string_of_float lprob); *)
-              let nonconstant_names = nonlinear_nonconstant_names_at hole_loc prog in
-              let user_ctors =
-                let initial_ctor_descs = Env.fold_constructors List.cons None(* not looking in a nested module *) Typing.initial_env [] in
-                let user_ctor_descs =
-                  Env.fold_constructors List.cons None(* not looking in a nested module *) typed_prog.str_final_env []
-                  |>@? begin fun ctor_desc -> not (List.memq ctor_desc initial_ctor_descs) end
-                in
-                user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
-                  (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
-                end
-              in
-              let nonlinear_local_idents = nonlinear_local_idents_at hole_loc typed_prog prog in
-              (* print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors"; *)
-              (* print_endline @@ "Nonlinear local idents at hole: " ^ (nonlinear_local_idents |>@ (fun (e, _, _) -> Exp.to_string e) |> String.concat ", "); *)
-              (* print_endline @@ "Nonlinear nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", "); *)
-              [ { hole_type                     = hole_typed_node.exp_type
-                ; user_ctors                    = user_ctors
-                ; nonconstant_names             = nonconstant_names
-                ; local_idents                  = nonlinear_local_idents
-                ; check_if_constant             = is_constant nonconstant_names
-                ; cant_be_constant              = List.length unique_asserted_exps >= 2
-                ; single_asserted_exp           = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
-                ; nonconstant_idents_at_type    = []
-                ; idents_at_type                = []
-                ; functions_producing_type      = []
-                ; ctors_producing_type          = []
-                }
-              ]
-          end
-          |> List.to_seq
+              user_ctor_descs |>@ begin fun ({ Types.cstr_name; _ } as ctor_desc) ->
+                (Longident.Lident cstr_name, ctor_desc, lprob_by_counts 1 (List.length user_ctor_descs))
+              end
+            in
+            let nonlinear_local_idents = nonlinear_local_idents_at hole_loc typed_prog prog in
+            (* print_endline @@ string_of_int (List.length user_ctors) ^ " user ctors"; *)
+            (* print_endline @@ "Nonlinear local idents at hole: " ^ (nonlinear_local_idents |>@ (fun (e, _, _) -> Exp.to_string e) |> String.concat ", "); *)
+            (* print_endline @@ "Nonlinear nonconstant names at hole: " ^ (SSet.elements nonconstant_names |> String.concat ", "); *)
+            [ { hole_type                     = hole_typed_node.exp_type
+              ; user_ctors                    = user_ctors
+              ; nonconstant_names             = nonconstant_names
+              ; local_idents                  = nonlinear_local_idents
+              ; check_if_constant             = is_constant nonconstant_names
+              ; cant_be_constant              = List.length unique_asserted_exps >= 2
+              ; single_asserted_exp           = (match unique_asserted_exps with | [e] -> Some (e, max_single_constant_term_lprob *. float_of_int (exp_size e)) | _ -> None)
+              ; nonconstant_idents_at_type    = []
+              ; idents_at_type                = []
+              ; functions_producing_type      = []
+              ; ctors_producing_type          = []
+              }
+            ]
         in
         (* print_endline "retyping prog"; *)
         (* progs *)
         (* ignore (exit 0); *)
         synth_envs
+        |> List.to_seq
         |> Seq.flat_map begin fun hole_synth_env ->
           (* At most one hole can be constant. *)
           hole_fillings_seq ~cant_be_constant:any_constant_holes (fillings, lprob) min_lprob hole_loc hole_synth_env.hole_type hole_synth_env
@@ -1251,6 +1262,9 @@ let rec fill_holes ?(max_lprob = max_single_term_lprob +. 0.01) start_sec prog r
       print_endline (string_of_int !terms_tested_count ^ "\t" ^ string_of_int terms_per_sec ^ " terms/sec\t" ^ StructItems.to_string (apply_fillings fillings top_level_sis_with_holes));
       (* print_endline @@ Loc_map.to_string Exp.to_string fillings; *)
     end;
+    (* if true then begin
+      print_endline (string_of_int !terms_tested_count ^ "\t" ^ StructItems.to_string (apply_fillings fillings top_level_sis_with_holes));
+    end; *)
     incr terms_tested_count;
     (* ignore (exit 0); *)
     (* let code = StructItems.to_string (apply_fillings fillings prog) in *)

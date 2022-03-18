@@ -140,7 +140,7 @@ module Type = struct
 
   let copy (t : t) : t = Btype.cleanup_abbrev (); Marshal.from_bytes (Marshal.to_bytes t [Closures]) 0
 
-  let rec iter f typ = Btype.iter_type_expr (fun t -> iter f t; f t) typ
+  let rec iter f typ = Btype.iter_type_expr (fun t -> iter f t) typ; f typ
 
   let new_var () = Btype.newgenvar ()
   let tuple ts = Btype.newgenty (Ttuple ts)
@@ -313,6 +313,7 @@ module Type = struct
     | Types.Tsubst t      -> tvar_name t
     | _                   -> None
 
+  (* Deduplicated Tvar/Tunivar names, from left to right. *)
   let names typ =
     let names = ref [] in
     typ
@@ -456,6 +457,16 @@ module Type = struct
       Some t1'
     with _ -> None
 
+  (* Is typ1 equal or more general than typ2? *)
+  let is_equal_or_more_general_than typ1 typ2 =
+    (* begin fun out ->
+      print_endline @@ to_string typ1 ^ "\t\t" ^ to_string typ2 ^ "\t\t" ^ (unify_opt typ1 typ2 |>& to_string ||& "-") ^ "\t\t" ^ string_of_bool out;
+      out
+    end @@ *)
+    match unify_opt typ1 typ2 with (* Apparently, unify prefers the Tvars in typ2 *)
+    | Some typ2' -> to_string typ2' = to_string typ2
+    | None       -> false
+
   (* Stops flattening if a labeled argument is encountered. *)
   (* e.g. 'a -> 'b -> 'c to ['a, 'b, 'c] *)
   let rec flatten_arrows typ =
@@ -521,7 +532,7 @@ module Type = struct
     | Tvariant { row_fields; row_more; row_name = None;         _ } -> (row_fields |>@ snd |>@@ flatten_row_field) @ flatten row_more
 
   (* Bottom up (children mapped before parents). *)
-  (* Note that mutable refs will no longer point to their originals (replaced instead with copies). Should matter for us. *)
+  (* Note that mutable refs will no longer point to their originals (replaced instead with copies). Shouldn't matter for us. *)
   let rec map f typ =
     let open Types in
     let recurse = map                                      f in
@@ -568,6 +579,17 @@ module Type = struct
     | Tpackage (path, lids, ts)                   -> f { typ with desc = Tpackage (path, lids, ts |>@ recurse) }
     | Tvariant row_desc                           -> f { typ with desc = Tvariant (map_row_desc row_desc) }
 
+  let rename_all mapping typ =
+    typ
+    |> map begin fun typ ->
+      match typ.desc with
+      | Tvar    (Some str) -> (match List.assoc_opt str mapping with | Some name' -> { typ with desc = Tvar    (Some name') } | None -> typ)
+      | Tunivar (Some str) -> (match List.assoc_opt str mapping with | Some name' -> { typ with desc = Tunivar (Some name') } | None -> typ)
+      | _                  -> typ
+    end
+
+  let rename name name' typ =
+    rename_all [(name, name')] typ
 end
 
 
@@ -795,6 +817,11 @@ module Exp = struct
     match exp.pexp_desc with
     | Pexp_apply (fexp, _) -> Some fexp
     | _                    -> None
+
+  let body_of_fun (exp : expression) =
+    match exp.pexp_desc with
+    | Pexp_fun (_, _, _, body) -> Some body
+    | _                        -> None
 
   let ctor_lid_loced (exp : expression) =
     match exp.pexp_desc with

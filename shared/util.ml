@@ -262,6 +262,15 @@ module List = struct
   let min = function
     | x::xs -> List.fold_left min x xs
     | []    -> raise @@ Invalid_argument "List.max needs to be given a non-empty list"
+
+  (* Turn n sequences into a sequence that produces lists of n values of all possible combinations between sequences. *)
+  let rec cart_prod lists =
+    match lists with
+    | list1::rest ->
+      list1 |> concat_map begin fun elem1 ->
+        cart_prod rest |> map (cons elem1)
+      end
+    | [] -> [[]]
 end
 
 module Seq = struct
