@@ -72,6 +72,9 @@ module Loc_ = struct
       Pervasives.compare
         (pos1.pos_fname, pos1.pos_cnum, pos1.pos_lnum, pos1.pos_bol)
         (pos2.pos_fname, pos2.pos_cnum, pos2.pos_lnum, pos2.pos_bol)
+
+    let byte_in_file { Lexing.pos_bol; pos_cnum; _ } =
+      pos_bol + pos_cnum
   end
 
   (* let none = Location.none *)

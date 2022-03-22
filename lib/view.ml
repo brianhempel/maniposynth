@@ -118,7 +118,7 @@ let html_of_pat ?(attrs = []) stuff pat =
   let type_error_htmls = type_error_htmls stuff pat.ppat_loc in
   let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
   span
-    ~attrs:(attrs @ [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat" ^ perhaps_type_error_class)] @ perhaps_type_attr @ perhaps_extraction_attr)
+    ~attrs:(attrs @ [("data-edit-loc", Serialize.string_of_loc pat.ppat_loc);("class","pat" ^ perhaps_type_error_class)] @ perhaps_type_attr @ perhaps_extraction_attr)
     (type_error_htmls @ [code])
 
 let string_of_arg_label =
@@ -133,8 +133,9 @@ let uninfix =  String.drop_prefix "(" %> String.drop_suffix ")"
 let exp_in_place_edit_attrs ?(infix = false) exp =
   let code = Attrs.remove_all_deep_exp exp |> Exp.to_string in (* Don't show pos/vis attrs. *)
   let code' = if infix then uninfix code else code in   (* Remove parens around ops rendered infix. *)
-  [ ("data-in-place-edit-loc", Serialize.string_of_loc exp.pexp_loc)
-  ; ("data-in-place-edit-code", code')
+  [ ("data-edit-loc", Serialize.string_of_loc exp.pexp_loc)
+  ; ("data-edit-loc-start-byte", Loc.Pos.byte_in_file exp.pexp_loc.loc_start |> string_of_int)
+  ; ("data-edit-code", code')
   ]
 
 let exp_gunk ?(infix = false) stuff exp =
@@ -694,7 +695,7 @@ let rec html_of_vb stuff recflag vb =
   let show_pat               = not (Pat.is_unit vb.pvb_pat) in
   let show_pat_on_top        = Exp.is_funlike vb.pvb_expr || should_show_vbs vb.pvb_expr in
   let perhaps_type_attr      = stuff.type_lookups.lookup_exp vb.pvb_expr.pexp_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.exp_type)]) ||& [] in
-  let attrs                  = [("data-in-place-edit-loc", Serialize.string_of_loc vb.pvb_loc); ("data-in-place-edit-code", Vb.to_string vb)] @ perhaps_type_attr in
+  let attrs                  = [("data-edit-loc", Serialize.string_of_loc vb.pvb_loc); ("data-edit-code", Vb.to_string vb)] @ perhaps_type_attr in
   box ~loc:vb.pvb_loc ~parsetree_attrs:vb.pvb_attributes ~attrs "vb" @@
     (if show_pat && show_pat_on_top then [html_of_pat stuff vb.pvb_pat] else []) @
     (if show_pat && Exp.is_funlike vb.pvb_expr then [label ~attrs:[("class","is-rec")] [checkbox ~attrs:(is_rec_perhaps_checked @ [loc_attr vb.pvb_loc]) (); "rec"]] else []) @
@@ -703,7 +704,7 @@ let rec html_of_vb stuff recflag vb =
 
 and html_tv_of_case_pat stuff pat =
   let perhaps_type_attr = stuff.type_lookups.lookup_pat pat.ppat_loc |>& (fun texp -> [("data-type", Type.to_string texp.Typedtree.pat_type)]) ||& [] in
-  let attrs             = [("data-in-place-edit-loc", Serialize.string_of_loc pat.ppat_loc); ("data-in-place-edit-code", Pat.to_string pat)] @ perhaps_type_attr in
+  let attrs             = [("data-edit-loc", Serialize.string_of_loc pat.ppat_loc); ("data-edit-code", Pat.to_string pat)] @ perhaps_type_attr in
   box ~loc:pat.ppat_loc ~parsetree_attrs:pat.ppat_attributes ~attrs "vb" @@
     [render_tv stuff (Some pat) None]
 
@@ -888,7 +889,7 @@ and render_tv stuff pat_opt (exp_opt : expression option) =
 
 let html_of_top_matter_structure_item (item : structure_item) =
   match item.pstr_desc with
-  | Pstr_type (_, _) -> div ~attrs:[("class", "type-def");("data-in-place-edit-loc", Serialize.string_of_loc item.pstr_loc)] [StructItem.to_string item]
+  | Pstr_type (_, _) -> div ~attrs:[("class", "type-def");("data-edit-loc", Serialize.string_of_loc item.pstr_loc)] [StructItem.to_string item]
   | _                -> ""
 
 let html_of_vb_structure_item stuff (item : structure_item) =
@@ -1036,10 +1037,6 @@ let html_str (structure_items : structure) lines_of_code_count (trace : Trace.t)
           [ div ~attrs:[("id", "text-edit-node-stuff")]
             [ label ~attrs:[("for","node-textbox");("id", "type-of-selected")] []
             ; fancyTextbox ~attrs:[("id", "node-textbox")] []
-            ]
-          ; span ~attrs:[("id", "text-edit-root-stuff")]
-            [ label ~attrs:[("for","root-node-textbox")] ["Root"]
-            ; fancyTextbox ~attrs:[("id", "root-node-textbox")] []
             ]
           ]
         ; div ~attrs:[("id", "assert-pane")]

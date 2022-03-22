@@ -421,11 +421,11 @@ table.subvalue-annotations td {
   color: black;
 }
 /* constants in value position */
-.value[data-in-place-edit-code] {
+.value[data-edit-code] {
   background-color: var(--color-light);
 }
 /* non-constant subvalues of something constant */
-.value[data-in-place-edit-code] .value:not([data-in-place-edit-code]) {
+.value[data-edit-code] .value:not([data-edit-code]) {
   background-color: var(--third-color-light);
 }
 /* .value[data-destruction-code] {
@@ -580,6 +580,15 @@ table.subvalue-annotations td {
 .autocomplete-options .selected {
   box-shadow: none;
 }
+.code-subexp-of-interest {
+  background-color: #e5e5e5;
+  /* text-shadow: 1px 1px 1px rgb(0, 150, 255), -1px 1px 1px rgb(0, 150, 255), -1px -1px 1px rgb(0, 150, 255), 1px -1px 1px rgb(0, 150, 255); */
+}
+.textbox:focus .code-subexp-of-interest {
+  background-color: inherit;
+  /* text-shadow: inherit; */
+}
+
 
 #inspector {
   position: fixed;
@@ -613,6 +622,7 @@ table.subvalue-annotations td {
   display: grid;
   grid-template-columns: auto auto;
 }
+
 /* #inspector #use-pane {
   display: grid;
   grid-template-columns: 60% auto auto;
@@ -762,6 +772,7 @@ table.subvalue-annotations td {
 }
 
 #interaction-stats {
+  /* Toggle display to turn stat display on or off */
   display: none;
   position: fixed;
   left: 0;

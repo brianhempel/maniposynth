@@ -7,7 +7,7 @@ Element.prototype.addEventListener = function (eventName, f, opts) {
   this.listeners = this.listeners || [];
   this.listeners.push({ eventName: eventName, f: f , opts: opts });
 };
-Element.prototype.removeEventListeners = function () {
+Element.prototype.removeEventListeners = function() {
   for (const { eventName, f, opts } of (this.listeners || [])) {
     this.removeEventListener(eventName, f, opts)
   }
@@ -34,9 +34,23 @@ Array.prototype.removeAsSet = function(elem) {
   return this;
 };
 
-Array.prototype.dedup = function () {
+Array.prototype.dedup = function() {
   // https://stackoverflow.com/a/9229821
   return this.filter((item, pos) => this.indexOf(item) == pos );
+}
+
+// Prefers first match in case of ties.
+String.prototype.indexOfMatchClosestToIndex = function(targetStr, idealI) {
+  let closestI = -1;
+  let i = -1;
+  while (true) {
+    i = this.indexOf(targetStr, i + 1);
+    if (i == -1) {
+      return closestI;
+    } else if (closestI == -1 || Math.abs(i - idealI) < Math.abs(closestI - idealI)) {
+      closestI = i;
+    }
+  }
 }
 
 function vectorAdd({x, y}, vec2) {
@@ -284,7 +298,7 @@ function drop(event) {
   // if (dropTarget.classList.contains("vbs") && droppedVTrace) {
   //   dropValueIntoVbs(dropTarget.dataset.loc, droppedVTrace);
   // } else if (dropTarget.classList.contains("exp") && droppedVTrace) {
-  //   dropValueIntoExp(dropTarget.dataset.inPlaceEditLoc, droppedVTrace);
+  //   dropValueIntoExp(dropTarget.dataset.editLoc, droppedVTrace);
   const toolKey = event.dataTransfer.getData("application/toolKey");
   const mainToolElem = toolKey && Array.from(document.querySelectorAll("[data-tool-key]")).find(elem => elem.dataset.toolKey === toolKey);
   if (dropTarget.classList.contains("vbs") && droppedExtractionCode) {
@@ -296,7 +310,7 @@ function drop(event) {
     else { console.error(event.dataTransfer.getData("application/dragSourceType")) }
     setMainTool(droppedExtractionCode, mainToolElem);
     insertCode(dropTarget.dataset.loc, droppedExtractionCode, compensateForMovedElems(dropTarget, mouseRelativeToElem(dropTarget, event)));
-  } else if (dropTarget.dataset.inPlaceEditLoc && droppedExtractionCode) {
+  } else if (dropTarget.dataset.editLoc && droppedExtractionCode) {
     if (dropTarget.classList.contains("exp")) {
       if (event.dataTransfer.getData("application/dragSourceType") == "tool")       { logDragToolbarExpToExp(); }
       else if (event.dataTransfer.getData("application/dragSourceType") == "exp")   { logDragExpToExp(); }
@@ -314,7 +328,7 @@ function drop(event) {
       console.error(dropTarget);
     }
     setMainTool(droppedExtractionCode, mainToolElem);
-    replaceLoc(dropTarget.dataset.inPlaceEditLoc, droppedExtractionCode);
+    replaceLoc(dropTarget.dataset.editLoc, droppedExtractionCode);
   } else {
     console.warn("No valid actions for drop on ", dropTarget);
   }
@@ -335,7 +349,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add drop zone events.
-  document.querySelectorAll('.vbs,.exp[data-in-place-edit-loc],.value[data-in-place-edit-loc]').forEach(elem => {
+  document.querySelectorAll('.vbs,.exp[data-edit-loc],.value[data-edit-loc]').forEach(elem => {
     elem.addEventListener("dragover", dragover);
     elem.addEventListener("dragleave", dragleave);
     elem.addEventListener("drop", drop);
@@ -458,7 +472,7 @@ window.addEventListener('DOMContentLoaded', () => {
     elem.addEventListener("click", globalSubmitEscape);
   });
   // Make appropriate items selectable.
-  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-in-place-edit-loc],[data-code-to-assert-on]').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]:not(.tool),.vb,[data-edit-loc],[data-code-to-assert-on]').forEach(elem => {
     elem.classList.add("selectable");
     elem.addEventListener("click", clickSelect);
   });
@@ -545,11 +559,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // }));
 
   // document.getElementById("node-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
-  //   replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
+  //   replaceLoc(targetElem.dataset.editLoc, text);
   // }));
 
   // document.getElementById("root-node-textbox").addEventListener("keydown", textboxKeydownHandler((targetElem, text) => {
-  //   replaceLoc(targetElem.dataset.inPlaceEditLoc, text);
+  //   replaceLoc(targetElem.dataset.editLoc, text);
   // }));
 
   const assertTextbox = document.getElementById("assert-textbox");
@@ -617,8 +631,6 @@ function selectInspectorTextbox() {
 function updateInspector() {
   const inspector         = window.inspector;
   const textEditPane      = document.getElementById("text-edit-pane");
-  const textEditRootStuff = document.getElementById("text-edit-root-stuff");
-  const rootNodeTextbox   = document.getElementById("root-node-textbox");
   const nodeTextbox       = document.getElementById("node-textbox");
   const assertPane        = document.getElementById("assert-pane");
   const assertOn          = document.getElementById("assert-on");
@@ -690,27 +702,49 @@ function updateInspector() {
     }
     show(inspector);
 
-    if (elem.dataset.inPlaceEditLoc) {
+    if (elem.dataset.editLoc) {
       let rootNodeElem = undefined;
       if (elem.classList.contains('exp')) {
         for (const parent of selfAndParents(elem)) {
-          if (parent.dataset.inPlaceEditLoc) {
+          if (parent.dataset.editLoc) {
             rootNodeElem = parent;
           } else {
             break;
           }
         }
       }
-      const rootNodeCode            = rootNodeElem?.dataset?.inPlaceEditCode || rootNodeElem?.innerText;
-      // rootNodeTextbox.value         = rootNodeCode;
-      rootNodeTextbox.innerText     = rootNodeCode;
-      // rootNodeTextbox.originalValue = rootNodeCode;
-      // rootNodeTextbox.targetElem    = rootNodeElem;
-      const nodeCode                = elem.dataset.inPlaceEditCode || elem.innerText;
-      // nodeTextbox.value             = nodeCode;
-      nodeTextbox.innerText         = nodeCode;
-      // nodeTextbox.originalValue     = nodeCode;
-      // nodeTextbox.targetElem        = elem;
+
+      let codeToEdit = "";
+      let locToEdit = "";
+
+      if (rootNodeElem?.dataset?.editLocStartByte && rootNodeElem?.dataset?.editCode) {
+        locToEdit  = rootNodeElem.dataset.editLoc;
+        codeToEdit = rootNodeElem.dataset.editCode;
+        nodeTextbox.innerText = codeToEdit;
+        // So, the locs are off slightly because they came from the ocamlformat formatted code, whereas our
+        // renderer is using OCaml's built-in unparser. Let's just go for "the closest" and hope it's good enough.
+        // console.log(codeTextNode.data, i, nodeCode)
+        const startByteEstimate = parseInt(elem.dataset.editLocStartByte) - parseInt(rootNodeElem.dataset.editLocStartByte);
+        const nodeCode          = elem.dataset.editCode || elem.innerText;
+        const i                 = nodeTextbox.childNodes[0].data.indexOfMatchClosestToIndex(nodeCode, startByteEstimate);
+
+        nodeTextbox.childNodes[0].splitText(i + nodeCode.length);
+        nodeTextbox.childNodes[0].splitText(i);
+
+        subexpTextNode = nodeTextbox.childNodes[1];
+        subexpTextNode.remove();
+
+        const subexpEmphNode = document.createElement('span');
+        subexpEmphNode.classList.add("code-subexp-of-interest");
+        subexpEmphNode.appendChild(subexpTextNode);
+
+        nodeTextbox.insertBefore(subexpEmphNode, nodeTextbox.childNodes[1]);
+      } else {
+        locToEdit  = elem.dataset.editLoc;
+        codeToEdit = elem.dataset.editCode || elem.innerText;
+        nodeTextbox.innerText = codeToEdit;
+      }
+
       const logEdit = function () {
         if (elem.classList.contains("value"))                 { logTypeOutCodeInValue(); }
         else if (elem.classList.contains("pat"))              { logTypeOutCodeInPat(); }
@@ -719,14 +753,9 @@ function updateInspector() {
         else if (elem.querySelector(":scope > .expectation")) { logTypeOutCodeInExp(); }
         else { console.error(elem); }
       };
-      if (!rootNodeElem || rootNodeElem === elem) {
-        hide(textEditRootStuff);
-      } else {
-        show(textEditRootStuff);
-        attachAutocomplete(rootNodeTextbox, rootNodeElem, code => { logEdit(); replaceLoc(rootNodeElem.dataset.inPlaceEditLoc, code) }, onTextEditAbort);
-      }
+
       show(textEditPane);
-      attachAutocomplete(nodeTextbox, elem, code => { logEdit(); replaceLoc(elem.dataset.inPlaceEditLoc, code) }, onTextEditAbort);
+      attachAutocomplete(nodeTextbox, elem, code => { logEdit(); replaceLoc(locToEdit, code) }, onTextEditAbort);
     } else {
       hide(textEditPane);
     }
@@ -893,36 +922,74 @@ function textboxDivToCode(textboxDiv) {
       code += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
     } else if (child.tagName === "BR") {
       code += "\n"
-    } else {
+    } else if (child.dataset.hasOwnProperty("extractionCode")) {
       // value node
       code += `(${child.dataset.extractionCode})`
+    } else {
+      // something else, e.g. a subexp emphasis node
+      code += textboxDivToCode(child);
     }
   }
   return code;
 }
 
-// if (option.isValue) {
-//   option.remove();
-//   option.contentEditable = false;
-// } else {
-//   textboxDiv.appendChild(document.createTextNode(option.innerText));
-// }
-
 // What we send to server to ask for suggestions
-// Autocompleted (sub)values are turned into (vtrace "hJWmvgAAAg4AAACUAAAB9wAAAfSgoKABANGwwClzaW1wbGUubWxBQE_ABAJBQGRAoLC6Ijo6QJCwmaCwkUCgoKABANCwwAQRRQB_AQCQwAQSRQB_AQCRQEBAkMCWwLOQsEEjaW50QECQQAED70ABAyYBA_BAAQMmoLC6BBlAkLCZoLCRQKCgoAEA0LDABClFAH8BAJPABCpFAH8BAJRAQECQwJYEGAED70ABAyqgsLoEK0CQsJmgsJFAoKCgAQDQsMAEO0UAfwEAlsAEPEUAfwEAl0BAQJDAlgQqAQPvQAEDLqCwuiJbXUBAoKCgAQDQsMAESEUAfwEAmMAESUUAfwEAmUFAQJDAlsCzkLBJJGxpc3RAoMCWBD8BA-9AAQMsQJBAAQPvQAEDLQED70ABAy9AoKCgAQDQsAQfBBFBQEBAoKCgAQDQBARAQJDAs5CwSSRsaXN0QKDABCYBA_BAAQM8QJBAAQPwQAEDO0CgoKABANCwBEEEIUFAQECgoKABANAEBEBAkMCzBBCgwARFAQPwQAEDP0CQQAED8EABAz5AoKCgAQDQsARmBC5BQEBAoKCgAQDQsMAEe0cBAKsBALzABHxHAQCrAQDEQEGgoKABANCwwASBRQB_AQCDwASCRQB_AQCLQKCwBICgoKABANCwwASJRQB_AQCOBEFAQECQwLMELaDABHoBA_BAAQNCQJBAAQPwQAEDQUAECwQGQAQZ")
+// Autocompleted (sub)values are turned into value_id_1234
+// Returns [code before/including cursor word, code after cursor word], which makes this allllll nasty
 function textboxDivToSuggestionQuery(textboxDiv) {
-  let code = "";
+  let codeBeforeCursor = "";
+  let codeAfterCursor = undefined;
   // Convert autocompleted values to code
   for (child of textboxDiv.childNodes) {
-    if (child.nodeType === 3) {
-      // Text node
-      code += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+    if (codeAfterCursor === undefined) {
+      if (child.nodeType === 3) {
+        // Text node
+        if (window.getSelection().focusNode === child) {
+          const nodeTextAfterCursor = child.data.substring(window.getSelection().focusOffset);
+          // Fill out to the end of the word...
+          const moreCharsCount = nodeTextAfterCursor.search(/[^a-zA-Z_0-9]/) == -1 ? nodeTextAfterCursor.length : nodeTextAfterCursor.search(/[^a-zA-Z_0-9]/);
+          const offset = moreCharsCount + window.getSelection().focusOffset;
+          codeBeforeCursor += child.data.substring(0,offset).replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+          codeAfterCursor   = child.data.substring(offset).replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+        } else {
+          codeBeforeCursor += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+        }
+      } else if (child.tagName === "BR") {
+        codeBeforeCursor += "\n"
+        if (window.getSelection().focusNode === child) {
+          codeAfterCursor = "";
+        }
+      } else if (child.dataset.hasOwnProperty("valueId")) {
+        // value node
+        codeBeforeCursor += `value_id_${child.dataset.valueId}`
+        if (window.getSelection().focusNode === child) {
+          codeAfterCursor = "";
+        }
+      } else {
+        // something else, e.g. a subexp emphasis node
+        const [before, after] = textboxDivToSuggestionQuery(child);
+        codeBeforeCursor += before;
+        codeAfterCursor   = after;
+      }
     } else {
-      // value node
-      code += `value_id_${child.dataset.valueId}`
+      // We've already seen the cursor.
+      if (child.nodeType === 3) {
+        // Text node
+        codeAfterCursor += child.data.replaceAll("\u00A0"," "); /* Remove non-breaking spaces...which are produced by space bar */
+      } else if (child.tagName === "BR") {
+        codeAfterCursor += "\n"
+      } else if (child.dataset.hasOwnProperty("valueId")) {
+        // value node
+        codeAfterCursor += `value_id_${child.dataset.valueId}`
+      } else {
+        // something else, e.g. a subexp emphasis node
+        const [before, after] = textboxDivToSuggestionQuery(child);
+        codeAfterCursor += before;
+        codeAfterCursor += (after || "");
+      }
     }
   }
-  return code;
+  return [codeBeforeCursor, codeAfterCursor];
 }
 
 function subvalueToOptionPart(subvalueElem) {
@@ -937,11 +1004,11 @@ function subvalueToOptionPart(subvalueElem) {
   return subvaluePart;
 }
 
-function optionFromSuggestion(suggestion) {
-  const parts = suggestion.split(/\b/); /* Split on word boundaries */
-  // Convert to nodes, turning value_id_123 into a pretty clone of that subvalue on the screen
+// returns [option, lastNodeOfSuggestion]
+function optionFromSuggestion(suggestion, codeAfterSuggestion) {
   const values = allExtractableValues();
-  const nodes = parts.map(part => {
+  // Convert to nodes, turning value_id_123 into a pretty clone of that subvalue on the screen
+  function partToHTMLNode(part) {
     let subvalueElem = null;
     if (part.startsWith('value_id_')) {
       // Try to find that subvalue
@@ -953,10 +1020,13 @@ function optionFromSuggestion(suggestion) {
     } else {
       return document.createTextNode(part);
     }
-  });
+  }
+  const suggestionNodes      = suggestion.split(/\b/).map(partToHTMLNode); /* Split on word boundaries */
+  const nodesAfterSuggestion = codeAfterSuggestion.split(/\b/).map(partToHTMLNode); /* Split on word boundaries */
   const option = document.createElement("div");
-  for (const node of nodes) { option.appendChild(node); }
-  return option;
+  for (const node of suggestionNodes)      { option.appendChild(node); }
+  for (const node of nodesAfterSuggestion) { option.appendChild(node); }
+  return [option, suggestionNodes[suggestionNodes.length - 1]];
 }
 
 function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedValueIdStr) {
@@ -1012,7 +1082,10 @@ function attachAutocomplete(textboxDiv, targetElem, onSubmit, onAbort, selectedV
   });
   textboxDiv.addEventListener('focus', event => {
     should_show_autocomplete && colorizeSubvalues(targetElem);
-    window.getSelection().selectAllChildren(textboxDiv);
+    // if there's a subexp of interest, select that, otherwise select all
+    const subexpEmphNode = Array.from(textboxDiv.childNodes).find(node => node.classList?.contains("code-subexp-of-interest"));
+    console.log(Array.from(textboxDiv.childNodes));
+    window.getSelection().selectAllChildren(subexpEmphNode || textboxDiv);
     should_show_autocomplete && updateAutocompleteAsync(textboxDiv, selectedValueIdStr);
   });
 }
@@ -1023,7 +1096,9 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   const valueIdsVisible = valuesVisible.map(elem => elem.dataset.valueId);
   const valueStrs       = valuesVisible.map(elem => subvalueToOptionPart(elem).innerText.replaceAll("\n"," ").trim().replaceAll(",","~CoMmA~") /* escape commas */ );
   // console.log(valueStrs);
-  const query           = textboxDivToSuggestionQuery(textboxDiv);
+  const [query, codeAfterQuery] = textboxDivToSuggestionQuery(textboxDiv);
+  // console.log(query)
+  // console.log(codeAfterQuery || "");
 
   // https://stackoverflow.com/a/57067829
   const searchURL = new URL(document.location.href + "/search");
@@ -1034,12 +1109,12 @@ function updateAutocompleteAsync(textboxDiv, selectedValueIdStr) {
   request.open("GET", searchURL);
   request.addEventListener("loadend", _ => {
     // console.log(request.responseText);
-    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0).filter(str => str !== textboxDiv.originalValue))
+    updateAutocomplete(textboxDiv, request.responseText.split("|$SEPARATOR$|").filter(str => str.length > 0).filter(str => str !== textboxDiv.originalValue), codeAfterQuery || "");
   });
   request.send();
 }
 
-function updateAutocomplete(textboxDiv, suggestions) {
+function updateAutocomplete(textboxDiv, suggestions, codeAfterSuggestion) {
   // console.log(suggestions);
   const autocompleteDiv = textboxDiv.autocompleteDiv;
   autocompleteDiv.innerHTML = "";
@@ -1054,7 +1129,7 @@ function updateAutocomplete(textboxDiv, suggestions) {
   for (const suggestion of suggestions) {
     // const optionDiv = document.createElement("div");
     // optionDiv.innerText = option;
-    let option = optionFromSuggestion(suggestion);
+    let [option, lastNodeOfSuggestion] = optionFromSuggestion(suggestion, codeAfterSuggestion);
     option.tabIndex = 0; /* Make element focusable, even though below we override tab */
     function chooseOption(event) {
       logSelectAutocompleteOption();
@@ -1062,7 +1137,7 @@ function updateAutocomplete(textboxDiv, suggestions) {
       autocompleteDiv.innerHTML = "";
       textboxDiv.innerHTML = "";
       const optionChildNodes = Array.from(option.childNodes); /* If we don't convert to array, for some reason the whitespace nodes are skipped. */
-      if (optionChildNodes[optionChildNodes.length - 1].dataset?.extractionCode) {
+      if (lastNodeOfSuggestion.dataset?.extractionCode) {
         logAutocompleteToValue();
       }
       for (const child of optionChildNodes) {
@@ -1163,7 +1238,7 @@ function beginNewCodeEdit(vbsHolder) {
 
 
 window.addEventListener('DOMContentLoaded', () => {
-  // document.querySelectorAll('[data-in-place-edit-loc]').forEach(elem => {
+  // document.querySelectorAll('[data-edit-loc]').forEach(elem => {
   //   elem.addEventListener("dblclick", beginEditCallback("in-place"));
   // });
 
@@ -1857,7 +1932,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 document.addEventListener("keydown", function(event) {
   if (event.key === "Backspace" || event.key === "Delete") {
-    const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected,.value[data-in-place-edit-loc].selected');
+    const elem = document.querySelector('.vb.selected,.exp.selected,.scrutinee.selected,.value[data-edit-loc].selected');
     if (elem) {
       if      (elem.classList.contains("vb") && elem.querySelector(":scope > .assert")) { logDeleteAssert() }
       else if (elem.classList.contains("vb"))                                           { logDeleteVb() }
@@ -1865,7 +1940,7 @@ document.addEventListener("keydown", function(event) {
       else if (elem.classList.contains("value"))                                        { logDeleteExp() }
       else if (elem.classList.contains("scrutinee"))                                    { logDeleteMatch() }
       else { console.error(elem) }
-      deleteLoc(elem.dataset.loc || elem.dataset.inPlaceEditLoc);
+      deleteLoc(elem.dataset.loc || elem.dataset.editLoc);
       event.stopImmediatePropagation();
     }
   }
