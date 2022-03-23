@@ -300,7 +300,8 @@ td.returns-label {
   /* text-align: left; */
 }
 .scrutinee .values,
-.label .values {
+.label .values,
+.ident-label {
   display: inline-block;
   position: relative;
   top: -0.7em;
@@ -309,8 +310,21 @@ td.returns-label {
   padding: 1px;
   color: #555;
 }
-.label .values {
+.label .values,
+.ident-label {
   background-color: var(--color);
+}
+/* Undo styles */
+.label .ident > .values {
+  display: inherit;
+  position: inherit;
+  top: inherit;
+  margin-left: inherit;
+  /* border: solid 1px var(--color); */
+  padding: inherit;
+  color: inherit;
+  pointer-events: none;
+  background-color: inherit;
 }
 .scrutinee .values {
   background-color: #eee;
@@ -394,8 +408,12 @@ table.subvalue-annotations td {
   font-size: 0.7rem;
 }
 .scrutinee .root-value-holder,
-.label .root-value-holder {
+.label .root-value-holder,
+.ident-label {
   font-size: 0.7rem;
+}
+.label .ident .root-value-holder {
+  font-size: inherit;
 }
 .root-value-holder {
   font-size: 1.5rem;

@@ -1897,6 +1897,16 @@ function updateActiveValues(elem, frameNo) {
         elem.classList.add("not-in-active-frame");
       }
     }
+
+    // For idents, show the exp as a label when there's an active value.
+    // The rest of the styling is in the CSS.
+    if (elem.classList.contains("ident")) {
+      if (active) {
+        elem.children[0].classList.add("ident-label");
+      } else {
+        elem.children[0].classList.remove("ident-label");
+      }
+    }
   }
 
   return active;
