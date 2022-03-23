@@ -309,6 +309,7 @@ td.returns-label {
   /* border: solid 1px var(--color); */
   padding: 1px;
   color: #555;
+  pointer-events: none;
 }
 .label .values,
 .ident-label {
@@ -475,6 +476,9 @@ table.subvalue-annotations td {
 .scrutinee .value,
 .label .value {
   font-weight: normal;
+}
+.label .ident .value {
+  font-weight: bold;
 }
 
 .root-value-holder.not-in-active-frame, .ellipses {

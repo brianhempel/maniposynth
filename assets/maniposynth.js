@@ -2086,7 +2086,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   hide(tooltipDiv);
 
-  document.querySelectorAll('[data-extraction-code]:not(.tool):not(.exp)').forEach(elem => {
+  document.querySelectorAll('[data-extraction-code]:not(.tool):not(.exp:not(.ident))').forEach(elem => {
     elem.addEventListener("mouseenter", event => {
       tooltipStack.unshift(elem);
       updateTooltip(event);

@@ -601,6 +601,7 @@ let accept_or_reject_options_html ?(item_name = "") prog exp =
 let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) (stuff : stuff) exp =
   let recurse ?(show_result = true) ?(infix = false) ?(parens_context = NoParens) ?(in_list = false) = html_of_exp ~show_result ~infix ~parens_context ~in_list stuff in
   let (code', attrs) = exp_gunk ~infix stuff exp in
+  let perhaps_exp_class = if Exp.is_hole exp then " hole" else if Exp.is_ite exp then " ite" else if Exp.is_ident exp then " ident" else "" in
   let wrap inner =
     let needs_parens =
       parens_context != NoParens &&
@@ -617,7 +618,6 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
         | NextToInfixOp -> has_infix_app ()
         end
     in
-    let perhaps_exp_class = if Exp.is_hole exp then " hole" else if Exp.is_ite exp then " ite" else if Exp.is_ident exp then " ident" else "" in
     let type_error_htmls = type_error_htmls stuff exp.pexp_loc in
     let perhaps_type_error_class = if type_error_htmls <> [] then " has-type-error" else "" in
     let (perhaps_accept_reject_class, perhaps_accept_or_reject_html) =
@@ -665,8 +665,12 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
   | Pexp_ifthenelse (e1, e2, e3_opt) ->
     values_for_exp ^ "if " ^ recurse e1 ^ "<br>then " ^ recurse e2 ^ (e3_opt |>& (fun e3 -> "<br>else " ^ recurse e3) ||& "")
-  | Pexp_ident _ ->
-    span ~attrs:[("class","")] [code'] ^ values_for_exp ^ " " (* code' will be given the ident-label class by the JS when the call frame has no values *)
+  | _ when String.includes "ident" perhaps_exp_class -> (* not on holes *)
+    (* the ident-label class will be toggled off by the JS when the selected call frame has no values. *)
+    (* For top level, show the code as a label if there are any values. *)
+    (* The CSS handles the styling to draw ident values differently (based on the ident class in `wrap` above) *)
+    let code_class = if String.includes "root-value-holder" values_for_exp then "ident-label" else "" in
+    span ~attrs:[("class",code_class)] [code'] ^ values_for_exp ^ " "
   | _ ->
     values_for_exp ^ code' ^ " "
 
