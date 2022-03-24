@@ -59,7 +59,7 @@ let rec fold f tree acc =
 
 let terms_tested_count         = ref 0
 let timeout_secs               = 10.0
-let fuel_per_top_level_binding = 300
+let fuel_per_top_level_binding = 1000
 
 
 type fillings = expression Loc_map.t
