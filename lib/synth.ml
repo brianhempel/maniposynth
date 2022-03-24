@@ -995,7 +995,7 @@ let rec type_of_expectation value =
   whereas [`a] will only unify with [`a].
 *)
 let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : program =
-  let (typed_struct, _, _) =
+  let (typed_struct, _, tenv) =
     try Typing.typedtree_sig_env_of_parsed prog file_name
     with _ -> ({ Typedtree.str_items = []; str_type = []; str_final_env = Env.empty }, [], Env.empty)
   in
@@ -1032,14 +1032,16 @@ let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : pro
       | _ -> ()
       end; *)
       (* print_endline @@ Type.to_string @@ Antiunify.most_specific_shared_generalization_of_types types; *)
+      let normalize_levels = Type.to_string %> Type.from_string ~env:tenv in (* uggh nat level 2074 didn't unify with Tvar level 100000000, but this fixes *)
       let exp_static_type =
+        normalize_levels @@
         match Eval.lookup_type_opt lookup_exp_typed exp.pexp_loc with
         | Some t -> t
         | None   -> Type.new_var ()
       in
       let type_to_annotate =
-        let generalization = Antiunify.most_specific_shared_generalization_of_types types in
-        Antiunify.most_specific_shared_generalization_of_types types
+        let generalization = Antiunify.most_specific_shared_generalization_of_types types |> normalize_levels in
+        generalization
         |> Type.unify_opt exp_static_type
         |> Option.from_some ("example generalization " ^ Type.to_string generalization ^ " doesn't unify with static type " ^ Type.to_string exp_static_type)
         |> harden_type_vars

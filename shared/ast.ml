@@ -338,7 +338,7 @@ module Type = struct
         safe_repr (t::v) t
       | t -> t
     in *)
-    let recurse = might_unify (* ~show *) in
+    let recurse = might_unify in
     let t1 = regular t1 in
     let t2 = regular t2 in
     match t1.desc, t2.desc with
