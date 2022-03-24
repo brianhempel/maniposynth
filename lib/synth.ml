@@ -1026,7 +1026,24 @@ let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : pro
       (* print_endline @@ "hi " ^ Loc.to_string exp.pexp_loc; *)
       exp
     | types ->
-      let type_to_annotate = Antiunify.most_specific_shared_generalization_of_types types |> harden_type_vars in
+      (* print_endline @@ String.concat "\n" (types |>@ Type.to_string);
+      begin match types with
+      | [t1;t2] -> Type.equal_ignoring_id_and_scope ~show:true t1 t2 |> ignore
+      | _ -> ()
+      end; *)
+      (* print_endline @@ Type.to_string @@ Antiunify.most_specific_shared_generalization_of_types types; *)
+      let exp_static_type =
+        match Eval.lookup_type_opt lookup_exp_typed exp.pexp_loc with
+        | Some t -> t
+        | None   -> Type.new_var ()
+      in
+      let type_to_annotate =
+        let generalization = Antiunify.most_specific_shared_generalization_of_types types in
+        Antiunify.most_specific_shared_generalization_of_types types
+        |> Type.unify_opt exp_static_type
+        |> Option.from_some ("example generalization " ^ Type.to_string generalization ^ " doesn't unify with static type " ^ Type.to_string exp_static_type)
+        |> harden_type_vars
+      in
       (* print_endline @@ "annotating: " ^ Type.to_string type_to_annotate; *)
       Exp.constraint_ exp (Type.to_core_type type_to_annotate)
   in

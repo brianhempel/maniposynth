@@ -182,7 +182,9 @@ module Type = struct
       str_opt1 = str_opt2
 
     | Tarrow (lab1, t_l1, t_r1, comm1)
-    , Tarrow (lab2, t_l2, t_r2, comm2) -> lab1 = lab2 && comm1 = comm2 && recurse t_l1 t_l2 && recurse t_r1 t_r2
+    , Tarrow (lab2, t_l2, t_r2, comm2) ->
+      let rec get_comm = function Clink { contents = comm } -> get_comm comm | comm -> comm in
+      lab1 = lab2 && get_comm comm1 = get_comm comm2 && recurse t_l1 t_l2 && recurse t_r1 t_r2
 
     | Ttuple ts1
     , Ttuple ts2 -> List.for_all2_safe recurse ts1 ts2

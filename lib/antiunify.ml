@@ -533,9 +533,9 @@ let most_specific_generalization typs =
   | [t] -> t
   | ts  -> failwith @@ "most_specific_generalization: " ^ string_of_int (List.length ts) ^ " \"most specific\" generalizations!\n" ^ String.concat "\n" (ts |>@ Type.to_string)
 
-let most_specific_shared_generalization typ1 typ2 =
+(* let most_specific_shared_generalization typ1 typ2 =
   shared_generalizations typ1 typ2
-  |> most_specific_generalization
+  |> most_specific_generalization *)
 
 let rec most_specific_shared_generalization_of_types typs =
   let recurse = most_specific_shared_generalization_of_types in

@@ -62,6 +62,8 @@ module Option = struct
   let join = function Some (Some x) -> Some x | _ -> None
   let to_list = function Some x -> [x] | None -> []
 
+  let from_some err_msg = function Some x -> x | None -> failwith @@ "from_some failed: " ^ err_msg
+
   let rec project = function
     | []             -> Some []
     | None   :: _    -> None
