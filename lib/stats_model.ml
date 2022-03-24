@@ -1656,12 +1656,6 @@ let pervasives_pure_idents_only =
   pervasives_idents_only
   |> List.filter (fun (_, typ, _) -> not (is_imperative typ))
 
-let max_single_constant_term_lprob =
-  mult_lprobs const_lprob begin
-    const_strs @ const_ints @ const_chars @ const_floats
-    |>@ Tup3.thd
-    |> List.max
-  end
 
 (* Use this to reserve probability for other holes! *)
 let max_ctor_lprob_given_ctor = max stdlib_ctor_lprob nonstdlib_ctor_lprob
@@ -1671,5 +1665,6 @@ let max_local_ident_lprob_given_ident =
   | _ -> failwith "asjndvoisehbvbhskdjvfkjdfs"
 
 
-let max_const_lprob_given_const = all_consts_ordered |>@ Tup3.thd |> List.max
-let max_single_term_lprob = mult_lprobs ident_lprob max_local_ident_lprob_given_ident
+let max_const_lprob_given_const    = all_consts_ordered |>@ Tup3.thd |> List.max
+let max_single_constant_term_lprob = mult_lprobs const_lprob max_const_lprob_given_const
+let max_single_term_lprob          = mult_lprobs ident_lprob max_local_ident_lprob_given_ident
