@@ -795,7 +795,7 @@ table.subvalue-annotations td {
 
 #interaction-stats {
   /* Toggle display to turn stat display on or off */
-  display: none;
+  /* display: none; */
   position: fixed;
   left: 0;
   bottom: 0;
