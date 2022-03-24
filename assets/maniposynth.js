@@ -2330,6 +2330,10 @@ function copyInteractionStats() {
   const rowStr = Array.from(statsDataTr.children).map(td => td.innerText.trim()).join("\t") + "\n\t";  // Apple Numbers needs the newline and tab to decide I'm pasting multiple cells and not just a single cell
 
   console.log(rowStr);
+  // If you need the "copy" button to work, but are running Maniposynth on a remote machine, you can use a tcp tunnel to expose the remote machine on localhost.
+  // $ brew install tcptunnel
+  // $ tcptunnel --local-port=1111 --remote-port=1111 --remote-host=169.254.24.1 --stay-alive
+
   navigator.clipboard.writeText(rowStr);
 }
 

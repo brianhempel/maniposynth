@@ -796,6 +796,9 @@ table.subvalue-annotations td {
 #interaction-stats {
   /* Toggle display to turn stat display on or off */
   /* display: none; */
+  /* If you need the "copy" button to work, but are running Maniposynth on a remote machine, you can use a tcp tunnel to expose the remote machine on localhost. */
+  /* $ brew install tcptunnel */
+  /* $ tcptunnel --local-port=1111 --remote-port=1111 --remote-host=169.254.24.1 --stay-alive */
   position: fixed;
   left: 0;
   bottom: 0;
