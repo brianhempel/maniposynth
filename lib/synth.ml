@@ -1375,7 +1375,7 @@ let best_result prog _trace assert_results file_name =
   (* print_endline @@ "Typing " ^ StructItems.to_string prog; *)
   let starting_hole_locs = hole_locs prog Loc_map.empty in
   match fill_holes start_sec prog reqs file_name with
-  | exception _ -> print_endline "synth exception"; Printexc.print_backtrace stdout; None
+  | exception exn -> print_endline @@ "synth exception: " ^ Printexc.to_string exn; Printexc.print_backtrace stdout; None
   | None -> print_endline "synth failed"; None
   | Some fillings' ->
     print_endline @@ "synth success. " ^ string_of_float (Unix.gettimeofday () -. start_sec) ^ "s";
