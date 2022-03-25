@@ -505,9 +505,9 @@ and generalizations typ : st list =
   in
   generalize_self_and_return @@
   match typ.desc with
-  | Tvar _                                  -> failwith "Antiunify.generalizations not smart enough to handle type variables in the input types"
   | Tnil
-  | Tunivar _                               -> [([], typ)]
+  | Tunivar _
+  | Tvar _                                  -> [([], typ)]
   | Tarrow (lab, l, r, commutable)          -> pair_combos l r   |>@ (fun (subst, (l', r'))     -> (subst, { typ with desc = Tarrow (lab, l', r', commutable) }))
   | Tlink t                                 -> recurse t         |>@ (fun (subst, t')           -> (subst, { typ with desc = Tlink t' }))
   | Tsubst t                                -> recurse t         |>@ (fun (subst, t')           -> (subst, { typ with desc = Tsubst t' }))
@@ -521,6 +521,8 @@ and generalizations typ : st list =
   | Tconstr _                               -> failwith "Antiunify.generalizations not smart enough to handle abbrev memos"
 
 let generalizations typ : st list =
+  if Type.flatten typ |> List.exists Type.is_var_type then
+    failwith "Antiunify.generalizations not smart enough to handle type variables in the input types";
   generalizations typ
   |>@ normalize_names
   |>@ fixup_tvars
