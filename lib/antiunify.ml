@@ -390,7 +390,7 @@ let rename name name' st : st =
 
 (* Normalize the names so we can easily compare for alpha-equivalence. *)
 let normalized_names = ["a"; "b"; "c"; "d"; "e"; "f"; "g"; "h"; "i"; "j"; "k"; "l"; "m"; "n"; "o"; "p"; "q"; "r"; "s"; "t"; "u"; "v"; "w"; "x"; "y"; "z"] (* what are you doing with more type variables than that?! *)
-let temp_names = normalized_names |>@ fun name -> name ^ "10000"
+let temp_names = normalized_names |>@ fun name -> name ^ "_____"
 let temp_names_mapping = List.map2_best_effort (fun name name' -> (name, name')) normalized_names temp_names
 let normalize_names st : st =
   let (subst, typ) = rename_all temp_names_mapping st in (* Avoid collisions if there are names in the subst that aren't in typ. *)
@@ -442,33 +442,38 @@ let all_ways_to_possibly_reuse_binding name1 t1 ((subst2, typ2) : st) : st list 
   end [(subst2, typ2)]
 
 
-(*
-  Renames vars in subst2 & typ2 so no collsions.
+let name_counter = ref 0
+let gen_name () =
+  incr name_counter;
+  "a" ^ string_of_int !name_counter
 
-  Also produces all combinations where a binding in s1 may be reused in s2.
+(*
+  Input names will only collide if they were pre-existing in the input, which we want, actually.
+
+  Produces all combinations where a binding in s1 may be reused in s2.
 *)
-let combine_substs subst1 typs1 ((subst2, typ2) : st) : st list =
-  let domain1 = List.dedup @@ (subst1 |>@ fst) @ (typs1 @ (subst1 |>@ snd) |>@@ Type.names) in
-  let domain2 = List.dedup @@ (subst2 |>@ fst) @ (typ2 :: (subst2 |>@ snd) |>@@ Type.names) in
-  let names = ref (domain1 @ domain2) in
-  domain2
-  |> List.fold_left begin fun outs name ->
+let combine_substs subst1 _typs1 ((subst2, typ2) : st) : st list =
+  (* let domain1 = List.dedup @@ (subst1 |>@ fst) @ (typs1 @ (subst1 |>@ snd) |>@@ Type.names) in *)
+  (* let domain2 = List.dedup @@ (subst2 |>@ fst) @ (typ2 :: (subst2 |>@ snd) |>@@ Type.names) in *)
+  (* let names = ref (domain1 @ domain2) in *)
+  (* domain2 *)
+  (* |> List.fold_left begin fun outs name ->
     if List.mem name domain1 then
       let name' = Name.gen_ ~avoid:!names ~base_name:"a" in
       names := name' :: !names;
       outs |>@ rename name name'
     else
       outs
-  end [(subst2, typ2)]
-  |>@@ begin fun (subst2', typ2') ->
+  end [(subst2, typ2)] *)
+  (* |>@@ begin fun typ2 -> *)
     (* if true then [(subst2', typ2')] else *)
-    (* If there's a binding in subst1 that has the same type_expr as in subst2, we can consolidate. e.g. turn [a:int][b:int]('a,'b) into [a:int]('a,'a) *)
-    subst1
-    |> List.fold_left begin fun outs (name1, t1) ->
-      outs
-      |>@@ (fun (subst2', typ2') -> all_ways_to_possibly_reuse_binding name1 t1 (subst2', typ2'))
-    end [(subst2', typ2')]
-  end
+  (* If there's a binding in subst1 that has the same type_expr as in subst2, we can consolidate. e.g. turn [a:int][b:int]('a,'b) into [a:int]('a,'a) *)
+  subst1
+  |> List.fold_left begin fun outs (name1, t1) ->
+    outs
+    |>@@ (fun (subst2', typ2') -> all_ways_to_possibly_reuse_binding name1 t1 (subst2', typ2'))
+  end [(subst2, typ2)]
+  (* end *)
   |>@ fun (subst2', typ2') -> (subst1 @ subst2', typ2')
 
 let rec combos typs : (subst * Types.type_expr list) list =
@@ -499,8 +504,9 @@ and generalizations typ : st list =
   let recurse = generalizations in
   let open Types in
   let generalize_self_and_return outs =
-    let name = Name.gen_ ~avoid:(Type.names typ) ~base_name:"a" in
-    let new_var = Btype.newgenvar ~name:"a" () in
+    let name = gen_name () in
+      (* Name.gen_ ~avoid:(Type.names typ) ~base_name:"a" in *)
+    let new_var = Btype.newgenvar ~name () in
     ([ (name, typ) ], new_var) :: outs
   in
   generalize_self_and_return @@
@@ -521,9 +527,23 @@ and generalizations typ : st list =
   | Tconstr _                               -> failwith "Antiunify.generalizations not smart enough to handle abbrev memos"
 
 let generalizations typ : st list =
+  name_counter := 0;
+  (* print_endline @@ Type.to_string_raw typ; *)
   generalizations typ
+  (* |> begin fun ts ->
+    ts |> List.iter (snd %> Type.to_string_raw %> print_endline);
+    ts
+  end *)
   |>@ normalize_names
   |>@ fixup_tvars
+  (* |> begin fun ts ->
+    ts |> List.iter (snd %> Type.to_string %> print_endline);
+    ts
+  end *)
+
+(* let _ =
+  generalizations (Type.from_string "'a -> 'a")
+  |> List.iter (to_string %> print_endline) *)
 
 let shared_generalizations typ1 typ2 : Types.type_expr list =
   let gens1 = generalizations typ1 |>@ snd |> List.dedup_by Type.to_string in
@@ -643,6 +663,17 @@ let most_specific_shared_generalization_of_types typs =
   most_specific_shared_generalization_of_types
     [ (Type.from_string ~env:Typing.initial_env "int -> int")
     ; (Type.from_string ~env:Typing.initial_env "string -> int") ]
+  |> Type.to_string |> print_endline *)
+
+
+(* Should be 'a list -> 'a -> bool *)
+(* There was once a bug that produced 'a list -> 'b -> bool *)
+(* let _ =
+  most_specific_shared_generalization_of_types
+    [ Type.from_string ~env:Typing.initial_env "int list -> int -> bool"
+    ; Type.from_string ~env:Typing.initial_env "string list -> string -> bool"
+    ; Type.from_string ~env:Typing.initial_env "int list -> int -> bool"
+    ]
   |> Type.to_string |> print_endline *)
 
 
