@@ -1021,10 +1021,24 @@ let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : pro
     ignore @@ push_down_req fillings filled_prog ~lookup_exp_typed ~hit_a_function_f req
   end;
   let perhaps_annotate_exp exp =
-    match Loc_map.all_at_key exp.pexp_loc !exps_to_annotate |>@? (Type.flatten %> List.count Type.is_var_type %> (=) 0) with (* The anti-unifier can only handle concrete types in its input. It's sound to not generalize as much as possible. *)
+    let example_types_at_exp = Loc_map.all_at_key exp.pexp_loc !exps_to_annotate in
+    (* The anti-unifier can only handle concrete types in its input. It is sound to not generalize as much as possible. *)
+    match example_types_at_exp |>@? (Type.flatten %> List.count Type.is_var_type %> (=) 0) with
     | []    ->
-      (* print_endline @@ "hi " ^ Loc.to_string exp.pexp_loc; *)
-      exp
+      (* All example calls have type vars. Better to try to annotate with something rather than nothing. *)
+      (* Attempt to choose an example type with the least number of different type vars and least number of type vars. *)
+      example_types_at_exp
+      |> List.sort_by begin fun t ->
+        (* print_endline @@ Type.to_string_raw t; *)
+        (* There will be unnamed tvars here... *)
+        let vars = Type.flatten t |>@? Type.is_var_type in
+        ( List.length (List.dedup_by Type.regular vars)
+        , List.length vars
+        )
+      end
+      |> List.hd_opt
+      |>& (fun type_to_annotate -> Exp.constraint_ exp (Type.to_core_type type_to_annotate))
+      ||& exp
     | types ->
       (* print_endline @@ String.concat "\n" (types |>@ Type.to_string);
       begin match types with
