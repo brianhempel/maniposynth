@@ -1021,7 +1021,7 @@ let apply_fillings_and_degeneralize_functions fillings file_name prog reqs : pro
     ignore @@ push_down_req fillings filled_prog ~lookup_exp_typed ~hit_a_function_f req
   end;
   let perhaps_annotate_exp exp =
-    match Loc_map.all_at_key exp.pexp_loc !exps_to_annotate with
+    match Loc_map.all_at_key exp.pexp_loc !exps_to_annotate |>@? (Type.flatten %> List.count Type.is_var_type %> (=) 0) with (* The anti-unifier can only handle concrete types in its input. It's sound to not generalize as much as possible. *)
     | []    ->
       (* print_endline @@ "hi " ^ Loc.to_string exp.pexp_loc; *)
       exp

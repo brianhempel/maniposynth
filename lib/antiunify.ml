@@ -357,6 +357,14 @@ The code below finds the possible generalizations for the given types,
 intersects them, and picks out the most specific (the type that doesn't
 change when unified with any of the others.)
 
+LIMITATIONS:
+
+Type variables in the _input_ types are not handled yet. They have a different meaning than type vars
+in the output.
+
+e.g. the most specific generalization of 'a -> int and int -> 'a *should* be int -> int, not 'a -> 'b.
+But we can't handle that yet.
+
 *)
 
 type subst = (string * Types.type_expr) list
@@ -497,9 +505,9 @@ and generalizations typ : st list =
   in
   generalize_self_and_return @@
   match typ.desc with
+  | Tvar _                                  -> failwith "Antiunify.generalizations not smart enough to handle type variables in the input types"
   | Tnil
-  | Tunivar _
-  | Tvar _                                  -> [([], typ)]
+  | Tunivar _                               -> [([], typ)]
   | Tarrow (lab, l, r, commutable)          -> pair_combos l r   |>@ (fun (subst, (l', r'))     -> (subst, { typ with desc = Tarrow (lab, l', r', commutable) }))
   | Tlink t                                 -> recurse t         |>@ (fun (subst, t')           -> (subst, { typ with desc = Tlink t' }))
   | Tsubst t                                -> recurse t         |>@ (fun (subst, t')           -> (subst, { typ with desc = Tsubst t' }))
@@ -606,13 +614,23 @@ let rec most_specific_shared_generalization_of_types typs =
 
 (* let _ =
   print_endline "Most specific shared generalization of (int * int) list -> (int list * int list) and (bool * bool) list -> (bool list * bool list):";
-  most_specific_shared_generalization
-    (Type.from_string ~env:Typing.initial_env "(int * int) list -> (int list * int list)")
-    (Type.from_string ~env:Typing.initial_env "(bool * bool) list -> (bool list * bool list)")
+  most_specific_shared_generalization_of_types
+    [ (Type.from_string ~env:Typing.initial_env "(int * int) list -> (int list * int list)")
+    ; (Type.from_string ~env:Typing.initial_env "(bool * bool) list -> (bool list * bool list)") ]
   |> Type.to_string |> print_endline *)
 
 (* let _ =
-  most_specific_shared_generalization
-    (Type.from_string ~env:Typing.initial_env "int -> int")
-    (Type.from_string ~env:Typing.initial_env "string -> int")
+  most_specific_shared_generalization_of_types
+    [ (Type.from_string ~env:Typing.initial_env "int -> int")
+    ; (Type.from_string ~env:Typing.initial_env "string -> int") ]
   |> Type.to_string |> print_endline *)
+
+
+(* type vars in the input should generalize to *everything* *)
+(* expected: int -> int *)
+(* currently: we crash to force you not to do this *)
+(* let _ =
+  shared_generalizations
+    (Type.from_string ~env:Typing.initial_env "'a -> int")
+    (Type.from_string ~env:Typing.initial_env "int -> 'a")
+  |> List.iter (Type.to_string %> print_endline) *)
