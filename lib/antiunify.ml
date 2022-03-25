@@ -521,8 +521,6 @@ and generalizations typ : st list =
   | Tconstr _                               -> failwith "Antiunify.generalizations not smart enough to handle abbrev memos"
 
 let generalizations typ : st list =
-  if Type.flatten typ |> List.exists Type.is_var_type then
-    failwith "Antiunify.generalizations not smart enough to handle type variables in the input types";
   generalizations typ
   |>@ normalize_names
   |>@ fixup_tvars
@@ -555,6 +553,26 @@ let rec most_specific_shared_generalization_of_types typs =
   | typ::typs ->
     shared_generalizations typ (recurse typs)
     |> most_specific_generalization
+
+(* Input types must not have type vars (for now). Shadow to prevent misuse. *)
+
+let check_input_types typs =
+  typs |> List.iter begin fun typ ->
+    if List.exists Type.is_var_type (Type.flatten typ) then
+      failwith "Antiunify.generalizations not smart enough to handle type variables in the input types";
+  end
+
+let generalizations typ =
+  check_input_types [typ];
+  generalizations typ
+
+let shared_generalizations typ1 typ2 =
+  check_input_types [typ1; typ2];
+  shared_generalizations typ1 typ2
+
+let most_specific_shared_generalization_of_types typs =
+  check_input_types typs;
+  most_specific_shared_generalization_of_types typs
 
 (* let _ =
   Type.from_string ~env:Typing.initial_env "int -> int"
