@@ -109,6 +109,7 @@ Start with a blank file. (Delete everything in your text editor and save.)
 - [ ] Notice "⇠ list ⇢" and the two return TVs in the returns area ("Return expression(s) and value(s)"), one return for each branch.
 - [ ] Drag the tail list (either the value `[0;0]` or the `tail` name) onto the `(??)` of `length (??)`.
 - [ ] Notice in the code that `length2 = length tail` is now in a particular branch inside the `match` case split.
+- [ ] You may want to toggle the "Show variable values instead of variable uses" option on or off in Maniposynth's gear menu, according to your preference. Off is more understandable (and matches the screenshots in the paper).
 - [ ] Click on `[]` in the IO grid to focus the call frame for the base case.
 - [ ] Notice that all the TVs in the function are grayed out, except for the return TV for that branch (which is still a hole `(??)`).
 - [ ] Double-click that `(??)` and set it to `0`.
@@ -154,9 +155,11 @@ This section claims that Undo works, and delete works on expressions and on let-
 - [ ] Undo until there is only one assert (`length [0; 0; 0] = 3`).
 - [ ] Press "Synth".
 - [ ] Notice the incorrect result (always returns 3 for each input).
-- [ ] Press "Try again".
+- [ ] Press "Accept case split".
+- [ ] Press "Reject" on one of the return expressions.
+- [ ] Press "Reject & try again" on the other.
 - [ ] Notice the correct result.
-- [ ] Press "Accept".
+- [ ] Press "Accept" on each sub-result.
 
 ### Subvisualizations, with asserts (Sec 2.3)
 
@@ -205,21 +208,8 @@ Pick a *simple* function of your choice and try to implement it—the easier exe
 ## Bugs to know
 
 - Pasting code that was copied from a rich-text source often fails. You will have to retype the code manually or try pasting into a plain text buffer and recopying.
-
 - The positioning code is still not great—don't fight too much with trying to reposition things if they do not end up where you want. If something "disappears", it was probably bumped further down the page.
-
 - If the page fails to render at all, there is likely a major type error or syntax error in your code. You will have to repair the file in your text editor and then refresh the browser. The Maniposynth terminal output *may* provide a hint as to what's wrong.
-
 - The undo history does not remember edits that happened in the text editor.
-
-- The synthesizer does not follow the same non-linear semantics as the rest of Maniposynth, so synthesis on a sketch will fail if a hole is not already inside the appropriate branch. For example, despite being partway to the goal, the following sketch will fail to synthesize because the synthesizer will not move `length2` into the branch:
-
-  ```ocaml
-  let rec length list =
-    let length2 = length (??) in
-    match list with hd :: tail -> (??) | [] -> (??)
-  ```
-
-  Delete the `length2` binding, or fill in the recursive call manually, and synthesis will succeed.
 
 *Have fun!*
