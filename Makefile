@@ -24,6 +24,7 @@ artifact:
 	rm -r artifact.zip; rm -rf artifact; mkdir artifact; cp ./_build/default/server.exe artifact/maniposynth
 	cp -r assets artifact/assets
 	rm -r artifact/assets/*.amdn; # don't need rich image files
+	rm -r artifact/assets/Maniposynth_Overview.mp4; # don't include the video
 	mkdir -p artifact/ocaml-4.07.1/stdlib; cp -r ocaml-4.07.1/stdlib/*.ml artifact/ocaml-4.07.1/stdlib/
 	cp ocaml-4.07.1/stdlib/*.cmi artifact/
 	cp ARTIFACT_README.md artifact/
