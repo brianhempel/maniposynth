@@ -1013,8 +1013,12 @@ let html_str (structure_items : structure) lines_of_code_count (trace : Trace.t)
         ; span ~attrs:[("class","settings tool")]
           [ img ~attrs:[("src", "/assets/settings-gear.svg")]; " ▾"
           ; div ~attrs:["class","settings-pane"]
-            [  checkbox ~attrs:[("id", "show-values-in-green-exp-labels");("checked","checked")] ()
-            ;  label ~attrs:[("for","show-values-in-green-exp-labels")] ["Show value superscripts in green expression labels."]
+            [ div [ checkbox ~attrs:[("id", "show-values-in-green-exp-labels");("checked","checked")] ()
+                  ; label ~attrs:[("for","show-values-in-green-exp-labels")] ["Show value superscripts in green expression labels."]
+                  ]
+            ; div [ checkbox ~attrs:[("id", "show-variable-usage-values");("checked","checked")] ()
+                  ; label ~attrs:[("for","show-variable-usage-values")] ["Show variable values instead of variable uses."]
+                  ]
             ]
           ]
         ; span ~attrs:[("class","undo tool")] ["Undo (" ^ span ~attrs:[("class","command-key-glyph")] [] ^ "Z)"]

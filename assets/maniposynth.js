@@ -2175,6 +2175,44 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
+/////////////////// Variable Values Setting ///////////////////
+
+showVariableValuesCheckbox = null;
+
+function changeShowVariableValues() {
+  if (showVariableValuesCheckbox.checked) {
+    window.sessionStorage.setItem("show-variable-usage-values", "true")
+    document.location.reload();
+  } else {
+    window.sessionStorage.setItem("show-variable-usage-values", "false")
+    document.location.reload();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  showVariableValuesCheckbox = document.getElementById("show-variable-usage-values");
+
+  if (window.sessionStorage.getItem("show-variable-usage-values") === "false") {
+    showVariableValuesCheckbox.checked = false;
+    // Ugh. Undo the things the server does. I refuse to make this a query param for the server.
+    document.querySelectorAll(".ident-label").forEach(elem => {
+      elem.classList.remove("ident-label");
+    });
+    document.querySelectorAll(".ident").forEach(elem => {
+      elem.classList.remove("ident");
+      // Put the values before the element.
+      const valuesContainer = elem.children[1];
+      if (valuesContainer) {
+        valuesContainer.remove();
+        elem.insertBefore(valuesContainer, elem.children[0]);
+      }
+    });
+  }
+
+  showVariableValuesCheckbox.addEventListener("change", changeShowVariableValues);
+});
+
+
 
 
 /////////////////// Type errors ///////////////////
