@@ -35,6 +35,10 @@ You *must* set up your editor with the OCaml language server. Its type hints, in
 
 For VS Code: Make sure you've run `opam install ocaml-lsp-server`, and in VS Code install the `OCaml Platform` extension by OCaml Labs.
 
+Note also that `OCaml Platform` includes an AST Explorer you can use to famililarize yourself with OCaml's AST data type. Cmd-shift-P and then search for it:
+
+![ast_explorer](assets/ast_explorer.png)
+
 ## Artifact for User Study
 
 ```
