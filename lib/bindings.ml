@@ -53,6 +53,7 @@ type rearrangment_root (* non-linear playpen; something rendered as a canvas hol
 exception Rearrangment_roots_found of rearrangment_root list
 
 (* For finding what names could be in scope at a hole, were a fixup to occur. *)
+(* Most deeply nested roots are first in the returned list, top-level is last. *)
 (* Should work the same as maniposynth.js vbsHolderForInsert for all practial purposes (which finds first self or ancenstor .exp.fun or .vbs). *)
 (* And the places where View.local_canvas_vbs_and_returns_htmls is called. *)
 let rec rearrangement_roots_at ?(higher_roots = []) exp_loc prog =
@@ -62,21 +63,21 @@ let rec rearrangement_roots_at ?(higher_roots = []) exp_loc prog =
   with Rearrangment_roots_found roots ->
     roots
 
-and struct_rearrangement_roots_at ?(higher_roots = []) exp_loc prog =
-  prog
+and struct_rearrangement_roots_at ?(higher_roots = []) exp_loc struct_items =
+  struct_items
   |> List.iter begin fun si ->
     match si.pstr_desc with
     | Pstr_eval (exp, _attrs) ->
-      exp_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc exp
+      exp_rearrangement_roots_at ~higher_roots:(RR_StructItems struct_items :: higher_roots) exp_loc exp
     | Pstr_value (_, vbs) ->
       vbs |>@ Vb.exp |> List.iter begin fun rhs ->
-        exp_rearrangement_roots_at ~higher_roots:(RR_Exp rhs :: RR_StructItems prog :: higher_roots) exp_loc rhs
+        exp_rearrangement_roots_at ~higher_roots:(RR_Exp rhs :: RR_StructItems struct_items :: higher_roots) exp_loc rhs
       end
     | Pstr_module mod_binding ->
-      mod_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc mod_binding.pmb_expr
+      mod_rearrangement_roots_at ~higher_roots:(RR_StructItems struct_items :: higher_roots) exp_loc mod_binding.pmb_expr
     | Pstr_recmodule mod_bindings ->
       mod_bindings |> List.iter begin fun mb ->
-        mod_rearrangement_roots_at ~higher_roots:(RR_StructItems prog :: higher_roots) exp_loc mb.pmb_expr
+        mod_rearrangement_roots_at ~higher_roots:(RR_StructItems struct_items :: higher_roots) exp_loc mb.pmb_expr
       end
     | Pstr_primitive _
     | Pstr_type (_, _)
@@ -191,7 +192,7 @@ let move_type_decls_to_top struct_items =
   top_sis @ rest_sis
 
 let rec rearrange_struct_items struct_items =
-  let movable_names   = StructItems.names struct_items in
+  let movable_names = StructItems.names struct_items in
   rearrange_struct_items' movable_names struct_items
 
 and rearrange_struct_items' ?(names_already_moved_here = []) later_movable_names struct_items =

@@ -569,15 +569,16 @@ let rec length list =
 let stuff3 = 19
 let stuff4 = 19
 
-Produces this order of idents:
+Produces this order of idents (for all the holes above):
 
 tail, hd, length2, length3, list, length, stuff2, stuff1, stuff3, stuff4
 
-That feels right to me.
+That feels right enough to me.
 *)
 (* "local" means same file and ostensibly visible at hole_loc after Bindings.synth_fixup *)
 let nonlinear_local_idents_at hole_loc typed_prog prog =
   let open Bindings in
+  (* rearrangement_roots_at returns the most deeply nested root first. *)
   rearrangement_roots_at hole_loc prog
   |>@@ begin function
   | RR_StructItems [] -> []
@@ -585,7 +586,7 @@ let nonlinear_local_idents_at hole_loc typed_prog prog =
     begin match Typing.find_struct_at si.pstr_loc typed_prog with
     | Some typed_struct ->
       sis
-      |>@@ StructItem.vbs_names
+      |>@@ StructItem.vbs_names (* Some of these names will already have been produced by Scope.names_at below. That's and good. The dedup step below will removed them. *)
       |>@ (fun name -> (name, Typing.type_of_name name typed_struct.str_final_env))
     | None ->
       []
@@ -596,7 +597,7 @@ let nonlinear_local_idents_at hole_loc typed_prog prog =
     |>@@ begin fun { pexp_loc = loc; _ } ->
       match Typing.find_exp_at loc typed_prog with
       | Some texp ->
-        Scope.names_at loc prog
+        Scope.names_at loc prog (* Thus, all names with visible via ordinary OCaml scoping appear first in the list (with the nearest name first). *)
         |>@ (fun name -> (name, Typing.type_of_name name texp.exp_env))
       | None ->
         []
