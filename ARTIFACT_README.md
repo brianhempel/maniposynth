@@ -3,11 +3,23 @@
 <video controls><source src="assets/Maniposynth_Overview.mp4"type="video/mp4"><img src="assets/teaser.png" referrerpolicy="no-referrer" alt="teaser">Sorry, your browser doesn't support embedded videos.</video>
 [(Download video)](http://maniposynth.org/assets/Maniposynth_Overview.mp4)
 
-Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
+**Visual non-linear editing, live programming, and synthesis for (some of) OCaml.**
+
+Maniposynth is described in our paper: [Brian Hempel and Ravi Chugh. Maniposynth: Bimodal Tangible Functional Programming. ECOOP 2022.](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf) This page contains the video figure (above) and the artifact (below) so you can try Maniposynth yourself.
 
 [TOC]
 
-## Download
+## Abstract
+
+Traditionally, writing code is a non-graphical, abstract, and linear process. Not everyone is comfortable with this way of thinking at all times. Can programming be transformed into a graphical, concrete, non-linear activity? While nodes-and-wires and blocks-based programming environments do leverage graphical direct manipulation, users perform their manipulations on abstract syntax tree elements, which are still abstract. Is it possible to be more concrete—could users instead directly manipulate live program values to create their program?
+
+We present a system, Maniposynth, that reimagines functional programming as a non-linear workflow where program expressions are spread on a 2D canvas. The live results of those expressions are continuously displayed and available for direct manipulation. The non-linear canvas liberates users to work out-of-order, and the live values can be interacted with via drag-and-drop. Incomplete programs are gracefully handled via hole expressions, which allow Maniposynth to offer program synthesis. Throughout the workflow, the program is valid OCaml code which the user may inspect and edit in their preferred text editor at any time.
+
+With Maniposynth's direct manipulation features, we created 38 programs drawn from a functional data structures course. We additionally hired two professional OCaml developers to implement a subset of these programs. We report on these experiences and discuss to what degree Maniposynth meets its goals of providing a non-linear, concrete, graphical programming workflow.
+
+Read  [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf) for more.
+
+## Artifact Download
 
 You can grab the VM or a prebuilt binary. The Ubuntu VM includes the prebuilt binary and VS Code. The advantage of the VM is that VS Code is preconfigured with the OCaml language server and a special highlighting rule to dim AST annotations. The disadvantage of the VM is that it's a 1000x bigger download than the binaries. I also find graphical interaction in [VirtualBox](https://www.virtualbox.org/) to be rather clunky, even with hardware acceleration on. And the VS Code configuration is entirely optional, Maniposynth works with any text editor that will refresh when the file changes on disk (see below for how to enable this in Vim/Emacs if you prefer those editors).
 
@@ -81,9 +93,18 @@ For Emacs, enable `global-auto-revert-mode`:
 
 To dim AST attribute annotations to make code more readable, in VS Code install the Highlight extension (fabiospampinato.vscode-highlight). This artifact includes a `.vscode/settings.json` that contains the regex and styling for annotations. It should "just work" if you open the artifact folder in VS code (e.g. via `code artifact`). You may have to edit the styling in `.vscode/settings.json` if you use a dark theme. (The VM is already configured with the Highlight extension.)
 
-## Evaluating
+## Bugs to know
 
-We claim (a) that our artifact works as described in the Overview example in Section 2 of [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-preprint.pdf), and (b) that our artifact works not just on the overview example.
+- Pasting code that was copied from a rich-text source often fails. You will have to retype the code manually or try pasting into a plain text buffer and recopying.
+- The positioning code is still not great—don't fight too much with trying to reposition things if they do not end up where you want. If something "disappears", it was probably bumped further down the page.
+- If the page fails to render at all, there is likely a major type error or syntax error in your code. You will have to repair the file in your text editor and then refresh the browser. The Maniposynth terminal output *may* provide a hint as to what's wrong.
+- The undo history does not remember edits that happened in the text editor.
+
+*Have fun!*
+
+## Artifact Evaluation Walkthrough
+
+For artifact evaluation, we claim (a) that our artifact works as described in the Overview example in Section 2 of [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf), and (b) that our artifact works not just on the overview example.
 
 To verify these claims, (a) we ask the artifact reviewers to follow the walkthrough in the paper Overview, including the variations, and (b) we ask the reviewers to try one example of their own choosing, either of their own design or from Table 1.
 
@@ -161,7 +182,7 @@ This section claims that Undo works, and delete works on expressions and on let-
 - [ ] Notice the correct result.
 - [ ] Press "Accept" on each sub-result.
 
-### Subvisualizations, with asserts (Sec 2.3)
+### Subvisualizations, with asserts (removed from final paper)
 
 - [ ] Clear the file in your text editor and save. (The browser should refresh to a blank canvas— if not, hit reload.)
 - [ ] Double-click and write `[0; 0; 0]`.
@@ -205,11 +226,3 @@ Pick a *simple* function of your choice and try to implement it—the easier exe
 
   To verify the function is correct, it's helpful to rename the arguments (double-click the pink names).
 
-## Bugs to know
-
-- Pasting code that was copied from a rich-text source often fails. You will have to retype the code manually or try pasting into a plain text buffer and recopying.
-- The positioning code is still not great—don't fight too much with trying to reposition things if they do not end up where you want. If something "disappears", it was probably bumped further down the page.
-- If the page fails to render at all, there is likely a major type error or syntax error in your code. You will have to repair the file in your text editor and then refresh the browser. The Maniposynth terminal output *may* provide a hint as to what's wrong.
-- The undo history does not remember edits that happened in the text editor.
-
-*Have fun!*
