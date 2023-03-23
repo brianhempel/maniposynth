@@ -1,5 +1,7 @@
 # ![The Magnificent Maniposynth](assets/maniposynth.svg)
 
+![Maniposynth Interface](assets/teaser.png)
+
 Visual non-linear editing, live programming, and synthesis for (some of) OCaml.
 
 ## Development
