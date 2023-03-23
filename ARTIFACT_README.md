@@ -1,11 +1,17 @@
-# ![The Magnificent Maniposynth](assets/maniposynth.svg)
+![The Magnificent Maniposynth](assets/maniposynth.svg)
+
+<div style="text-align: center; margin-bottom: 1em"><strong style="font-size: 23pt">Maniposynth: Bimodal Tangible Functional Programming</strong><br>
+<span style="font-size: 17pt">Brian Hempel and Ravi Chugh. ECOOP 2022.</span><br>
+<a href="https://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf">(Paper)</a> &nbsp; <a href="https://maniposynth.org/assets/Maniposynth_Overview.mp4" download>(Video Figure ⬇)</a> &nbsp; <a href="https://www.youtube.com/watch?v=Ot84dlyDRks">(33min presentation</a>&nbsp;<a href="https://maniposynth.org/assets/Maniposynth-Bimodal_Tangible_Functional_Programming.mp4" download>⬇)</a> &nbsp; <a href="https://maniposynth.org/assets/Maniposynth-Bimodal_Tangible_Functional_Programming_Slides.pdf">(Slides)</a> &nbsp; <a href="#artifact-download">(Artifact)</a>
+</div>
+
+
 
 <video controls><source src="assets/Maniposynth_Overview.mp4"type="video/mp4"><img src="assets/teaser.png" referrerpolicy="no-referrer" alt="teaser">Sorry, your browser doesn't support embedded videos.</video>
-[(Download video)](http://maniposynth.org/assets/Maniposynth_Overview.mp4)
 
 **Visual non-linear editing, live programming, and synthesis for (some of) OCaml.**
 
-Maniposynth is described in our paper: [Brian Hempel and Ravi Chugh. Maniposynth: Bimodal Tangible Functional Programming. ECOOP 2022.](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf) This page contains the video figure (above) and the artifact (below) so you can try Maniposynth yourself.
+This page contains the video figure (above) and the artifact (below) so you can try Maniposynth yourself.
 
 [TOC]
 
@@ -17,7 +23,7 @@ We present a system, Maniposynth, that reimagines functional programming as a no
 
 With Maniposynth's direct manipulation features, we created 38 programs drawn from a functional data structures course. We additionally hired two professional OCaml developers to implement a subset of these programs. We report on these experiences and discuss to what degree Maniposynth meets its goals of providing a non-linear, concrete, graphical programming workflow.
 
-Read  [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf) for more.
+Read  [the paper](https://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf) for more.
 
 ## Artifact Download
 
@@ -25,8 +31,8 @@ You can grab the VM or a prebuilt binary. The Ubuntu VM includes the prebuilt bi
 
 **Pre-built binaries** (~5MB, effectively what we gave to user study participants):
 
-- [Download MacOS Artifact](http://maniposynth.org/assets/maniposynth-artifact-mac.zip)
-- [Download Linux x86_64 Artifact](http://maniposynth.org/assets/maniposynth-artifact-linux.zip)
+- [Download MacOS Artifact](https://maniposynth.org/assets/maniposynth-artifact-mac.zip)
+- [Download Linux x86_64 Artifact](https://maniposynth.org/assets/maniposynth-artifact-linux.zip)
 
 **VM Image (with VS Code configured**)
 
@@ -34,7 +40,7 @@ You can grab the VM or a prebuilt binary. The Ubuntu VM includes the prebuilt bi
 
 **Build from source (if the above fail)**
 
-- [Download Source](http://maniposynth.org/assets/maniposynth-source.zip) (It should be easy to build. [Install opam](https://opam.ocaml.org/doc/Install.html) and then see the README.md in the source.)
+- [Download Source](https://maniposynth.org/assets/maniposynth-source.zip) (It should be easy to build. [Install opam](https://opam.ocaml.org/doc/Install.html) and then see the README.md in the source.)
 
 ## Quickstart
 
@@ -104,7 +110,7 @@ To dim AST attribute annotations to make code more readable, in VS Code install 
 
 ## Artifact Evaluation Walkthrough
 
-For artifact evaluation, we claim (a) that our artifact works as described in the Overview example in Section 2 of [the paper](http://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf), and (b) that our artifact works not just on the overview example.
+For artifact evaluation, we claim (a) that our artifact works as described in the Overview example in Section 2 of [the paper](https://maniposynth.org/assets/Maniposynth-Bimodal-Tangible-Functional-Programming-with-Appendices.pdf), and (b) that our artifact works not just on the overview example.
 
 To verify these claims, (a) we ask the artifact reviewers to follow the walkthrough in the paper Overview, including the variations, and (b) we ask the reviewers to try one example of their own choosing, either of their own design or from Table 1.
 
