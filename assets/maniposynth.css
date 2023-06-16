@@ -171,7 +171,7 @@ nav > img {
 
 .box > .tv,
 .return > .tv {
-  /* box-shadow: 0px 0px 5px rgba(0,0,0,0.15); */
+  box-shadow: 0px 0px 5px rgba(0,0,0,0.15);
 }
 
 .box > .pat,
@@ -189,7 +189,7 @@ nav > img {
 
 .top-level > .box > .tv {
   /* border: solid 1px black; */
-  /* box-shadow: 0px 0px 10px rgba(0,0,0,0.15); */
+  box-shadow: 0px 0px 10px rgba(0,0,0,0.15);
 }
 
 .is-rec {
@@ -233,7 +233,7 @@ nav > img {
 .label > .pat,
 td.pat-label > .pat {
   display: inline-block;
-  /* padding: var(--padding) calc(2 * var(--padding)); */
+  padding: var(--padding) calc(2 * var(--padding));
 }
 td.pat-label > .pat {
   min-height: 2rem;
@@ -296,7 +296,7 @@ td.returns-label {
 }
 /* Root value in TV result should be full width */
 .tv > .values > .root-value-holder > .value {
-  /* display: block; */
+  display: block;
   /* text-align: left; */
 }
 .scrutinee .values,
@@ -338,12 +338,10 @@ td.returns-label {
 .fun-returns > td:not(.returns-label),
 .tv > .values {
   background-color: var(--third-color-light);
-  border: solid 1px lightgray;
-  width: fit-content;
 }
 .tv > .values {
-  /* min-height: 2.2rem; */
-  /* min-width: 2rem; */
+  min-height: 2.2rem;
+  min-width: 2rem;
 }
 
 table.subvalue-annotations {
@@ -367,7 +365,7 @@ table.subvalue-annotations td {
   position: relative; /* This causes the vises to be displayed on top of the pink pat border. Go figure. */
 }
 .tv > .label {
-  /* background-color: var(--color-light); */
+  background-color: var(--color-light);
   /* display: grid;
   grid-template-columns: max-content max-content auto;
   align-items: center; */
@@ -401,7 +399,7 @@ table.subvalue-annotations td {
 }
 
 .label {
-  /* text-align: center; */
+  text-align: center;
   /* font-size: 1rem; */
 }
 .derived-vis-values {
