@@ -365,7 +365,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
       )
       [str]
   in
-  let tuple_or_array_children ?(in_list = false) vs =
+  let tuple_children ?(in_list = false) vs =
     extraction_exp_opt |>& begin fun extraction_exp ->
       let prior_extraction_names = (Exp.everything extraction_exp).pats |>@& Pat.name in
       let child_pat_names =
@@ -384,6 +384,13 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
       children
     end
     ||&~ (fun () -> vs |> List.mapi (fun i v -> recurse ~in_list:(i = 1 && in_list (* tail position *)) None v))
+  in
+  let array_children ?(in_list = false) vs =
+    vs
+    |> List.mapi begin fun i v ->
+      let child_extraction_exp_opt = extraction_exp_opt |>& fun extraction_exp -> Exp.simple_apply "Array.get" [extraction_exp; Exp.int_lit i] in
+      recurse ~in_list:(i = 1 && in_list (* tail position *)) child_extraction_exp_opt v
+    end
   in
   let assert_result_strs =
     if all_passed then [] else
@@ -423,7 +430,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
   | String bytes -> Exp.to_string (Exp.string_lit (Bytes.to_string bytes)) (* Make sure string is quoted & escaped *)
   | Float float  -> string_of_float float
   | Tuple vs     ->
-    begin match (tuple_or_array_children ~in_list vs, in_list) with
+    begin match (tuple_children ~in_list vs, in_list) with
     | ([head; tail], true) -> head ^ tail
     | (children, _)        -> "(" ^ String.concat ", " children ^ ")"
     end
@@ -497,7 +504,7 @@ and html_of_value ?exp_to_assert_on ?(in_list = false) ?(is_expectation = false)
     |> String.concat "; "
     |> (fun entries_str -> "{ " ^ entries_str ^ " }")
   | Lz _                          -> "lazy"
-  | Array values_arr              -> "[! " ^ String.concat "; " (tuple_or_array_children @@ Array.to_list values_arr) ^ " !]"
+  | Array values_arr              -> "[| " ^ String.concat "; " (array_children @@ Array.to_list values_arr) ^ " |]"
   | Fun_with_extra_args (_, _, _) -> "funwithextraargs"
   | Object _                      -> "object"
   | ExCall _                      -> "ExCall ShouldntSeeThis"
@@ -634,7 +641,7 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
   in
   let values_for_exp =
     (* if true then "" else *)
-    if show_result && not (Exp.is_hole exp) && not tv_root_exp && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
+    if show_result && not (Exp.is_hole exp) && not (Exp.is_ctor exp) && not tv_root_exp && not (Exp.is_funlike exp) && Scope.free_unqualified_names exp <> [] then html_of_values_for_exp ~single_line_only:true stuff None exp else ""
   in
   wrap @@
   match exp.pexp_desc with
@@ -652,15 +659,15 @@ let rec html_of_exp ?(tv_root_exp = false) ?(show_result = true) ?(infix = false
     | true, [la1; la2] -> html_of_labeled_arg ~parens_context:NextToInfixOp la1 ^ " " ^ (values_for_exp ^ if Exp.is_ident fexp then uninfix (Exp.to_string @@ Attrs.remove_all_deep_exp fexp) else recurse ~show_result:false ~infix:true ~parens_context:NormalArg fexp) ^ " " ^ html_of_labeled_arg ~parens_context:NextToInfixOp la2
     | _                -> values_for_exp ^ (if Exp.is_ident fexp then (Exp.to_string @@ Attrs.remove_all_deep_exp fexp) ^ " " else recurse ~parens_context:NormalArg ~show_result:false fexp) ^ (labeled_args |>@ html_of_labeled_arg ~parens_context:NormalArg |> String.concat " ")
     end
-  | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> values_for_exp ^ if in_list then "]" else "[]"
+  | Pexp_construct ({ txt = Longident.Lident "[]"; _ }, None) -> if in_list then "]" else "[]"
   | Pexp_construct ({ txt = Longident.Lident "::"; _ }, Some { pexp_desc = Pexp_tuple [head; tail]; _}) ->
     if String.starts_with "[" code' && String.ends_with "]" code' then (* Have to make sure this list is suitable to render sugared *)
-      values_for_exp ^ (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
+      (if in_list then "; " else "[ ") ^ recurse head ^ recurse ~in_list:true tail
     else
       (* Render infix *)
-      recurse ~parens_context:NextToInfixOp head ^ values_for_exp ^ " :: " ^ recurse ~parens_context:NextToInfixOp tail
+      recurse ~parens_context:NextToInfixOp head ^ " :: " ^ recurse ~parens_context:NextToInfixOp tail
   | Pexp_construct ({ txt = lid; _ }, Some arg) ->
-    values_for_exp ^ Longident.to_string lid ^ " " ^ recurse ~parens_context:NormalArg arg
+    Longident.to_string lid ^ " " ^ recurse ~parens_context:NormalArg arg
   | Pexp_tuple exps ->
     "(" ^ String.concat ", " (exps |>@ recurse) ^ ")"
   | Pexp_ifthenelse (e1, e2, e3_opt) ->

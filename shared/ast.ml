@@ -845,6 +845,7 @@ module Exp = struct
   let is_fun         = function { pexp_desc = Pexp_fun        _; _ } -> true | _ -> false
   let is_function    = function { pexp_desc = Pexp_function   _; _ } -> true | _ -> false
   let is_funlike exp = is_fun exp || is_function exp
+  let is_ctor        = function { pexp_desc = Pexp_construct  _; _ } -> true | _ -> false
   let is_constant    = function { pexp_desc = Pexp_constant   _; _ } -> true | _ -> false
   let is_match       = function { pexp_desc = Pexp_match      _; _ } -> true | _ -> false
   let is_ident       = function { pexp_desc = Pexp_ident      _; _ } -> true | _ -> false
