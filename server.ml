@@ -52,6 +52,24 @@ let serve_asset request_str out_chan url =
     | None -> respond ~content_type:"application/yolo" out_chan content_str
   with Sys_error _ -> respond_not_found request_str out_chan
 
+let render_file_picker out_chan =
+  let html_str =
+    let input = Unix.open_process_in "sh -c 'ls *.ml; ls **/*.ml'" in
+    let output = ref "<html><body>" in
+    try
+      (* Thanks, GPT-4! *)
+      while true do
+        let line = input_line input in
+        if not @@ String.starts_with "history/" line then
+          output := !output ^ "<a href=\"" ^ line ^ "\">" ^ line ^ "</a><br>\n";
+      done;
+      !output
+    with _ ->
+      close_in input;
+      !output ^ "</body></html>"
+  in
+  respond out_chan html_str
+
 let split_on_multiple_lines = Str.regexp "[ \n\t]*\n"
 
 let render_maniposynth out_chan url =
@@ -164,7 +182,9 @@ let handle_connection in_chan out_chan =
       else if String.ends_with ".ml" path then begin
         (* sample_this_process "http_GET_profile.txt"; *)
         render_maniposynth out_chan url
-      end else
+      end else if path = "/" then
+        render_file_picker out_chan
+      else
         respond_not_found request_str out_chan
   | "PATCH"::url::_ ->
       if String.ends_with ".ml" url then begin
