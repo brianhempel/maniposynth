@@ -8,3 +8,4 @@ artifact*
 synth_stats_model/corpus
 synth_stats_model/annotated
 *_profile.txt
+_opam/
